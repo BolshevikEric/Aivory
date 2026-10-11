@@ -1221,7 +1221,9 @@ func forkConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errNotFound)
 		return
 	}
-	path, err := msgcache.ListMessages(r.Context(), d.Cache, d.DB, conv.ID, body.LeafID)
+	// Internal skill snapshots are deliberately hidden from JSON, including the
+	// presentation cache. Read the durable path to preserve them in a fork.
+	path, err := store.ListMessages(r.Context(), d.DB, conv.ID, body.LeafID)
 	if err != nil {
 		writeError(w, 500, err)
 		return
@@ -1280,22 +1282,23 @@ func forkConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 			// REAL model id/label/provider (copied above), so without this the fork
 			// would have fast=0 and redactCost would serve the real model name to the
 			// user on every load of the forked conversation.
-			Fast:                 m.Fast,
-			Blocks:               m.Blocks,
-			Raw:                  m.Raw,
-			StopReason:           m.StopReason,
-			Attachments:          m.Attachments,
-			SelectedUserSkillIDs: m.SelectedUserSkillIDs,
-			Citations:            m.Citations,
-			InputTokens:          m.InputTokens,
-			ContextTokens:        m.ContextTokens,
-			OutputTokens:         m.OutputTokens,
-			CacheReadTokens:      m.CacheReadTokens,
-			CacheWriteTokens:     m.CacheWriteTokens,
-			Cost:                 m.Cost,
-			Currency:             m.Currency,
-			Status:               "complete",
-			AuthorID:             authorID,
+			Fast:                  m.Fast,
+			Blocks:                m.Blocks,
+			Raw:                   m.Raw,
+			StopReason:            m.StopReason,
+			Attachments:           m.Attachments,
+			SelectedUserSkillIDs:  m.SelectedUserSkillIDs,
+			DisabledModelSkillIDs: m.DisabledModelSkillIDs,
+			Citations:             m.Citations,
+			InputTokens:           m.InputTokens,
+			ContextTokens:         m.ContextTokens,
+			OutputTokens:          m.OutputTokens,
+			CacheReadTokens:       m.CacheReadTokens,
+			CacheWriteTokens:      m.CacheWriteTokens,
+			Cost:                  m.Cost,
+			Currency:              m.Currency,
+			Status:                "complete",
+			AuthorID:              authorID,
 		})
 	}
 	if len(copies) > 0 {

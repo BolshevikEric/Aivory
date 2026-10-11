@@ -114,7 +114,8 @@ type UnifiedChatRequest struct {
 	SelectedToolsConfigured bool
 	// Retain selected skill identities so fallback can revalidate instructions
 	// already injected into History before contacting another provider.
-	SelectedUserSkillIDs []string
+	SelectedUserSkillIDs  []string
+	DisabledModelSkillIDs []string
 	// ToolAccessPolicy is the current user's server-authoritative group ceiling.
 	// It is carried into transparent model fallback so a fallback cannot broaden
 	// access even when its own default tool set is larger.

@@ -27,15 +27,18 @@ export interface PersistedComposerPrefs {
   selectedToolIdsByModel: Record<string, string[]>
   paramValuesByModel: Record<string, ComposerParamValues>
   draftsByScope: Record<string, string>
+  /** Disabled model defaults, isolated to a conversation or new-chat draft. */
+  disabledModelSkillIdsByScope: Record<string, string[]>
 }
 
 interface ComposerPrefsStore extends PersistedComposerPrefs {
+  setDisabledModelSkillIds: (scope: string, ids: string[]) => void
   setMode: (mode: ComposerMode) => void
   setVerify: (verify: boolean) => void
   setOptimizeImagePrompt: (enabled: boolean) => void
   setToolMode: (scope: string, toolMode: ToolMode) => void
   clearToolMode: (scope: string) => void
-  moveToolModeScope: (fromScope: string, toScope: string) => void
+  moveToolModeScope: (fromScope: string, toScope: string, accountId?: string) => void
   // Update the mirror of the administrator-controlled default tool policy.
   setDefaultToolMode: (toolMode: ToolMode) => void
   setForceWebSearch: (scope: string, on: boolean) => void
@@ -62,6 +65,7 @@ const DEFAULT_PREFS: PersistedComposerPrefs = {
   selectedToolIdsByModel: {},
   paramValuesByModel: {},
   draftsByScope: {},
+  disabledModelSkillIdsByScope: {},
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -174,6 +178,7 @@ export function parsePersistedComposerPrefs(parsed: unknown): PersistedComposerP
     selectedToolIdsByModel: sanitizeSelectedToolIdsByModel(parsed.selectedToolIdsByModel),
     paramValuesByModel: sanitizeParamValuesByModel(parsed.paramValuesByModel),
     draftsByScope: sanitizeDraftsByScope(parsed.draftsByScope),
+    disabledModelSkillIdsByScope: sanitizeSelectedToolIdsByModel(parsed.disabledModelSkillIdsByScope),
   }
 }
 
@@ -206,6 +211,7 @@ function persistedFrom(state: PersistedComposerPrefs, patch: Partial<PersistedCo
     selectedToolIdsByModel: state.selectedToolIdsByModel,
     paramValuesByModel: state.paramValuesByModel,
     draftsByScope: state.draftsByScope,
+    disabledModelSkillIdsByScope: state.disabledModelSkillIdsByScope,
     ...patch,
   }
 }
@@ -230,6 +236,19 @@ export const useComposerPrefs = create<ComposerPrefsStore>((set) => {
     })
   return {
     ...initial,
+    setDisabledModelSkillIds(scope, ids) {
+      const key = scope.trim()
+      if (!key) return
+      set((state) => {
+        const disabledModelSkillIdsByScope = { ...state.disabledModelSkillIdsByScope }
+        const clean = sanitizeToolIds(ids) ?? []
+        if (clean.length) disabledModelSkillIdsByScope[key] = clean
+        else delete disabledModelSkillIdsByScope[key]
+        const patch = { disabledModelSkillIdsByScope }
+        persistPrefs(persistedFrom(state, patch))
+        return patch
+      })
+    },
     setMode(mode) {
       commit({ mode })
     },
@@ -271,21 +290,29 @@ export const useComposerPrefs = create<ComposerPrefsStore>((set) => {
         return patch
       })
     },
-    moveToolModeScope(fromScope, toScope) {
+    moveToolModeScope(fromScope, toScope, accountId = '') {
       const from = fromScope.trim()
       const to = toScope.trim()
       if (!from || !to || from === to) return
       set((state) => {
         const hasMode = from in state.toolModesByScope
         const hasSearch = from in state.forceWebSearchByScope
-        if (!hasMode && !hasSearch) return {}
+        const skillKey = `${accountId}:${from}`
+        const skillKeys = skillKey in state.disabledModelSkillIdsByScope ? [skillKey] : []
+        const hasSkills = skillKeys.length > 0
+        if (!hasMode && !hasSearch && !hasSkills) return {}
         const toolModesByScope = { ...state.toolModesByScope }
         const forceWebSearchByScope = { ...state.forceWebSearchByScope }
+        const disabledModelSkillIdsByScope = { ...state.disabledModelSkillIdsByScope }
+        for (const key of skillKeys) {
+          disabledModelSkillIdsByScope[`${key.slice(0, -from.length)}${to}`] = disabledModelSkillIdsByScope[key]
+          delete disabledModelSkillIdsByScope[key]
+        }
         if (hasMode) toolModesByScope[to] = toolModesByScope[from]
         if (hasSearch) forceWebSearchByScope[to] = true
         delete toolModesByScope[from]
         delete forceWebSearchByScope[from]
-        const patch = { toolModesByScope, forceWebSearchByScope }
+        const patch = { toolModesByScope, forceWebSearchByScope, disabledModelSkillIdsByScope }
         persistPrefs(persistedFrom(state, patch))
         return patch
       })
@@ -342,6 +369,10 @@ export const useComposerPrefs = create<ComposerPrefsStore>((set) => {
       set((state) => {
         const toolModesByScope = { ...state.toolModesByScope }
         const forceWebSearchByScope = { ...state.forceWebSearchByScope }
+        const disabledModelSkillIdsByScope = { ...state.disabledModelSkillIdsByScope }
+        for (const key of Object.keys(disabledModelSkillIdsByScope)) {
+          if (key.endsWith(':new-chat') || key.endsWith(':new-draw')) delete disabledModelSkillIdsByScope[key]
+        }
         delete toolModesByScope['new-chat']
         delete toolModesByScope['new-draw']
         delete forceWebSearchByScope['new-chat']
@@ -349,6 +380,7 @@ export const useComposerPrefs = create<ComposerPrefsStore>((set) => {
         const patch: Partial<PersistedComposerPrefs> = {
           toolModesByScope,
           forceWebSearchByScope,
+          disabledModelSkillIdsByScope,
           // A chosen subset is a turn override, not the next conversation's
           // model default. Clear every model so changing models in the new
           // conversation cannot revive a stale selection either.

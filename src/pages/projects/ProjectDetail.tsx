@@ -382,7 +382,7 @@ export default function ProjectDetail() {
         }
         // Preserve a mode selected before the first attachment created this
         // hidden project conversation.
-        useComposerPrefs.getState().moveToolModeScope(toolModeDraftScope, created.id)
+        useComposerPrefs.getState().moveToolModeScope(toolModeDraftScope, created.id, user?.id)
         writePendingConversation(storageKey, created.id)
         pendingConvRef.current = created
         setPendingConversationId(created.id)
@@ -468,6 +468,7 @@ export default function ProjectDetail() {
       toolMode: ToolMode
       webSearch?: boolean
       selectedUserSkillIds?: string[]
+      disabledModelSkillIds?: string[]
       selectedToolIds?: string[]
       fast?: boolean
     },
@@ -503,7 +504,7 @@ export default function ProjectDetail() {
       pendingConsumedRef.current = false
       return
     }
-    useComposerPrefs.getState().moveToolModeScope(sourceToolModeScope, conv.id)
+    useComposerPrefs.getState().moveToolModeScope(sourceToolModeScope, conv.id, user?.id)
     if (!opts.fast && effectiveProjectModelId && conv.modelId !== effectiveProjectModelId) {
       void useConversations.getState().setModel(conv.id, effectiveProjectModelId)
     }
@@ -520,6 +521,7 @@ export default function ProjectDetail() {
       toolMode: opts.toolMode,
       webSearch: opts.webSearch,
       selectedUserSkillIds: opts.selectedUserSkillIds,
+      disabledModelSkillIds: opts.disabledModelSkillIds,
       selectedToolIds: opts.selectedToolIds,
       fast: opts.fast,
     })

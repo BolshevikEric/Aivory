@@ -252,6 +252,10 @@ func modelsResponse(d Deps, r *http.Request, models []store.Model) map[string]an
 		// nullable admin policy, this always contains only live registry tools that
 		// survive the global and user-group ceilings.
 		BuiltinTools []string `json:"builtin_tools"`
+		// Only display metadata is public. Instructions and trigger descriptions
+		// stay server-side and are revalidated for every turn.
+		BoundSkills          []publicSkill `json:"bound_skills"`
+		SkillsDefaultEnabled bool          `json:"skills_default_enabled"`
 		// ToolsAvailable is the unified user-facing capability bit. It remains true
 		// when a model default is empty but the user may manually select a live tool.
 		ToolsAvailable bool `json:"tools_available"`
@@ -385,6 +389,24 @@ func modelsResponse(d Deps, r *http.Request, models []store.Model) map[string]an
 	}
 
 	items := []item{}
+	boundSkills := map[string][]publicSkill{}
+	if workspaceSkillsAllowed && availableBuiltinTools["use_skill"] && permissions.AllowSkills {
+		// One query for the catalog, rather than one round trip per model.
+		if rows, err := d.DB.QueryContext(r.Context(), `SELECT ms.model_id, s.id, s.name, s.display_description, s.icon, s.sort_order FROM model_skills ms JOIN skills s ON s.id=ms.skill_id WHERE s.enabled=1 ORDER BY s.sort_order, s.name, s.id`); err == nil {
+			for rows.Next() {
+				var modelID string
+				var skill publicSkill
+				if rows.Scan(&modelID, &skill.ID, &skill.Name, &skill.DisplayDescription, &skill.Icon, &skill.SortOrder) != nil {
+					break
+				}
+				if store.ResourcePolicyAllows(permissions.Skills, skill.ID) {
+					skill.Enabled = true
+					boundSkills[modelID] = append(boundSkills[modelID], skill)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
 	maskChannels := map[string]*store.Channel{}
 	for _, m := range models {
 		if m.Kind == "image" {
@@ -408,6 +430,16 @@ func modelsResponse(d Deps, r *http.Request, models []store.Model) map[string]an
 				builtinDefaults = append(builtinDefaults, name)
 			}
 		}
+		modelSkills := []publicSkill{}
+		if m.Kind == "chat" && m.ToolMode != "none" {
+			modelSkills = append(modelSkills, boundSkills[m.ID]...)
+		}
+		skillsDefaultEnabled := false
+		for _, name := range builtinDefaults {
+			if name == "use_skill" {
+				skillsDefaultEnabled = true
+			}
+		}
 		hostedToolsAvailable := false
 		if workspaceToolCallingAllowed && m.ToolMode != "none" {
 			if definitions, err := store.ParseOfficialTools(m.OfficialTools); err == nil {
@@ -428,6 +460,8 @@ func modelsResponse(d Deps, r *http.Request, models []store.Model) map[string]an
 			Kind: m.Kind, Enabled: m.Enabled, Vision: m.Vision, Stream: m.Stream, ResearchEnabled: m.ResearchEnabled, ToolMode: m.ToolMode,
 			MaskEdit:               llm.SupportsImageMaskEdit(&m, maskChannels[m.ChannelID]),
 			BuiltinTools:           builtinDefaults,
+			BoundSkills:            modelSkills,
+			SkillsDefaultEnabled:   skillsDefaultEnabled,
 			ToolsAvailable:         m.ToolMode != "none" && (len(availableBuiltinTools) > 0 || hostedToolsAvailable || mcpToolsAvailable),
 			ResearchToolsAvailable: researchToolsAvailable(m, availableBuiltinTools),
 			ParamControls:          m.ParamControls, ChannelID: m.ChannelID, SortOrder: m.SortOrder,

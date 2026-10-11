@@ -575,6 +575,8 @@ type Message struct {
 	// orchestrator resolves these ids under the message author's ownership and
 	// appends their content to the last user-role history entry.
 	SelectedUserSkillIDs json.RawMessage `json:"-"`
+	// Private per-turn snapshot of disabled model defaults, used for regeneration.
+	DisabledModelSkillIDs json.RawMessage `json:"-"`
 }
 
 // KnowledgeBase — §5 knowledge_bases row.

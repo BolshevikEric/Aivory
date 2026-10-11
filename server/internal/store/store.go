@@ -337,6 +337,7 @@ func Migrate(db *sql.DB) error {
 	addUserSkillWorkspace := `ALTER TABLE user_skills ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`
 	addUserPromptWorkspace := `ALTER TABLE user_prompts ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`
 	addMsgSelectedUserSkills := `ALTER TABLE messages ADD COLUMN selected_user_skill_ids TEXT NOT NULL DEFAULT '[]'`
+	addMsgDisabledModelSkills := `ALTER TABLE messages ADD COLUMN disabled_model_skill_ids TEXT NOT NULL DEFAULT '[]'`
 	// §credits redeem codes: 'credits'-kind codes grant permanent credits instead
 	// of a group; redemptions record the granted amount for the audit trail.
 	addRedeemKind := `ALTER TABLE redeem_codes ADD COLUMN kind TEXT NOT NULL DEFAULT 'group'`
@@ -501,6 +502,7 @@ func Migrate(db *sql.DB) error {
 		addUserSkillWorkspace = `ALTER TABLE user_skills ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''`
 		addUserPromptWorkspace = `ALTER TABLE user_prompts ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''`
 		addMsgSelectedUserSkills = `ALTER TABLE messages ADD COLUMN IF NOT EXISTS selected_user_skill_ids TEXT NOT NULL DEFAULT '[]'`
+		addMsgDisabledModelSkills = `ALTER TABLE messages ADD COLUMN IF NOT EXISTS disabled_model_skill_ids TEXT NOT NULL DEFAULT '[]'`
 		addRedeemKind = `ALTER TABLE redeem_codes ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'group'`
 		addRedeemCredits = `ALTER TABLE redeem_codes ADD COLUMN IF NOT EXISTS credits REAL NOT NULL DEFAULT 0`
 		addRedemptionCredits = `ALTER TABLE redeem_redemptions ADD COLUMN IF NOT EXISTS credits REAL NOT NULL DEFAULT 0`
@@ -587,7 +589,7 @@ func Migrate(db *sql.DB) error {
 		addWorkspaceAllowPrivateChat, addWorkspaceAllowAiPPT,
 		addKBIsPublic, addProjectIsPublic,
 		addModelFast, addConvFast, addMsgFast,
-		addSkillDisplayDescription, addUserSkillIcon, addUserSkillWorkspace, addUserPromptWorkspace, addMsgSelectedUserSkills,
+		addSkillDisplayDescription, addUserSkillIcon, addUserSkillWorkspace, addUserPromptWorkspace, addMsgSelectedUserSkills, addMsgDisabledModelSkills,
 		addRedeemKind, addRedeemCredits, addRedemptionCredits,
 		addPaymentPaidAmount, addPaymentTaxAmount, addPaymentProviderAmount, addPaymentProviderCurrency, addPaymentConversionRate,
 		addPaymentChannelEnvironment, addPaymentOrderEnvironment,
@@ -745,7 +747,7 @@ func Migrate(db *sql.DB) error {
 	// O(1). If you add an ALTER above, add its column here.
 	columnChecks := map[string][]string{
 		"channels":                        {"id", "name", "type", "api_format", "base_url", "api_key", "headers", "enabled", "auto_disable_errors", "auto_disable_timeouts", "auto_disable_minutes", "consecutive_errors", "consecutive_timeouts", "auto_disabled_until", "sort_order", "updated_at"},
-		"messages":                        {"credits", "model_label", "search_text", "gen_ms", "feedback", "verify", "author_id", "fast", "selected_user_skill_ids", "context_tokens"},
+		"messages":                        {"credits", "model_label", "search_text", "gen_ms", "feedback", "verify", "author_id", "fast", "selected_user_skill_ids", "disabled_model_skill_ids", "context_tokens"},
 		"message_feedback":                {"id", "message_id", "conversation_id", "user_id", "workspace_id", "model_id", "channel_id", "rating", "reasons", "comment", "created_at", "updated_at"},
 		"user_feedback":                   {"id", "user_id", "message_id", "conversation_id", "conversation_title", "description", "page_path", "user_agent", "viewport_width", "viewport_height", "screenshot", "screenshot_mime", "screenshot_width", "screenshot_height", "created_at"},
 		"skills":                          {"display_description"},

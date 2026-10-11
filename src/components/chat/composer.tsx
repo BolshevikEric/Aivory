@@ -65,6 +65,7 @@ import { StylePicker } from './style-picker'
 import { ParamControls } from './param-controls'
 import { filterVisibleParams, parseControls } from './param-controls.utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useAnimatedAutoHeight } from '@/hooks/use-animated-auto-height'
 import { pulseComposerShell } from '@/lib/composer-pulse'
 import { useModels } from '@/store/models'
 import { useAuth } from '@/store/auth'
@@ -85,7 +86,6 @@ import type {
 } from '@/api/types'
 import { toast, useToastStore } from '@/hooks/use-toast'
 import { cn, uid, modKey } from '@/lib/utils'
-import { attachmentKindLabel, attachmentTileClass, fileIconFor } from '@/lib/file-icon'
 import {
   containsDroppedDirectory,
   prepareSandboxFolderUpload,
@@ -123,6 +123,7 @@ import {
 import { loadSttCapability, resolveSpeechEngine, speechEnginePreference } from '@/lib/speech-recognition'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { SkillIcon } from '@/components/ui/skill-icon'
+import { ComposerSkillMenu } from './composer-skill-menu'
 import { envNum } from '@/lib/env-config'
 import {
   isImageFileLike,
@@ -182,6 +183,7 @@ interface ComposerProps {
       webSearch?: boolean
       /** User-owned skills explicitly selected for this turn. */
       selectedUserSkillIds?: string[]
+      disabledModelSkillIds?: string[]
       /** Per-model candidate tool subset. undefined preserves the model defaults. */
       selectedToolIds?: string[]
       /** §fast-mode: run this turn in fast mode. */
@@ -489,7 +491,9 @@ function FeatureRow({ item, onAfter }: { item: FeatureItem; onAfter?: () => void
   )
 }
 
-type ToolUsePanel = 'root' | 'tools'
+const EMPTY_SKILL_IDS: readonly string[] = []
+
+type ToolUsePanel = 'root' | 'tools' | 'knowledge-bases' | 'skills'
 
 interface ToolModeAction {
   mode: ToolMode
@@ -559,6 +563,7 @@ function ToolUseSelector({
   modeItems,
   secondaryItems,
   toolSelection,
+  panel,
   onPanelChange,
   onAfter,
 }: {
@@ -571,17 +576,14 @@ function ToolUseSelector({
   modeItems: ToolModeAction[]
   secondaryItems?: FeatureItem[]
   toolSelection: ToolSelectionAction
-  onPanelChange?: (panel: ToolUsePanel) => void
+  panel: 'root' | 'tools'
+  onPanelChange: (panel: ToolUsePanel) => void
   onAfter?: () => void
 }) {
-  const [panel, setPanel] = useState<ToolUsePanel>('root')
+  const setPanel = onPanelChange
   const previousPanelRef = useRef(panel)
   const rootToolRef = useRef<HTMLButtonElement>(null)
   const toolsBackRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    onPanelChange?.(panel)
-  }, [onPanelChange, panel])
 
   useEffect(() => {
     if (!menuOpen) {
@@ -596,7 +598,7 @@ function ToolUseSelector({
     } else {
       rootToolRef.current?.focus()
     }
-  }, [menuOpen, panel])
+  }, [menuOpen, panel, setPanel])
 
   if (panel === 'root') {
     return (
@@ -828,6 +830,9 @@ export function Composer({
   // Tool policy is scoped to this conversation (or the new-chat draft). The
   // administrator-provided default is used whenever this scope has no override.
   const toolModeScope = conversationId ?? draftScope ?? 'new-chat'
+  const skillPreferenceScope = `${user?.id ?? ''}:${toolModeScope}`
+  const disabledModelSkillIds = useComposerPrefs(s => s.disabledModelSkillIdsByScope[skillPreferenceScope] ?? EMPTY_SKILL_IDS)
+  const setDisabledModelSkillIds = useComposerPrefs(s => s.setDisabledModelSkillIds)
   const hasToolModeOverride = useComposerPrefs((s) =>
     Object.prototype.hasOwnProperty.call(s.toolModesByScope, toolModeScope),
   )
@@ -861,11 +866,11 @@ export function Composer({
   const [kbLoading, setKBLoading] = useState(false)
   const [kbLoaded, setKBLoaded] = useState(false)
   const [kbLoadFailed, setKBLoadFailed] = useState(false)
-  const [kbPopoverOpen, setKBPopoverOpen] = useState(false)
   const kbLoadRequestRef = useRef(0)
   const [librarySkills, setLibrarySkills] = useState<ApiUserSkill[]>([])
   const [libraryPrompts, setLibraryPrompts] = useState<ApiUserPrompt[]>([])
   const [libraryLoading, setLibraryLoading] = useState(true)
+  const [libraryLoadFailed, setLibraryLoadFailed] = useState(false)
   const [selectedSkills, setSelectedSkills] = useState<ApiUserSkill[]>([])
   const libraryLoadRequestRef = useRef(0)
   const [commandQuery, setCommandQuery] = useState<ComposerCommandQuery | null>(null)
@@ -888,6 +893,8 @@ export function Composer({
   const [dismissedCommandKey, setDismissedCommandKey] = useState('')
   const commandMenuRef = useRef<HTMLDivElement>(null)
   const composerRootRef = useRef<HTMLDivElement>(null)
+  const composerBodyRef = useRef<HTMLDivElement>(null)
+  useAnimatedAutoHeight(composerRootRef, composerBodyRef)
   const [commandPosition, setCommandPosition] = useState<ComposerCommandPosition | null>(null)
   // Drag-and-drop file upload. `dragOver` is driven by WINDOW-level listeners
   // (see the effect below) so a file can be dropped ANYWHERE on the page, not
@@ -905,9 +912,22 @@ export function Composer({
   const isTouchDevice = useMediaQuery('(pointer: coarse)')
   const [moreOpen, setMoreOpen] = useState(false)
   const [toolUsePanel, setToolUsePanel] = useState<ToolUsePanel>('root')
-  // Turn-feature menu (the "+" left of attach): research / verify / tool use
-  // / web-search in one shared mobile/desktop surface.
+  // The "+" menu shares features, folder upload and KB selection on all sizes.
   const [featuresOpen, setFeaturesOpen] = useState(false)
+  const kbMenuBackRef = useRef<HTMLButtonElement>(null)
+  const kbMenuEntryRef = useRef<HTMLButtonElement>(null)
+  const skillMenuBackRef = useRef<HTMLButtonElement>(null)
+  const skillMenuEntryRef = useRef<HTMLButtonElement>(null)
+  const previousMenuPanelRef = useRef<ToolUsePanel>('root')
+  useEffect(() => {
+    if (moreOpen || featuresOpen) {
+      if (toolUsePanel === 'skills') skillMenuBackRef.current?.focus()
+      else if (previousMenuPanelRef.current === 'skills' && toolUsePanel === 'root') skillMenuEntryRef.current?.focus()
+      else if (toolUsePanel === 'knowledge-bases') kbMenuBackRef.current?.focus()
+      else if (previousMenuPanelRef.current === 'knowledge-bases' && toolUsePanel === 'root') kbMenuEntryRef.current?.focus()
+    }
+    previousMenuPanelRef.current = toolUsePanel
+  }, [featuresOpen, moreOpen, toolUsePanel])
   const [toolSelectionOpen, setToolSelectionOpen] = useState(false)
   const handleSelectedToolIdsChange = useCallback(
     (ids: string[] | undefined) => {
@@ -951,6 +971,7 @@ export function Composer({
   const loadLibrary = useCallback(async (requestedWorkspaceID = workspaceIdRef.current) => {
     const requestID = ++libraryLoadRequestRef.current
     setLibraryLoading(true)
+    setLibraryLoadFailed(false)
     setLibrarySkills([])
     setLibraryPrompts([])
     try {
@@ -980,6 +1001,7 @@ export function Composer({
       if (requestID !== libraryLoadRequestRef.current || workspaceIdRef.current !== requestedWorkspaceID) return
       setLibrarySkills([])
       setLibraryPrompts([])
+      setLibraryLoadFailed(true)
       if (!workspaceId || workspacePolicyResolved) setSelectedSkills([])
     } finally {
       if (requestID === libraryLoadRequestRef.current && workspaceIdRef.current === requestedWorkspaceID) setLibraryLoading(false)
@@ -995,13 +1017,13 @@ export function Composer({
     setKBLoading(false)
     setKBLoaded(false)
     setKBLoadFailed(false)
-    setKBPopoverOpen(false)
+    setToolUsePanel('root')
     setCommandQuery(null)
   }, [canUseKnowledgeBases, workspaceId])
 
   useEffect(() => {
     if (canUseKnowledgeBases) return
-    setKBPopoverOpen(false)
+    setToolUsePanel((panel) => panel === 'knowledge-bases' ? 'root' : panel)
     if ((kbIds ?? []).some((id) => id && id !== projectKBId)) onKBChange?.([])
   }, [canUseKnowledgeBases, kbIds, onKBChange, projectKBId])
   const ref = useRef<RichComposerEditorHandle>(null)
@@ -1102,7 +1124,7 @@ export function Composer({
         if (event.kind === 'account') void loadLibrary()
         if (event.kind === 'account' || event.kind === 'workspace' || event.kind === 'knowledge-base') {
           setKBLoaded(false)
-          setKBPopoverOpen(false)
+          setToolUsePanel((panel) => panel === 'knowledge-bases' ? 'root' : panel)
           void loadKBList()
         }
       }),
@@ -1888,6 +1910,7 @@ export function Composer({
       verify: effectiveVerify ? true : undefined,
       toolMode: effectiveToolMode,
       webSearch: effectiveWebSearch ? true : undefined,
+      disabledModelSkillIds: [...disabledModelSkillIds],
       selectedUserSkillIds: selectedUserSkillIdsForRequest(
         canUseWorkspaceSkills ? selectedSkills : [],
       ),
@@ -2048,6 +2071,7 @@ export function Composer({
     const recalledSkillIds = canUseWorkspaceSkills
       ? new Set(withdrawn.selectedUserSkillIds ?? [])
       : new Set<string>()
+    if (withdrawn.disabledModelSkillIds) setDisabledModelSkillIds(skillPreferenceScope, withdrawn.disabledModelSkillIds)
     if (recalledSkillIds.size > 0) {
       setSelectedSkills((current) => {
         const present = new Set(current.map((skill) => skill.id))
@@ -2724,7 +2748,6 @@ export function Composer({
         key: 'deep-research',
         icon: <Telescope size={16} aria-hidden />,
         label: t('composer.research'),
-        desc: t('composer.features.researchDesc', { defaultValue: 'Plan, search the web across rounds, and write a cited report.' }),
         active: researchActive,
         toggle: () => setMode(researchActive ? 'default' : 'deep-research'),
       })
@@ -2734,7 +2757,6 @@ export function Composer({
         key: 'verify',
         icon: <ShieldCheck size={16} aria-hidden />,
         label: t('composer.verify', { defaultValue: 'Verify' }),
-        desc: t('composer.features.verifyDesc', { defaultValue: 'A second model fact-checks the answer after it is written.' }),
         active: verify,
         toggle: () => setVerify(!verify),
       })
@@ -2822,7 +2844,71 @@ export function Composer({
         }
       : undefined
 
-  const featureList = (onAfter?: () => void) => (
+  const canManageSkills = canUseWorkspaceSkills && !isImageMode
+  const boundSkills = effectiveFast ? [] : currentModel?.bound_skills ?? []
+  const defaultSkillsEnabled = workspaceCaps.toolCalling && effectiveToolMode !== 'disabled' && currentModel?.tool_mode !== 'none' &&
+    (selectedToolIds !== undefined ? selectedToolIds.includes('builtin:use_skill') : currentModel?.skills_default_enabled !== false)
+  const activeSkillCount = selectedSkills.length + boundSkills.filter(skill =>
+    defaultSkillsEnabled && !disabledModelSkillIds.includes(skill.id) && !selectedSkills.some(item => item.source_skill_id === skill.id),
+  ).length
+
+  function addManualSkill(skill: ApiUserSkill) {
+    if (!canUseWorkspaceSkills) return
+    setSelectedSkills(current => addSelectedUserSkill(current, skill))
+    // An explicit selection overrides an excluded default for this turn only.
+    // Keep the saved exclusion so sending does not reactivate it next turn.
+  }
+
+  function removeManualSkill(skill: ApiUserSkill) {
+    setSelectedSkills(current => current.filter(item => item.id !== skill.id))
+    // Removing a manual override must not silently reactivate the same default.
+    if (skill.source_skill_id && boundSkills.some(item => item.id === skill.source_skill_id)) {
+      setDisabledModelSkillIds(skillPreferenceScope, [...new Set([...disabledModelSkillIds, skill.source_skill_id])])
+    }
+  }
+
+  const featureList = (onAfter?: () => void) => toolUsePanel === 'skills' ? (
+    <div data-composer-menu="skills" onKeyDown={event => {
+      if (event.key === 'ArrowLeft' && !(event.target instanceof HTMLInputElement)) {
+        event.preventDefault()
+        setToolUsePanel('root')
+      }
+    }}>
+      <div className="mb-1 flex min-h-9 items-center gap-2 px-1">
+        <button ref={skillMenuBackRef} type="button" onClick={() => setToolUsePanel('root')} aria-label={t('actions.back', { ns: 'common' })} className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] interactive hover:bg-[var(--color-bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"><ArrowLeft size={14} aria-hidden /></button>
+        <span className="text-[13px] font-medium">{t('composer.skills.title')}</span>
+      </div>
+      <ComposerSkillMenu defaults={boundSkills} available={librarySkills} selected={selectedSkills} disabledIds={disabledModelSkillIds} defaultsEnabled={defaultSkillsEnabled} loading={libraryLoading} failed={libraryLoadFailed} onRetry={() => void loadLibrary()} onToggleDefault={skill => {
+        const manual = selectedSkills.filter(item => item.source_skill_id === skill.id)
+        if (!defaultSkillsEnabled && manual.length === 0) {
+          const candidate = librarySkills.find(item => item.source_skill_id === skill.id)
+          if (candidate) addManualSkill(candidate)
+          return
+        }
+        const active = manual.length > 0 || !disabledModelSkillIds.includes(skill.id)
+        setSelectedSkills(current => current.filter(item => item.source_skill_id !== skill.id))
+        setDisabledModelSkillIds(skillPreferenceScope, active ? [...disabledModelSkillIds.filter(id => id !== skill.id), skill.id] : disabledModelSkillIds.filter(id => id !== skill.id))
+      }} onToggleManual={skill => {
+        if (selectedSkills.some(item => item.id === skill.id)) removeManualSkill(skill)
+        else addManualSkill(skill)
+      }} />
+    </div>
+  ) : toolUsePanel === 'knowledge-bases' ? (
+    <div data-composer-menu="knowledge-bases" onKeyDown={(event) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        setToolUsePanel('root')
+      }
+    }}>
+      <div className="mb-1 flex min-h-9 items-center gap-2 px-1">
+        <button ref={kbMenuBackRef} type="button" onClick={() => setToolUsePanel('root')} aria-label={t('actions.back', { ns: 'common' })} className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] interactive hover:bg-[var(--color-bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          <ArrowLeft size={14} aria-hidden />
+        </button>
+        <span className="text-[13px] font-medium">{t('composer.knowledgeBases')}</span>
+      </div>
+      {kbChecklist}
+    </div>
+  ) : (
     <div className="flex flex-col gap-0.5">
       {showToolUseSelector ? (
         <ToolUseSelector
@@ -2844,15 +2930,46 @@ export function Composer({
               if (!workspaceCaps.toolCalling) return
               setMoreOpen(false)
               setFeaturesOpen(false)
+              setToolUsePanel('root')
               setToolSelectionOpen(true)
             },
           }}
+          panel={toolUsePanel === 'tools' ? 'tools' : 'root'}
           onPanelChange={setToolUsePanel}
           onAfter={onAfter}
         />
       ) : (
         featureItems.map((item) => <FeatureRow key={item.key} item={item} onAfter={onAfter} />)
       )}
+      {toolUsePanel === 'root' && canManageSkills ? (
+        <button ref={skillMenuEntryRef} type="button" aria-label={t('composer.skills.title')} onClick={() => setToolUsePanel('skills')} className="flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] font-medium text-[var(--color-fg)] interactive hover:bg-[var(--color-bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          <SkillIcon name="Sparkles" size={16} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
+          <span className="min-w-0 flex-1">{t('composer.skills.title')}</span>
+          {activeSkillCount > 0 ? <span className="text-xs tabular-nums text-[var(--color-tool-selection-text)]">{activeSkillCount}</span> : null}
+          <ChevronRight size={14} className="shrink-0 text-[var(--color-fg-subtle)]" aria-hidden />
+        </button>
+      ) : null}
+      {toolUsePanel === 'root' && canUploadFolder ? (
+        <button type="button" disabled={Boolean(folderUpload)} onClick={() => {
+          setMoreOpen(false)
+          setFeaturesOpen(false)
+          void pickAndAttachFolder()
+        }} className="flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] font-medium text-[var(--color-fg)] interactive hover:bg-[var(--color-bg-muted)] disabled:cursor-wait disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          <FolderUp size={16} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
+          {t('composer.attachFolder', { defaultValue: 'Upload folder' })}
+        </button>
+      ) : null}
+      {toolUsePanel === 'root' && canSelectKnowledgeBases ? (
+        <button ref={kbMenuEntryRef} type="button" aria-label={t('composer.knowledgeBases')} onClick={() => {
+          setToolUsePanel('knowledge-bases')
+          void loadKBList()
+        }} className="flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] font-medium text-[var(--color-fg)] interactive hover:bg-[var(--color-bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          <BookOpen size={16} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
+          <span className="min-w-0 flex-1">{t('composer.knowledgeBases')}</span>
+          {selectedKnowledgeBaseIds.length > 0 && <span className="text-xs tabular-nums text-[var(--color-tool-selection-text)]">{selectedKnowledgeBaseIds.length}</span>}
+          <ChevronRight size={14} className="shrink-0 text-[var(--color-fg-subtle)]" aria-hidden />
+        </button>
+      ) : null}
     </div>
   )
 
@@ -2864,7 +2981,15 @@ export function Composer({
     ...(toolUseOverride ? [toolUseOverride] : []),
   ]
   const anyFeatureActive = activeChips.length > 0
-  const featureMenuAvailable = showToolUseSelector || featureItems.length > 0
+  const canSelectKnowledgeBases = canUseKnowledgeBases && Boolean(onKBChange) && !isImageMode
+  useEffect(() => {
+    setToolUsePanel((panel) =>
+      (panel === 'skills' && !canManageSkills) || (panel === 'knowledge-bases' && !canSelectKnowledgeBases) || (panel === 'tools' && !showToolUseSelector)
+        ? 'root'
+        : panel,
+    )
+  }, [canManageSkills, canSelectKnowledgeBases, showToolUseSelector])
+  const featureMenuAvailable = showToolUseSelector || featureItems.length > 0 || canUploadFolder || canSelectKnowledgeBases || canManageSkills
   const hasActiveParamControl = useMemo(
     () =>
       parseControls(visibleParamControls).some((control) => {
@@ -2885,7 +3010,7 @@ export function Composer({
     [paramValues, visibleParamControls],
   )
 
-  // The mobile "+" turns blue whenever a persistent choice inside it is active.
+  // Keep the "+" affordance visibly active when a persistent choice is set.
   // Hidden KB/tool policies must not leak into image or fast turns.
   const knowledgeBaseSelection = useMemo(
     () =>
@@ -2908,17 +3033,18 @@ export function Composer({
     [kbList, selectedKnowledgeBaseIds],
   )
   const hasActiveTool =
-    anyFeatureActive ||
+    anyFeatureActive || selectedSkills.length > 0 || disabledModelSkillIds.length > 0 ||
     hasActiveParamControl ||
     (canUseKnowledgeBases && !isImageMode && Boolean(onKBChange) && selectedKnowledgeBaseIds.length > 0)
 
   const openKnowledgeBaseManager = () => {
     setMoreOpen(false)
-    setKBPopoverOpen(false)
+    setFeaturesOpen(false)
+    setToolUsePanel('root')
     navigate('/kb')
   }
 
-  // KB checklist — shared by the desktop popover and the mobile "+" menu.
+  // KB checklist — the same "+" submenu on desktop and mobile.
   // Retrieval compatibility is authoritative server behavior. The user-facing
   // selector only handles library identity and selection.
   const kbChecklist =
@@ -3121,6 +3247,7 @@ export function Composer({
     }
     update()
     const unsubscribe = subscribeAppViewport(schedule)
+    // Follow the animated shell while retaining mobile viewport positioning.
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
     if (composerRootRef.current) observer?.observe(composerRootRef.current)
     if (composerRootRef.current?.parentElement) observer?.observe(composerRootRef.current.parentElement)
@@ -3215,7 +3342,7 @@ export function Composer({
     if (item.kind === 'skill') {
       if (!canUseWorkspaceSkills) return
       ref.current?.replaceRange(query.from, query.to, '')
-      setSelectedSkills((current) => addSelectedUserSkill(current, item.skill))
+      addManualSkill(item.skill)
       setDismissedCommandKey('')
     } else if (item.kind === 'command') {
       ref.current?.replaceRange(query.from, query.to, '')
@@ -3656,6 +3783,7 @@ export function Composer({
           )
         : null}
 
+      <div ref={composerBodyRef} className="chat-composer-body min-w-0 flow-root">
       {queuedTurn ? (
         <div
           className="mx-3 mt-2 flex min-h-10 min-w-0 items-center gap-2 border-b border-[var(--color-divider)] px-0.5 text-sm"
@@ -3746,9 +3874,12 @@ export function Composer({
             >
               <SkillIcon name={skill.icon} size={13} className="shrink-0" aria-hidden />
               <span className="truncate">{skill.name}</span>
+              <span className="shrink-0 text-[10px] font-normal text-[var(--color-fg-faint)]">
+                {t('composer.skillThisTurn')}
+              </span>
               <button
                 type="button"
-                onClick={() => setSelectedSkills((current) => current.filter((item) => item.id !== skill.id))}
+                onClick={() => removeManualSkill(skill)}
                 aria-label={t('library:command.removeSkill', { name: skill.name })}
                 className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--color-fg-faint)] interactive hover:text-[var(--color-fg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] max-sm:size-8"
               >
@@ -3888,13 +4019,13 @@ export function Composer({
             onOpenChange={(o) => {
               setMoreOpen(o)
               if (!o) setToolUsePanel('root')
-              if (o && canUseKnowledgeBases && onKBChange) void loadKBList()
             }}
           >
             <PopoverTrigger asChild>
               <button
                 type="button"
                 aria-label={t('composer.more', { defaultValue: 'More' })}
+                aria-pressed={hasActiveTool}
                 className={cn(
                   'relative inline-flex size-11 shrink-0 items-center justify-center rounded-full interactive',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
@@ -3904,7 +4035,7 @@ export function Composer({
                   className={cn(
                     'relative inline-flex size-8 items-center justify-center rounded-full',
                     hasActiveTool
-                      ? 'bg-[var(--color-tool-selection)] text-[var(--color-tool-selection-fg)] ring-4 ring-[var(--color-tool-selection-soft)] hover:bg-[var(--color-tool-selection-hover)]'
+                      ? 'bg-[var(--color-tool-selection-soft)] text-[var(--color-tool-selection-text)] hover:bg-[var(--color-tool-selection)]/15'
                       : 'bg-[var(--color-tool-idle)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]',
                   )}
                   >
@@ -3976,42 +4107,12 @@ export function Composer({
                       {t('composer.takePhoto')}
                     </button>
                   ) : null}
-                  {canUploadFolder ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMoreOpen(false)
-                        void pickAndAttachFolder()
-                      }}
-                      className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-[15px] text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)] active:bg-[var(--color-bg-muted)]"
-                    >
-                      <FolderUp size={18} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
-                      <span className="grid min-w-0 gap-0.5">
-                        <span>{t('composer.attachFolder', { defaultValue: 'Upload folder' })}</span>
-                        <span className="truncate text-[0.75rem] leading-tight text-[var(--color-fg-subtle)]">
-                          {t('composer.attachFolderHint', {
-                            defaultValue: 'Let the assistant work inside the whole folder',
-                          })}
-                        </span>
-                      </span>
-                    </button>
-                  ) : null}
                 </>
               ) : null}
               {featureMenuAvailable ? (
                 <>
                   {toolUsePanel === 'root' ? <div className="my-1 h-1" aria-hidden /> : null}
                   {featureList()}
-                </>
-              ) : null}
-
-              {toolUsePanel === 'root' && canUseKnowledgeBases && onKBChange && !isImageMode ? (
-                <>
-                  <div className="my-1 h-1" aria-hidden />
-                  <p className="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-fg-subtle)]">
-                    {t('composer.knowledgeBases')}
-                  </p>
-                  {kbChecklist}
                 </>
               ) : null}
 
@@ -4045,7 +4146,7 @@ export function Composer({
                   className={cn(
                     'inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                     optimizeImagePrompt
-                      ? 'bg-[var(--color-tool-selection)] text-[var(--color-tool-selection-fg)] ring-4 ring-[var(--color-tool-selection-soft)] hover:bg-[var(--color-tool-selection-hover)]'
+                      ? 'bg-[var(--color-tool-selection-soft)] text-[var(--color-tool-selection-text)] hover:bg-[var(--color-tool-selection)]/15'
                       : 'bg-[var(--color-tool-idle)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]',
                   )}
                 >
@@ -4070,16 +4171,20 @@ export function Composer({
         <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
           <div data-vt-part="tools" className="-my-1.5 flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-1.5 scrollbar-none">
             {featureMenuAvailable ? (
-              <Popover open={featuresOpen} onOpenChange={setFeaturesOpen}>
+              <Popover open={featuresOpen} onOpenChange={(open) => {
+                setFeaturesOpen(open)
+                if (!open) setToolUsePanel('root')
+              }}>
                 <Tooltip content={t('composer.features.title', { defaultValue: 'Turn features' })}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
                       aria-label={t('composer.features.title', { defaultValue: 'Turn features' })}
+                      aria-pressed={anyFeatureActive || selectedSkills.length > 0 || disabledModelSkillIds.length > 0 || (canSelectKnowledgeBases && selectedKnowledgeBaseIds.length > 0)}
                       className={cn(
                         'relative mx-1 inline-flex size-8 items-center justify-center rounded-[8px] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-                        anyFeatureActive
-                          ? 'bg-[var(--color-tool-selection)] text-[var(--color-tool-selection-fg)] ring-4 ring-[var(--color-tool-selection-soft)] hover:bg-[var(--color-tool-selection-hover)]'
+                        anyFeatureActive || selectedSkills.length > 0 || disabledModelSkillIds.length > 0 || (canSelectKnowledgeBases && selectedKnowledgeBaseIds.length > 0)
+                          ? 'bg-[var(--color-tool-selection-soft)] text-[var(--color-tool-selection-text)] hover:bg-[var(--color-tool-selection)]/15'
                           : 'bg-[var(--color-tool-idle)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]',
                       )}
                     >
@@ -4148,20 +4253,7 @@ export function Composer({
               </Tooltip>
             ) : null}
 
-            {canUploadFolder ? (
-              <Tooltip content={t('composer.attachFolder', { defaultValue: 'Upload folder' })}>
-                <button
-                  type="button"
-                  onClick={() => void pickAndAttachFolder()}
-                  aria-label={t('composer.attachFolder', { defaultValue: 'Upload folder' })}
-                  className="inline-flex items-center justify-center size-8 rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                >
-                  <FolderUp size={15} aria-hidden />
-                </button>
-              </Tooltip>
-            ) : null}
-
-            <div className="mx-1 h-5 w-px bg-[var(--color-divider)]" aria-hidden />
+            <div className="mx-1 w-1 shrink-0" aria-hidden />
 
             {isImageMode ? (
               <Tooltip content={t(optimizeImagePrompt ? 'composer.imagePromptOptimizationOn' : 'composer.imagePromptOptimizationOff')}>
@@ -4173,7 +4265,7 @@ export function Composer({
                   className={cn(
                     'inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                     optimizeImagePrompt
-                      ? 'bg-[var(--color-tool-selection)] text-[var(--color-tool-selection-fg)] ring-4 ring-[var(--color-tool-selection-soft)] hover:bg-[var(--color-tool-selection-hover)]'
+                      ? 'bg-[var(--color-tool-selection-soft)] text-[var(--color-tool-selection-text)] hover:bg-[var(--color-tool-selection)]/15'
                       : 'bg-[var(--color-tool-idle)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]',
                   )}
                 >
@@ -4196,43 +4288,6 @@ export function Composer({
               </div>
             ) : null}
 
-            {/* §7.2-7 📚 知识库选择器 — 绑定 kb_ids 到当前会话 */}
-            {canUseKnowledgeBases && onKBChange && !isImageMode ? (
-              <Popover
-                open={kbPopoverOpen}
-                onOpenChange={(open) => {
-                  setKBPopoverOpen(open)
-                  if (open) void loadKBList()
-                }}
-              >
-                <Tooltip content={t('composer.knowledgeBases')}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={t('composer.knowledgeBases')}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 h-8 px-2 rounded-[8px] text-[12px] font-medium interactive',
-                        selectedKnowledgeBaseIds.length > 0
-                          ? 'bg-[var(--color-tool-selection-soft)] text-[var(--color-tool-selection-text)]'
-                          : 'text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)]',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-                      )}
-                    >
-                      <BookOpen size={14} aria-hidden />
-                      {selectedKnowledgeBaseIds.length > 0 ? (
-                        <span className="text-[11px]">{selectedKnowledgeBaseIds.length}</span>
-                      ) : null}
-                    </button>
-                  </PopoverTrigger>
-                </Tooltip>
-                <PopoverContent align="start" className="w-72 p-2">
-                  <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-fg-subtle)]">
-                    {t('composer.knowledgeBases')}
-                  </p>
-                  {kbChecklist}
-                </PopoverContent>
-              </Popover>
-            ) : null}
           </div>
 
           {/* Active-feature chips — icon-only (name on hover). In their own
@@ -4275,6 +4330,8 @@ export function Composer({
           </div>
         </div>
       )}
+
+      </div>
 
       <FormulaEditorDialog
         open={formulaOpen}

@@ -45,8 +45,25 @@
     "drawLead": "Describe what you want to create — your gallery is below."
   },
   "composer": {
+    "skills": {
+      "title": "Skills",
+      "modelDefaults": "Model defaults",
+      "addSkills": "Manual selection",
+      "defaultScope": "Model default · can be disabled in this chat",
+      "manualScope": "Manual · this turn only",
+      "toggle": "Enable or remove skill {{name}}",
+      "search": "Search skills",
+      "defaultsUnavailable": "Current tool settings do not enable model defaults. You can still select skills manually with /.",
+      "noDescription": "No description available.",
+      "loading": "Loading skills",
+      "loadFailed": "Could not load skills.",
+      "retry": "Retry",
+      "empty": "No skills available. Add skills in the library.",
+      "noResults": "No matching skills."
+    },
     "placeholder": "Ask anything — type / for skills, commands, and prompts.",
     "placeholderMobile": "Ask anything, or type /",
+    "skillThisTurn": "This turn only",
     "commands": {
       "compactDescription": "Summarize earlier turns and keep recent context",
       "compacting": "Compacting conversation context…",

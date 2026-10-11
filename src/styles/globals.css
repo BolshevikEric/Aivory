@@ -1155,8 +1155,16 @@ html[data-view-transition='private']::view-transition-new(root) {
   .chat-composer-shell {
     box-shadow: var(--shadow-sm);
     transition:
+      height 220ms var(--ease-out),
       transform var(--duration-base) var(--ease-out),
       box-shadow var(--duration-base) var(--ease-out);
+  }
+
+  .chat-composer-shell[data-height-ready='true'] { overflow: clip; }
+  .chat-composer-shell[data-height-ready='true'] > .chat-composer-body {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
   }
 
   .chat-composer-shell:focus-within {

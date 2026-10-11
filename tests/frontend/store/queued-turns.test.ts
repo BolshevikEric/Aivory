@@ -19,6 +19,7 @@ function turnInput(conversationId = 'conv_1'): QueuedTurnInput {
     params: { temperature: 0.3 },
     toolMode: 'auto',
     selectedUserSkillIds: ['skill_1'],
+    disabledModelSkillIds: ['default_skill_1'],
     selectedToolIds: ['builtin:web'],
   }
 }
@@ -52,12 +53,14 @@ describe('queued turns store', () => {
     input.attachments[0].name = 'changed.pdf'
     if (input.params) input.params.temperature = 1
     input.selectedUserSkillIds?.push('skill_2')
+    input.disabledModelSkillIds?.push('default_skill_2')
     input.selectedToolIds?.push('builtin:python')
 
     expect(queued).toMatchObject({
       attachments: [{ name: 'notes.pdf' }],
       params: { temperature: 0.3 },
       selectedUserSkillIds: ['skill_1'],
+      disabledModelSkillIds: ['default_skill_1'],
       selectedToolIds: ['builtin:web'],
     })
   })

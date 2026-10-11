@@ -50,6 +50,23 @@ func TestUseSkillHonorsAdministratorSkillCeiling(t *testing.T) {
 	if !tc.AllowsAdminSkill("allowed-skill") || tc.AllowsAdminSkill("denied-skill") {
 		t.Fatal("test fixture did not retain the selected skill")
 	}
+	tc.DisabledAdminSkillIDs = map[string]bool{"allowed-skill": true}
+	input, _ = json.Marshal(skillInput{Name: "Allowed skill"})
+	output, _, err = tool.Execute(ctx, input, tc)
+	if err != nil || strings.Contains(output, "ALLOWED-INSTRUCTIONS") || tc.AllowsAdminSkill("allowed-skill") {
+		t.Fatalf("disabled default was still accessible: output=%q err=%v", output, err)
+	}
+	tc.SelectedAdminSkillIDs = map[string]bool{"allowed-skill": true}
+	output, _, err = tool.Execute(ctx, input, tc)
+	if err != nil || strings.Contains(output, "ALLOWED-INSTRUCTIONS") || !strings.Contains(output, "already applied") {
+		t.Fatalf("manual override duplicated default instructions: output=%q err=%v", output, err)
+	}
+	tc.SelectedAdminSkillIDs = nil
+	tc.DisabledAdminSkillIDs = nil
+	output, _, err = tool.Execute(ctx, input, tc)
+	if err != nil || strings.Count(output, "ALLOWED-INSTRUCTIONS") != 1 || !tc.AllowsAdminSkill("allowed-skill") {
+		t.Fatalf("restored default stayed inaccessible: output=%q err=%v", output, err)
+	}
 }
 
 func TestUseSkillRechecksCurrentGroupSkillSelection(t *testing.T) {

@@ -995,6 +995,7 @@ func toolRunnerForModelRequest(runner ToolRunner, modelID string, definitions []
 			SystemTools:            cloneBoolMap(systemTools),
 			AdminSkillIDs:          cloneBoolMap(source.AdminSkillIDs),
 			SelectedAdminSkillIDs:  cloneBoolMap(source.SelectedAdminSkillIDs),
+			DisabledAdminSkillIDs:  cloneBoolMap(source.DisabledAdminSkillIDs),
 			PreloadedAdminSkillIDs: preloadedSkillIDs(promptOpts),
 			ImageModelID:           source.ImageModelID,
 			ImageRequestParams:     params,

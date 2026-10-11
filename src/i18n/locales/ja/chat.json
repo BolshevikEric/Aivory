@@ -45,6 +45,22 @@
     "drawLead": "作りたい画像を説明してください — ギャラリーは下にあります。"
   },
   "composer": {
+    "skills": {
+      "title": "スキル",
+      "modelDefaults": "モデルの既定",
+      "addSkills": "手動で選択",
+      "defaultScope": "モデルの既定 · この会話で解除可能",
+      "manualScope": "手動選択 · 今回のみ",
+      "toggle": "スキル {{name}} を有効または解除",
+      "search": "スキルを検索",
+      "defaultsUnavailable": "現在のツール設定ではモデルの既定スキルが無効です。/ から手動で選択できます。",
+      "noDescription": "説明がありません。",
+      "loading": "スキルを読み込み中",
+      "loadFailed": "スキルを読み込めませんでした。",
+      "retry": "再試行",
+      "empty": "利用できるスキルがありません。ライブラリで追加できます。",
+      "noResults": "一致するスキルがありません。"
+    },
     "commands": {
       "compactDescription": "以前の会話を要約し、最近のコンテキストを保持します",
       "compacting": "会話コンテキストを圧縮しています…",
@@ -58,6 +74,7 @@
     },
     "placeholder": "何でも質問 — / でスキル、コマンド、プロンプトを表示。",
     "placeholderMobile": "何でも質問、/ でスキル",
+    "skillThisTurn": "今回のみ",
     "attach": "ファイルを添付",
     "dropHint": "ドロップして添付",
     "dropAnywhere": "どこにでもドロップして添付",

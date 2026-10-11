@@ -1173,6 +1173,9 @@ export interface ApiModel {
   /** skill ids bound to this model (model_skills) — these get listed in the
    *  system-prompt skill index; full instructions load on demand via use_skill (§4.17). */
   skills?: string[]
+  /** User-safe metadata for the current model's permitted defaults. */
+  bound_skills?: ApiPublicSkill[]
+  skills_default_enabled?: boolean
   /** Screen each user prompt before generation (§ moderation). */
   moderation_enabled?: boolean
   /** Which screen to use when moderation is on: keyword list or a model verdict. */

@@ -150,6 +150,8 @@ type ToolContext struct {
 	AdminSkillIDs map[string]bool
 	// Explicit instructions already applied once to this turn (catalog IDs).
 	SelectedAdminSkillIDs map[string]bool
+	// User-disabled model defaults; explicit manual selections remain separate.
+	DisabledAdminSkillIDs map[string]bool
 	// Presentation instructions already applied in the current model request.
 	PreloadedAdminSkillIDs map[string]bool
 	// ImageModelID is the user's pre-selected image model (§4.12-B).
@@ -290,6 +292,9 @@ func (tc *ToolContext) isSystemTool(name string) bool {
 // administrator-managed skill. Model bindings and this group ceiling must both
 // allow a skill before its instructions or files can be loaded.
 func (tc *ToolContext) AllowsAdminSkill(id string) bool {
+	if tc != nil && tc.DisabledAdminSkillIDs[id] && !tc.SelectedAdminSkillIDs[id] {
+		return false
+	}
 	if tc == nil || tc.AdminSkillIDs == nil {
 		return true
 	}
@@ -1655,6 +1660,9 @@ type RunRequest struct {
 	// selected for this turn. They are persisted on the user message and injected
 	// at user-message authority, never into composeSystemPrompt.
 	SelectedUserSkillIDs []string
+	// DisabledModelSkillIDs subtracts model-bound defaults for this turn. The
+	// snapshot is persisted on the user message for faithful regeneration.
+	DisabledModelSkillIDs []string
 	// NoTools is the legacy boolean input and the resolved effective state used by
 	// the existing no-tool fallbacks later in Run. ToolMode takes precedence when
 	// it is non-empty.
@@ -2105,7 +2113,7 @@ func (o *Orchestrator) buildFallbackRequest(ctx context.Context, base UnifiedCha
 		fallbackOpts.PresentationSkillsAllowed = fallbackOpts.PresentationSkillsAllowed && fallbackAllowsSkills &&
 			fallbackToolMode != "none" && toolCallingAllowed(fallbackAccessPolicy)
 		if fallbackOpts.SkillsAllowed || fallbackOpts.PresentationSkillsAllowed {
-			indexes, full, presentation := loadEnabledModelSkills(ctx, o.db, m.ID, fallbackAccessPolicy, fallbackSelectedSkills)
+			indexes, full, presentation := loadTurnModelSkills(ctx, o.db, m.ID, fallbackAccessPolicy, base.DisabledModelSkillIDs, fallbackSelectedSkills)
 			if fallbackOpts.SkillsAllowed {
 				fallbackOpts.Skills, fallbackOpts.SkillsFull = indexes, full
 			}
@@ -2901,6 +2909,10 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 	// from ever reaching history or durable message metadata.
 	selectedUserSkills := []store.UserSkill{}
 	normalizedSelectedUserSkillIDs := []string{}
+	req.DisabledModelSkillIDs, err = NormalizeDisabledModelSkillIDs(req.DisabledModelSkillIDs)
+	if err != nil {
+		return nil, err
+	}
 	if !req.ReuseExistingUserMessage {
 		if err := validateWorkspaceUserSkillAccess(ctx, o.db, conv.WorkspaceID, req.UserID, req.SelectedUserSkillIDs); err != nil {
 			return nil, err
@@ -2984,6 +2996,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 			// a shared conversation must never read another user's private skills.
 			var persistedIDs []string
 			_ = json.Unmarshal(existing.SelectedUserSkillIDs, &persistedIDs)
+			_ = json.Unmarshal(existing.DisabledModelSkillIDs, &req.DisabledModelSkillIDs)
 			if err := validateWorkspaceUserSkillAccess(ctx, o.db, conv.WorkspaceID, req.UserID, persistedIDs); err != nil {
 				return nil, err
 			}
@@ -2999,6 +3012,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 	if userMsg == nil {
 		atts, _ := json.Marshal(req.Attachments)
 		selectedIDs, _ := json.Marshal(normalizedSelectedUserSkillIDs)
+		disabledIDs, _ := json.Marshal(req.DisabledModelSkillIDs)
 		userBlocksList := []UnifiedBlock{}
 		if strings.TrimSpace(req.UserText) != "" {
 			userBlocksList = append(userBlocksList, UnifiedBlock{Kind: "text", Text: req.UserText})
@@ -3011,7 +3025,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 		created, err := store.CreateMessageForUser(ctx, o.db, store.Message{
 			ConversationID: conv.ID, ParentID: parentID, Role: "user",
 			Provider: channel.Type, ModelID: model.ID, Fast: fastMode,
-			Blocks: userBlocks, Attachments: atts, SelectedUserSkillIDs: selectedIDs,
+			Blocks: userBlocks, Attachments: atts, SelectedUserSkillIDs: selectedIDs, DisabledModelSkillIDs: disabledIDs,
 			AuthorID: req.UserID, // §workspaces: shared conversations attribute each question
 		}, req.UserID)
 		if err != nil {
@@ -3273,6 +3287,12 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 	if err != nil {
 		return nil, err
 	}
+	// Project away disabled defaults' historical tool output before either
+	// compaction or provider-native history replay can reintroduce instructions.
+	history, err = stripDisabledSkillHistory(ctx, o.db, history, req.DisabledModelSkillIDs)
+	if err != nil {
+		return nil, err
+	}
 	branchDocumentIDs, err := store.ConversationDocumentIDsForBranch(ctx, o.db, conv.ID, req.UserID, userMsg.ID)
 	if err != nil {
 		return nil, err
@@ -3302,7 +3322,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 		skillsAllowed = skillsAllowed && (builtinTools == nil || builtinTools["use_skill"])
 	}
 	if skillsAllowed {
-		availableSkillIdx, availableSkillFull, presentationSkills = loadEnabledModelSkills(ctx, o.db, model.ID, req.ToolAccessPolicy, selectedUserSkills)
+		availableSkillIdx, availableSkillFull, presentationSkills = loadTurnModelSkills(ctx, o.db, model.ID, req.ToolAccessPolicy, req.DisabledModelSkillIDs, selectedUserSkills)
 	}
 
 	// 5. Resolve tools for this model BEFORE composing the system prompt so the
@@ -4072,6 +4092,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 		SelectedToolsConfigured: req.SelectedToolsConfigured,
 		ToolAccessPolicy:        req.ToolAccessPolicy,
 		SelectedUserSkillIDs:    append([]string(nil), normalizedSelectedUserSkillIDs...),
+		DisabledModelSkillIDs:   append([]string(nil), req.DisabledModelSkillIDs...),
 		WorkspaceID:             conv.WorkspaceID,
 		ToolsEnabled:            toolsEnabled,
 		SearchOnly:              searchOnly,
@@ -4158,6 +4179,7 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 			SystemTools:            toolDefNameSet(systemToolDefs),
 			AdminSkillIDs:          adminSkillIDSet(req.ToolAccessPolicy),
 			SelectedAdminSkillIDs:  selectedAdminSkillIDs(selectedUserSkills),
+			DisabledAdminSkillIDs:  disabledModelSkillIDSet(req.DisabledModelSkillIDs),
 			PreloadedAdminSkillIDs: preloadedSkillIDs(&systemOpts),
 			citationIndexes: func() *citationIndexAllocator {
 				if !hasAttachedKnowledgeBase {

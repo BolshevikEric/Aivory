@@ -250,7 +250,7 @@ export default function ChatHome() {
         }
         // Keep a tool-mode choice made before the first attachment attached
         // to the hidden conversation that now owns that upload.
-        useComposerPrefs.getState().moveToolModeScope(draftScope, created.id)
+        useComposerPrefs.getState().moveToolModeScope(draftScope, created.id, user?.id)
         // startNew claimed this in-flight reservation. Hand the row to the
         // optimistic send, but do not recreate a pending-draft storage entry
         // after navigation has already consumed it.
@@ -304,6 +304,7 @@ export default function ChatHome() {
       toolMode: ToolMode
       webSearch?: boolean
       selectedUserSkillIds?: string[]
+      disabledModelSkillIds?: string[]
       selectedToolIds?: string[]
       fast?: boolean
     },
@@ -341,7 +342,7 @@ export default function ChatHome() {
         ),
       beforeNavigate: (tempId) => {
         clearComposerDraft(draftScope)
-        useComposerPrefs.getState().moveToolModeScope(sourceToolModeScope, tempId)
+        useComposerPrefs.getState().moveToolModeScope(sourceToolModeScope, tempId, user?.id)
       },
       // Commit the already-loaded thread before background conversation work
       // starts. This is the one transition where a visible response in the same
@@ -364,6 +365,7 @@ export default function ChatHome() {
         toolMode: opts.toolMode,
         webSearch: opts.webSearch,
         selectedUserSkillIds: opts.selectedUserSkillIds,
+        disabledModelSkillIds: opts.disabledModelSkillIds,
         selectedToolIds: opts.selectedToolIds,
         fast: opts.fast,
         // Swap temp→real id in the URL only if the user is STILL on the optimistic

@@ -133,7 +133,8 @@ type postMessageReq struct {
 	// SelectedUserSkillIDs applies up to five private, user-owned Agent Skills to
 	// this turn. The handler resolves ownership before opening SSE; the
 	// orchestrator re-validates and persists the normalized ids.
-	SelectedUserSkillIDs []string `json:"selected_user_skill_ids"`
+	SelectedUserSkillIDs  []string `json:"selected_user_skill_ids"`
+	DisabledModelSkillIDs []string `json:"disabled_model_skill_ids"`
 	// SelectedToolIDs is omitted for the backwards-compatible all-tools policy;
 	// an explicit [] is a real deny-all candidate subset.
 	SelectedToolIDs json.RawMessage `json:"selected_tool_ids"`
@@ -1253,6 +1254,11 @@ func postMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.SelectedUserSkillIDs = normalizedSkillIDs
+	req.DisabledModelSkillIDs, err = llm.NormalizeDisabledModelSkillIDs(req.DisabledModelSkillIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	// A branch edit names the exact persisted message it forks from. Reject a
 	// stale optimistic id (or a message from another conversation) before opening
 	// the SSE response, so the client receives a clear conflict instead of a 200
@@ -1569,6 +1575,7 @@ func postMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		Verify:                  req.Verify,
 		ToolMode:                toolMode,
 		SelectedUserSkillIDs:    req.SelectedUserSkillIDs,
+		DisabledModelSkillIDs:   req.DisabledModelSkillIDs,
 		SelectedToolIDs:         selectedToolIDs,
 		SelectedToolsConfigured: selectedToolsConfigured,
 		ToolAccessPolicy:        workspaceTurnToolPolicy(r.Context(), d.DB, conv, runToolAccessPolicy(permissions)),

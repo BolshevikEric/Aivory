@@ -26,10 +26,26 @@ function resetPrefs() {
     selectedToolIdsByModel: {},
     paramValuesByModel: {},
     draftsByScope: {},
+    disabledModelSkillIdsByScope: {},
   })
 }
 
 describe('composer tool mode', () => {
+  it('isolates disabled defaults by account and chat and preserves them through draft rekeying', () => {
+    const prefs = useComposerPrefs.getState()
+    prefs.setDisabledModelSkillIds('alice:new-chat', [' sk_visual ', 'sk_visual'])
+    prefs.setDisabledModelSkillIds('bob:chat-other', ['sk_other'])
+    prefs.setDisabledModelSkillIds('bob:new-chat', ['sk_bob'])
+    expect(useComposerPrefs.getState().disabledModelSkillIdsByScope).toEqual({ 'alice:new-chat': ['sk_visual'], 'bob:chat-other': ['sk_other'], 'bob:new-chat': ['sk_bob'] })
+    prefs.moveToolModeScope('new-chat', 'temp-1', 'alice')
+    prefs.moveToolModeScope('temp-1', 'conv-1', 'alice')
+    expect(useComposerPrefs.getState().disabledModelSkillIdsByScope).toEqual({ 'alice:conv-1': ['sk_visual'], 'bob:chat-other': ['sk_other'], 'bob:new-chat': ['sk_bob'] })
+    prefs.setDisabledModelSkillIds('alice:new-chat', ['sk_new'])
+    prefs.resetForNewConversation()
+    expect(useComposerPrefs.getState().disabledModelSkillIdsByScope).toEqual({ 'alice:conv-1': ['sk_visual'], 'bob:chat-other': ['sk_other'] })
+    expect(parsePersistedComposerPrefs({ disabledModelSkillIdsByScope: { 'alice:conv-1': ['sk_visual'] } }).disabledModelSkillIdsByScope).toEqual({ 'alice:conv-1': ['sk_visual'] })
+  })
+
   beforeEach(resetPrefs)
 
   afterEach(() => {

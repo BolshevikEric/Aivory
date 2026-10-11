@@ -45,6 +45,22 @@
     "drawLead": "描述你想画的画面——你的作品在下方。"
   },
   "composer": {
+    "skills": {
+      "title": "技能",
+      "modelDefaults": "模型默认",
+      "addSkills": "手动添加",
+      "defaultScope": "随模型启用 · 当前对话可取消",
+      "manualScope": "手动选择 · 仅本轮",
+      "toggle": "启用或取消技能 {{name}}",
+      "search": "搜索技能",
+      "defaultsUnavailable": "当前工具设置未启用模型默认技能。手动技能仍可通过 / 添加。",
+      "noDescription": "暂无简介。",
+      "loading": "正在加载技能",
+      "loadFailed": "技能列表加载失败。",
+      "retry": "重试",
+      "empty": "暂无可用技能，可在资源库中添加。",
+      "noResults": "没有匹配的技能。"
+    },
     "commands": {
       "compactDescription": "摘要较早的对话并保留最近上下文",
       "compacting": "正在压缩对话上下文…",
@@ -58,6 +74,7 @@
     },
     "placeholder": "随便问点什么——输入 / 唤出技能、命令与提示词。",
     "placeholderMobile": "问点什么，或输入 / 调用技能",
+    "skillThisTurn": "仅本轮",
     "attach": "添加附件",
     "dropHint": "拖放文件以上传",
     "dropAnywhere": "拖放到任意位置即可添加",

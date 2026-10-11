@@ -739,6 +739,7 @@ CREATE TABLE IF NOT EXISTS messages (
   stop_reason        TEXT,
   attachments        TEXT NOT NULL DEFAULT '[]',
   selected_user_skill_ids TEXT NOT NULL DEFAULT '[]', -- private skill ids applied to this user turn
+  disabled_model_skill_ids TEXT NOT NULL DEFAULT '[]', -- user-disabled model defaults for regeneration
   citations          TEXT NOT NULL DEFAULT '[]',
   input_tokens       INTEGER NOT NULL DEFAULT 0,
   context_tokens     INTEGER NOT NULL DEFAULT 0,

@@ -365,6 +365,7 @@ interface ConversationStore {
     webSearch?: boolean
     /** User-owned skill ids selected explicitly for this turn. */
     selectedUserSkillIds?: string[]
+    disabledModelSkillIds?: string[]
     /** Explicit candidate subset; undefined means every available tool. */
     selectedToolIds?: string[]
     /** §fast-mode: run this turn in fast mode (model resolved server-side + masked;
@@ -1802,6 +1803,8 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
 
   async sendMessage(input) {
     const accountCurrent = captureAccountRequestGuard()
+    const skillAccountId = useAuth.getState().user?.id ?? ''
+    const disabledModelSkillIds = [...(input.disabledModelSkillIds ?? useComposerPrefs.getState().disabledModelSkillIdsByScope[`${skillAccountId}:${input.conversationId}`] ?? [])]
     // Capture selection before any stop/path reconciliation await. The request
     // carries this exact turn snapshot, so a KB toggle made after Send belongs
     // to the next turn and a slow conversation PATCH cannot invert the scope.
@@ -2034,7 +2037,7 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
       }
       const tempId = input.conversationId
       const realId = created.id
-      useComposerPrefs.getState().moveToolModeScope(tempId, realId)
+      useComposerPrefs.getState().moveToolModeScope(tempId, realId, skillAccountId)
       const latestKnowledgeBaseIds = [
         ...(get().conversations.find((conversation) => conversation.id === tempId)?.kbIds ?? []),
       ]
@@ -2138,6 +2141,7 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
           // server-run search injection.
           tool_mode: requestToolMode,
           selected_user_skill_ids: normalizeSelectedUserSkillIds(input.selectedUserSkillIds),
+          disabled_model_skill_ids: disabledModelSkillIds,
           selected_tool_ids: input.selectedToolIds,
           web_search: requestWebSearch,
           // §fast-mode: run this turn on the admin's hidden fast model.

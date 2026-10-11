@@ -349,6 +349,7 @@ export default function ChatThread() {
       toolMode: ToolMode
       webSearch?: boolean
       selectedUserSkillIds?: string[]
+      disabledModelSkillIds?: string[]
       selectedToolIds?: string[]
       fast?: boolean
     },
@@ -371,6 +372,7 @@ export default function ChatThread() {
       toolMode: opts.toolMode,
       webSearch: opts.webSearch,
       selectedUserSkillIds: opts.selectedUserSkillIds,
+      disabledModelSkillIds: opts.disabledModelSkillIds,
       selectedToolIds: opts.selectedToolIds,
       fast: opts.fast,
     })

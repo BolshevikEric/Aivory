@@ -679,10 +679,19 @@ type SkillFull struct {
 }
 
 func loadEnabledModelSkills(ctx context.Context, db *sql.DB, modelID string, policy *ToolAccessPolicy, selected ...[]store.UserSkill) ([]SkillIndex, []SkillFull, []SkillFull) {
+	return loadTurnModelSkills(ctx, db, modelID, policy, nil, selected...)
+}
+
+// A turn may subtract model defaults without elevating manual user selections
+// into system instructions or widening the administrator's permission ceiling.
+func loadTurnModelSkills(ctx context.Context, db *sql.DB, modelID string, policy *ToolAccessPolicy, disabled []string, selected ...[]store.UserSkill) ([]SkillIndex, []SkillFull, []SkillFull) {
 	indexes := []SkillIndex{}
 	full := []SkillFull{}
 	presentation := []SkillFull{}
 	explicit := map[string]bool{}
+	for _, id := range disabled {
+		explicit[id] = true
+	}
 	for _, list := range selected {
 		for _, skill := range list {
 			if skill.SourceSkillID != "" {

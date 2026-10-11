@@ -17,6 +17,7 @@ export interface QueuedTurnInput {
   toolMode: ToolMode
   webSearch?: boolean
   selectedUserSkillIds?: string[]
+  disabledModelSkillIds?: string[]
   selectedToolIds?: string[]
   fast?: boolean
 }
@@ -47,6 +48,7 @@ function snapshotTurn(input: QueuedTurnInput): QueuedTurn {
       ? [...input.selectedUserSkillIds]
       : undefined,
     selectedToolIds: input.selectedToolIds ? [...input.selectedToolIds] : undefined,
+    disabledModelSkillIds: input.disabledModelSkillIds ? [...input.disabledModelSkillIds] : undefined,
   }
 }
 

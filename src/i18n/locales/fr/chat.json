@@ -45,6 +45,22 @@
     "drawLead": "Décrivez ce que vous voulez créer — votre galerie est ci-dessous."
   },
   "composer": {
+    "skills": {
+      "title": "Compétences",
+      "modelDefaults": "Par défaut du modèle",
+      "addSkills": "Sélection manuelle",
+      "defaultScope": "Par défaut · désactivable dans cette discussion",
+      "manualScope": "Manuelle · ce tour uniquement",
+      "toggle": "Activer ou retirer la compétence {{name}}",
+      "search": "Rechercher une compétence",
+      "defaultsUnavailable": "Les réglages des outils désactivent les compétences du modèle. Vous pouvez toujours en sélectionner avec /.",
+      "noDescription": "Aucune description disponible.",
+      "loading": "Chargement des compétences",
+      "loadFailed": "Impossible de charger les compétences.",
+      "retry": "Réessayer",
+      "empty": "Aucune compétence disponible. Ajoutez-en dans la bibliothèque.",
+      "noResults": "Aucune compétence correspondante."
+    },
     "commands": {
       "compactDescription": "Résumer les anciens échanges et conserver le contexte récent",
       "compacting": "Compactage du contexte de la conversation…",
@@ -58,6 +74,7 @@
     },
     "placeholder": "Posez une question — / affiche les compétences, commandes et invites.",
     "placeholderMobile": "Posez une question, ou tapez /",
+    "skillThisTurn": "Ce tour uniquement",
     "attach": "Joindre des fichiers",
     "dropHint": "Déposez les fichiers à joindre",
     "dropAnywhere": "Déposez n'importe où pour joindre",
