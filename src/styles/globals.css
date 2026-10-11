@@ -1931,21 +1931,36 @@ body {
   max-width: 100%;
 }
 
-@media (max-width: 639px),
-(max-height: 520px) {
+.formula-editor-dialog {
+  top: calc(var(--formula-viewport-top, 0px) + (var(--formula-viewport-height, 100dvh) - var(--formula-keyboard-inset, 0px)) / 2);
+  max-height: max(0px, calc(var(--formula-viewport-height, 100dvh) - var(--formula-keyboard-inset, 0px) - 2rem));
+}
+
+/* Touch WebViews can expose a desktop-sized CSS viewport even when the
+   physical screen is a phone. Keep this dialog full-screen for those inputs
+   as well as for narrow and short viewports. */
+@media (max-width: 767px), (pointer: coarse), (max-height: 520px) {
   .formula-editor-dialog {
-    top: var(--safe-top);
-    right: var(--safe-right);
-    bottom: var(--safe-bottom);
-    left: var(--safe-left);
-    width: auto;
+    --formula-dialog-height: max(0px, calc(var(--formula-viewport-height, 100dvh) - var(--formula-keyboard-inset, 0px) - var(--safe-top, 0px)));
+    top: calc(var(--formula-viewport-top, 0px) + var(--safe-top, 0px));
+    right: var(--safe-right, 0px);
+    bottom: auto;
+    left: var(--safe-left, 0px);
+    width: calc(100% - var(--safe-left, 0px) - var(--safe-right, 0px));
     min-width: 0;
     max-width: none;
-    height: auto;
-    max-height: none;
+    height: var(--formula-dialog-height);
+    max-height: var(--formula-dialog-height);
+    box-sizing: border-box;
     translate: none;
-    transform: none;
+    /* Full-screen geometry must stay fixed while the keyboard animates.
+       Override the shared dialog's Web Animations resize scale as well. */
+    transform: none !important;
     border-radius: 0;
+  }
+
+  .formula-editor-dialog[data-state='open'] {
+    animation-name: fade-in;
   }
 
   .formula-editor-dialog>button[aria-label] {
@@ -1981,6 +1996,19 @@ body {
   .formula-editor-dialog[data-keyboard-open='true'] .formula-editor-footer {
     padding-top: 0.3125rem;
     padding-bottom: 0.3125rem;
+  }
+
+  .formula-editor-dialog .formula-editor-footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .formula-editor-dialog .formula-editor-footer > button {
+    min-width: 0;
+    height: auto;
+    white-space: normal;
   }
 }
 
