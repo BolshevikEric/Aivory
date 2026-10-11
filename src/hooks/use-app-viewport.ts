@@ -1,27 +1,19 @@
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useState } from 'react'
+import { readAppViewport, readSurfaceViewport, subscribeAppViewport } from '@/lib/app-viewport'
 
 /** Safari's keyboard changes the visual viewport without resizing 100dvh. */
 export function useAppViewport() {
-  useLayoutEffect(() => {
-    const viewport = window.visualViewport
-    const root = document.documentElement
-    let frame = 0
-    const update = () => {
-      const height = viewport && viewport.scale === 1 ? viewport.height : window.innerHeight
-      root.style.setProperty('--app-height', `${Math.floor(height)}px`)
-    }
-    const schedule = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(update)
-    }
-    update()
-    window.addEventListener('resize', schedule)
-    viewport?.addEventListener('resize', schedule)
-    return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('resize', schedule)
-      viewport?.removeEventListener('resize', schedule)
-      root.style.removeProperty('--app-height')
-    }
-  }, [])
+  useLayoutEffect(() => subscribeAppViewport(() => {}), [])
+}
+
+export function useSurfaceViewport() {
+  const [viewport, setViewport] = useState(readAppViewport)
+  useLayoutEffect(() => subscribeAppViewport(() => {
+    const next = readSurfaceViewport()
+    setViewport((previous) =>
+      previous.left === next.left && previous.top === next.top && previous.width === next.width &&
+      previous.height === next.height && previous.scale === next.scale ? previous : next,
+    )
+  }), [])
+  return viewport
 }

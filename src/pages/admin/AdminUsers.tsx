@@ -750,7 +750,7 @@ export default function AdminUsers() {
       </Dialog>
 
       <Sheet open={Boolean(activityPanel)} onOpenChange={(open) => !open && setActivityPanel(null)}>
-        <SheetContent side="right" size="lg" className="w-full max-w-[64rem] border-0 sm:w-[calc(100vw-3rem)]">
+        <SheetContent side="right" size="lg" className="w-full max-w-[64rem] [--sheet-width-limit:64rem] border-0 sm:w-[calc(100vw-3rem)]">
           <SheetHeader>
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0">
