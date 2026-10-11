@@ -13,11 +13,15 @@ const tailwindBrowserRuntime = readFileSync(require.resolve('@tailwindcss/browse
 // (src/lib/app-update.ts). CI can pin a stable id via GIT_SHA/GITHUB_SHA;
 // otherwise the build timestamp is used (every build = a new version).
 const appVersion = process.env.APP_VERSION || process.env.GIT_SHA || process.env.GITHUB_SHA || `build-${Date.now().toString(36)}`
+// The public release version is separate from the per-build reload identifier.
+// About must show a package version even when CI uses a commit SHA as its ID.
+const releaseVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
 
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __RELEASE_VERSION__: JSON.stringify(releaseVersion),
   },
   plugins: [
     react(),

@@ -2,6 +2,8 @@
 
 // §23 version probe — the build id baked in by vite.config.ts `define`.
 declare const __APP_VERSION__: string
+// Public package version shared by the web About page and desktop build.
+declare const __RELEASE_VERSION__: string
 
 declare module '*.css' {}
 declare module '*.svg' {
