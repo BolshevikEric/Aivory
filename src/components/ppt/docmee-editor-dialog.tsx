@@ -12,7 +12,7 @@ import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { aipptApi, ApiError } from '@/api'
 import type { ApiAiPPTDeck } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { createDocmeeEditor, DocmeeEditorError, type DocmeeEditorHandle } from '@/lib/docmee-editor'
 import { useAiPPT } from '@/store/aippt'
@@ -117,12 +117,12 @@ export function DocmeeEditorDialog({ deck, onClose, onSynced }: DocmeeEditorDial
 
   return (
     <Dialog open={deck !== null} onOpenChange={(open) => (!open ? close() : undefined)}>
-      <DialogContent className="max-w-6xl p-0">
+      <DialogContent scrollMode="body" data-preview-dialog className="h-[min(54rem,calc(var(--app-height,100dvh)-2rem))] max-w-6xl p-0">
         <DialogHeader className="px-4 pt-4 sm:px-5">
           <DialogTitle>{deck?.subject || t('editor.title')}</DialogTitle>
         </DialogHeader>
 
-        <div className="relative mx-4 mb-4 h-[75vh] min-h-[420px] overflow-hidden rounded-[10px] bg-[var(--color-bg-muted)] sm:mx-5">
+        <DialogBody className="relative mx-4 mb-4 min-h-0 overflow-hidden rounded-[10px] bg-[var(--color-bg-muted)] p-0 sm:mx-5">
           <div ref={containerRef} className="h-full w-full" />
           {phase === 'loading' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--color-bg)]">
@@ -131,22 +131,24 @@ export function DocmeeEditorDialog({ deck, onClose, onSynced }: DocmeeEditorDial
             </div>
           ) : null}
           {phase === 'error' ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-bg)] px-6 text-center">
-              <AlertTriangle size={20} aria-hidden className="text-[var(--color-danger)]" />
-              <p className="max-w-md text-sm text-[var(--color-fg-muted)]">{error}</p>
-              <Button variant="outline" size="sm" onClick={() => void mount()}>
-                <RefreshCw size={13} aria-hidden className="mr-1.5" />
-                {t('editor.retry')}
-              </Button>
+            <div className="absolute inset-0 flex overflow-auto overscroll-contain bg-[var(--color-bg)] px-6 py-4 text-center" role="alert">
+              <div className="m-auto flex w-full max-w-md shrink-0 flex-col items-center gap-3">
+                <AlertTriangle size={20} aria-hidden className="shrink-0 text-[var(--color-danger)]" />
+                <p className="w-full break-words text-sm text-[var(--color-fg-muted)] [overflow-wrap:anywhere]">{error}</p>
+                <Button variant="outline" size="sm" onClick={() => void mount()}>
+                  <RefreshCw size={13} aria-hidden className="mr-1.5" />
+                  {t('editor.retry')}
+                </Button>
+              </div>
             </div>
           ) : null}
-        </div>
+        </DialogBody>
 
-        <div className="flex justify-end px-4 py-3 sm:px-5">
+        <DialogFooter className="px-4 py-3 sm:px-5">
           <Button size="sm" loading={syncing} disabled={syncing} onClick={() => void close()}>
             {t('editor.done')}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

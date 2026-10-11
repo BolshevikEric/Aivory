@@ -147,22 +147,22 @@ export function PptxNativePreview({ data, name, labels, onError }: PptxNativePre
   const failureLabel = status === 'too-large' ? labels.tooLarge : labels.error
 
   return (
-    <div className="relative h-full min-h-[28rem] overflow-hidden bg-[var(--color-bg-muted)]">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--color-bg-muted)]">
       {status === 'loading' && (
         <div
-          className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center gap-4 overflow-hidden px-4 py-8"
+          className="pointer-events-none absolute inset-0 z-10 flex min-h-0 flex-col items-center gap-4 overflow-hidden px-4 py-4 sm:py-8"
           role="status"
           aria-live="polite"
         >
-          <span className="text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
+          <span className="shrink-0 text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
           <Skeleton className="aspect-video w-full max-w-[52rem] shrink-0 rounded-[4px]" />
           <Skeleton className="aspect-video w-full max-w-[52rem] shrink-0 rounded-[4px]" />
         </div>
       )}
 
       {(status === 'error' || status === 'too-large') && (
-        <div className="flex h-full min-h-[28rem] items-center justify-center p-6" role="alert">
-          <div className="max-w-md text-center">
+        <div className="flex min-h-0 flex-1 overflow-auto overscroll-contain p-6" role="alert">
+          <div className="m-auto w-full max-w-md shrink-0 text-center">
             <FileWarning
               size={24}
               strokeWidth={1.6}
@@ -181,7 +181,7 @@ export function PptxNativePreview({ data, name, labels, onError }: PptxNativePre
         aria-busy={status === 'loading'}
         inert={status !== 'ready'}
         className={[
-          'h-full min-h-[28rem] overflow-auto overscroll-contain px-3 pt-3 sm:px-5 sm:pt-5',
+          'min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain px-3 pt-3 sm:px-5 sm:pt-5',
           status === 'error' || status === 'too-large' ? 'hidden' : '',
           status === 'loading' ? 'pointer-events-none opacity-0' : '',
         ].join(' ')}

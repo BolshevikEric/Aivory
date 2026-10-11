@@ -258,13 +258,13 @@ export function SpreadsheetNativePreview({
   if (status === 'loading') {
     return (
       <div
-        className="flex h-full min-h-[28rem] flex-col gap-4 overflow-hidden bg-[var(--color-surface)] p-4"
+        className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden bg-[var(--color-surface)] p-4"
         role="status"
         aria-live="polite"
       >
-        <span className="text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
-        <Skeleton className="h-9 w-full rounded-[6px]" />
-        <div className="grid flex-1 grid-cols-4 gap-px overflow-hidden bg-[var(--color-divider)]">
+        <span className="shrink-0 text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
+        <Skeleton className="h-9 w-full shrink-0 rounded-[6px]" />
+        <div className="grid min-h-0 flex-1 grid-cols-4 gap-px overflow-hidden bg-[var(--color-divider)]">
           {Array.from({ length: 20 }, (_, index) => (
             <Skeleton key={index} className="min-h-9 rounded-none" />
           ))}
@@ -276,10 +276,10 @@ export function SpreadsheetNativePreview({
   if (status === 'error' || status === 'too-large') {
     return (
       <div
-        className="flex h-full min-h-[28rem] items-center justify-center bg-[var(--color-surface)] p-6"
+        className="flex h-full min-h-0 min-w-0 overflow-auto overscroll-contain bg-[var(--color-surface)] p-6"
         role="alert"
       >
-        <div className="max-w-md text-center">
+        <div className="m-auto w-full max-w-md shrink-0 text-center">
           <FileWarning
             size={24}
             strokeWidth={1.6}
@@ -293,7 +293,7 @@ export function SpreadsheetNativePreview({
   }
 
   return (
-    <div className="flex h-full min-h-[28rem] min-w-0 flex-col overflow-hidden bg-[var(--color-surface)]">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--color-surface)]">
       {sheets.length > 0 && (
         <div className="shrink-0 overflow-x-auto border-b border-[var(--color-divider)] px-2">
           <div className="inline-flex min-w-full items-end gap-1" role="tablist" aria-label={labels.sheets}>
@@ -335,9 +335,9 @@ export function SpreadsheetNativePreview({
           id={`${id}-panel`}
           role="tabpanel"
           aria-labelledby={sheets.length > 0 ? `${id}-tab-${safeActiveIndex}` : undefined}
-          className="flex min-h-0 flex-1 items-center justify-center p-6 text-sm text-[var(--color-fg-muted)]"
+          className="flex min-h-0 flex-1 overflow-auto overscroll-contain p-6 text-sm text-[var(--color-fg-muted)]"
         >
-          {labels.emptySheet}
+          <span className="m-auto shrink-0 text-center">{labels.emptySheet}</span>
         </div>
       ) : (
         <>
