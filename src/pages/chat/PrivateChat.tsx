@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowUp, ImagePlus, Menu, ShieldOff, Square, X } from 'lucide-react'
+import { ArrowUp, Camera, ImagePlus, Menu, ShieldOff, Square, X } from 'lucide-react'
 import { modelsApi } from '@/api'
 import type { ApiModel } from '@/api/types'
 import { streamSSE } from '@/api/client'
@@ -107,6 +107,7 @@ export default function PrivateChat() {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraFileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -129,6 +130,7 @@ export default function PrivateChat() {
     setReadingImages(false)
     setError('')
     if (fileRef.current) fileRef.current.value = ''
+    if (cameraFileRef.current) cameraFileRef.current.value = ''
   }, [])
 
   useEffect(() => {
@@ -371,7 +373,9 @@ export default function PrivateChat() {
         </div>
         {(model?.vision || visionOutsource) && canUpload && <>
           <input ref={fileRef} type="file" accept={PRIVATE_IMAGE_TYPES.join(',')} multiple className="hidden" onChange={(event) => void pickImages(event)} aria-label={t('private.addImage')} />
+          {isPhone ? <input ref={cameraFileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void pickImages(event)} aria-label={t('private.takePhoto')} /> : null}
           <Tooltip content={t('private.addImage')}><Button variant="ghost" size="icon" loading={readingImages} disabled={streaming || readingImages} aria-label={t('private.addImage')} onClick={() => fileRef.current?.click()}><ImagePlus size={18} aria-hidden /></Button></Tooltip>
+          {isPhone ? <Tooltip content={t('private.takePhoto')}><Button variant="ghost" size="icon" loading={readingImages} disabled={streaming || readingImages} aria-label={t('private.takePhoto')} onClick={() => cameraFileRef.current?.click()}><Camera size={18} aria-hidden /></Button></Tooltip> : null}
         </>}
         <div className="ml-auto">
           {/* Same primary action as the ordinary composer: ink when ready,

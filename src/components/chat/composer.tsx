@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowUp,
   AudioWaveform,
+  Camera,
   Paperclip,
   Image as ImageIcon,
   FolderUp,
@@ -1002,6 +1003,7 @@ export function Composer({
   const ref = useRef<RichComposerEditorHandle>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
+  const cameraFileRef = useRef<HTMLInputElement>(null)
   const folderFileRef = useRef<HTMLInputElement>(null)
   /**
    * True while a File System Access directory pick is in flight.
@@ -3840,6 +3842,17 @@ export function Composer({
               e.currentTarget.value = ''
             }}
           />
+          <input
+            type="file"
+            ref={cameraFileRef}
+            hidden
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              void handleAttach(e.currentTarget.files)
+              e.currentTarget.value = ''
+            }}
+          />
           {/* Fallback directory picker. The primary path is the File System
               Access API (see `pickAndAttachFolder`); `webkitdirectory` is a
               non-standard attribute, so this input is what remains on a host
@@ -3942,6 +3955,19 @@ export function Composer({
                     >
                       <ImageIcon size={18} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
                       {t('composer.addImage')}
+                    </button>
+                  ) : null}
+                  {canUploadFiles ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        cameraFileRef.current?.click()
+                      }}
+                      className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-[15px] text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)] active:bg-[var(--color-bg-muted)]"
+                    >
+                      <Camera size={18} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
+                      {t('composer.takePhoto')}
                     </button>
                   ) : null}
                   {canUploadFolder ? (
