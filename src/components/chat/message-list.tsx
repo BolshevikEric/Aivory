@@ -15,11 +15,16 @@ import { useWorkspaces } from '@/store/workspaces'
 import { toast } from '@/hooks/use-toast'
 import { protectedFirstRoundMessageIds } from '@/lib/message-state'
 import { userCan } from '@/lib/user-permissions'
+import { GenerativeReplyProvider } from './generative-reply'
+import { useConversationGenerativeReply } from '@/hooks/use-conversation-generative-reply'
+import type { MessageImageSelection } from '@/hooks/use-conversation-image-share'
 
 import type { ArtifactRef, Attachment, Conversation, MessageFeedbackInput } from '@/types/chat'
 
 interface MessageListProps {
   conversation: Conversation
+  imageSelection?: MessageImageSelection
+  onGenerativeReplyAccepted?: () => void
   /** When set, expand the lazy window to include this message, scroll it into
    *  view, and briefly highlight it (content-search jump). */
   scrollToMessageId?: string
@@ -34,7 +39,7 @@ interface MessageListProps {
 const INITIAL_WINDOW = 24
 const BATCH = 24
 
-export function MessageList({ conversation, scrollToMessageId, jumpKey }: MessageListProps) {
+export function MessageList({ conversation, scrollToMessageId, jumpKey, onGenerativeReplyAccepted, imageSelection }: MessageListProps) {
   const user = useAuth((s) => s.user)
   const meId = user?.id
   const conversationWorkspace = useWorkspaces((s) =>
@@ -44,6 +49,7 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey }: Messag
   )
   const isWorkspaceGuest = conversationWorkspace?.role === 'guest'
   const isReadOnlyConversation = isWorkspaceGuest || conversation.archived
+  const handleGenerativeReply = useConversationGenerativeReply(conversation, Boolean(isReadOnlyConversation), onGenerativeReplyAccepted)
   const canDeleteConversations =
     userCan(user, 'allow_conversation_deletion') &&
     (!conversation.workspaceId || conversationWorkspace?.can_delete_conversations !== false)
@@ -132,7 +138,8 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey }: Messag
     setVisible((v) => (v < INITIAL_WINDOW ? Math.min(INITIAL_WINDOW, total) : v))
   }, [total])
 
-  const start = Math.max(0, total - visible)
+  const selectedStart = imageSelection ? conversation.messages.findIndex(message => imageSelection.selected.has(message.id)) : -1
+  const start = Math.min(Math.max(0, total - visible), selectedStart >= 0 ? selectedStart : total)
   const hasMore = start > 0
   const shown = hasMore ? conversation.messages.slice(start) : conversation.messages
 
@@ -369,32 +376,43 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey }: Messag
         </div>
       ) : null}
       {shown.map((m) => (
-        <MessageRow
-          key={m.id}
-          message={m}
-          onRegenerate={isReadOnlyConversation ? undefined : handleRegenerate}
-          onEdit={isReadOnlyConversation ? undefined : handleEdit}
-          onImageEdit={canMaskEdit ? handleImageEdit : undefined}
-          onSaveEdit={isReadOnlyConversation ? undefined : handleSaveEdit}
-          onFeedback={isWorkspaceGuest ? undefined : handleFeedback}
-          onReport={isWorkspaceGuest ? undefined : handleReport}
-          onBranchSwitch={isWorkspaceGuest ? undefined : handleBranchSwitch}
-          onFork={isWorkspaceGuest ? undefined : handleFork}
-          onDelete={
-            // §first-exchange: the opening question + its answer can never be
-            // deleted, whoever owns the conversation.
-            isWorkspaceGuest || !canDeleteConversations || protectedFirstRoundIds.has(m.id)
-              ? undefined
-              : // §workspaces: hide the delete-round affordance on turns the member
-                // cannot delete (server enforces author-or-creator regardless). In a
-                // shared conversation: the creator moderates everything; others only
-                // their own user turns (assistant rows have no author -> hidden).
-                !conversation.workspaceId || conversation.creatorId === meId || (m.role === 'user' && m.authorId === meId)
-                ? handleDelete
-                : undefined
-          }
-          userMessageMarkdown={userMessageMarkdown}
-        />
+        <div key={m.id} data-image-share-row={imageSelection ? m.id : undefined} className={imageSelection ? `flex min-w-0 items-start gap-3 rounded-lg p-2 -mx-2 ${imageSelection.selected.has(m.id) ? 'bg-[color-mix(in_oklch,var(--color-accent)_7%,transparent)]' : ''}` : 'contents'}>
+          {imageSelection && m.role !== 'system' && <input type="checkbox" checked={imageSelection.selected.has(m.id)} disabled={imageSelection.disabled || m.streaming || m.localOnly} onChange={() => imageSelection.toggle(m.id)} aria-label={t('shareImage.selectMessage', { role: m.role === 'user' ? t('private.you') : t('assistant') })} className="mt-2 size-4 shrink-0 accent-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] [color-scheme:light] dark:[color-scheme:dark]" />}
+          <div className={imageSelection ? 'min-w-0 flex-1' : 'contents'}>
+        <GenerativeReplyProvider
+          messageId={m.id}
+          onReply={handleGenerativeReply}
+          status={imageSelection || isReadOnlyConversation || m.role !== 'assistant' ? 'readonly' : m.streaming ? 'streaming' : conversation.messages.at(-1)?.id !== m.id ? 'answered' : 'ready'}
+        >
+          <MessageRow
+            message={m}
+            readOnly={Boolean(imageSelection)}
+            onRegenerate={isReadOnlyConversation ? undefined : handleRegenerate}
+            onEdit={isReadOnlyConversation ? undefined : handleEdit}
+            onImageEdit={canMaskEdit ? handleImageEdit : undefined}
+            onSaveEdit={isReadOnlyConversation ? undefined : handleSaveEdit}
+            onFeedback={isWorkspaceGuest ? undefined : handleFeedback}
+            onReport={isWorkspaceGuest ? undefined : handleReport}
+            onBranchSwitch={isWorkspaceGuest ? undefined : handleBranchSwitch}
+            onFork={isWorkspaceGuest ? undefined : handleFork}
+            onDelete={
+              // §first-exchange: the opening question + its answer can never be
+              // deleted, whoever owns the conversation.
+              isWorkspaceGuest || !canDeleteConversations || protectedFirstRoundIds.has(m.id)
+                ? undefined
+                : // §workspaces: hide the delete-round affordance on turns the member
+                  // cannot delete (server enforces author-or-creator regardless). In a
+                  // shared conversation: the creator moderates everything; others only
+                  // their own user turns (assistant rows have no author -> hidden).
+                  !conversation.workspaceId || conversation.creatorId === meId || (m.role === 'user' && m.authorId === meId)
+                  ? handleDelete
+                  : undefined
+            }
+            userMessageMarkdown={userMessageMarkdown}
+          />
+        </GenerativeReplyProvider>
+          </div>
+        </div>
       ))}
       <IssueFeedbackDialog
         open={Boolean(reportMessageId)}

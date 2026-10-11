@@ -11,6 +11,8 @@ import { useSettings } from '@/store/settings'
 import { useWorkspaces } from '@/store/workspaces'
 import { cn } from '@/lib/utils'
 import { hasMathContent } from '@/lib/math-content'
+import { GenerativeReplyProvider } from './generative-reply'
+import { useConversationGenerativeReply } from '@/hooks/use-conversation-generative-reply'
 
 /**
  * InlineThreadPanel — the right-edge drawer that renders a text-selection
@@ -66,6 +68,7 @@ function ThreadBody({ quote, childId, onClose }: { quote: string; childId: strin
       : false,
   )
   const sendMessage = useConversations((s) => s.sendMessage)
+  const handleGenerativeReply = useConversationGenerativeReply(conv, isWorkspaceGuest || Boolean(conv?.archived))
   const userMessageMarkdown = useSettings((s) => s.appearance.userMessageMarkdown)
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -139,12 +142,19 @@ function ThreadBody({ quote, childId, onClose }: { quote: string; childId: strin
               </div>
             ) : (
               <div key={m.id} className="self-start w-full text-[13.5px] text-[var(--color-fg)]">
-                <Markdown
-                  content={m.content}
-                  artifacts={m.artifacts}
-                  live={Boolean(m.streaming)}
-                  blockKeyPrefix={m.id}
-                />
+                <GenerativeReplyProvider
+                  messageId={m.id}
+                  onReply={handleGenerativeReply}
+                  status={isWorkspaceGuest || conv?.archived ? 'readonly' : m.streaming ? 'streaming' : messages.at(-1)?.id !== m.id ? 'answered' : 'ready'}
+                >
+                  <Markdown
+                    allowGenerativeUI
+                    content={m.content}
+                    artifacts={m.artifacts}
+                    live={Boolean(m.streaming)}
+                    blockKeyPrefix={m.id}
+                  />
+                </GenerativeReplyProvider>
                 {m.streaming && !m.content ? (
                   <span className="text-[12px] text-[var(--color-fg-subtle)]">{t('common:common.thinking', { defaultValue: 'Thinking' })}…</span>
                 ) : null}

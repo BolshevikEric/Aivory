@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal } from 'lucide-react'
+import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal, Link2, Image, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Composer } from '@/components/chat/composer'
 import { MessageList } from '@/components/chat/message-list'
 import { UserMenu } from '@/components/sidebar/sidebar'
@@ -9,6 +9,8 @@ import { InlineThreadLayer } from '@/components/chat/inline-thread-layer'
 import { ModelPicker } from '@/components/chat/model-picker'
 import { RenameConversationDialog } from '@/components/chat/rename-conversation-dialog'
 import { ShareConversationDialog } from '@/components/chat/share-conversation-dialog'
+import { ConversationImagePreviewDialog, ImageShareToolbar } from '@/components/chat/conversation-image-share'
+import { useConversationImageShare } from '@/hooks/use-conversation-image-share'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { PanelFallback } from '@/components/ui/panel-fallback'
@@ -18,6 +20,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -143,6 +148,7 @@ export default function ChatThread() {
   }, [])
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const imageShare = useConversationImageShare(conversation, canShare && !isWorkspaceGuest, scrollRef)
   // Tracks the conversation id we've already positioned at the bottom, so the
   // instant "jump to newest" only runs once per conversation (not on every
   // streaming token).
@@ -165,6 +171,7 @@ export default function ChatThread() {
   // archive / delete) collapse into one trailing overflow that opens this bottom
   // action Sheet, keeping the header a calm three-zone bar (§ mobile redesign).
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [mobileShareOptions, setMobileShareOptions] = useState(false)
   const streaming = useMemo(
     () => conversation?.messages.some((m) => m.streaming),
     [conversation?.messages],
@@ -627,9 +634,13 @@ export default function ChatThread() {
                 <Star size={13} aria-hidden /> {conversation.starred ? t('common:actions.unstar') : t('common:actions.star')}
               </DropdownMenuItem>
               {canShare ? (
-                <DropdownMenuItem onSelect={() => setShareOpen(true)}>
-                  <Share2 size={13} aria-hidden /> {t('chat:sidebar.share')}
-                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger><Share2 size={13} aria-hidden /> {t('chat:sidebar.share')}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem onSelect={() => { imageShare.cancel(); setShareOpen(true) }}><Link2 size={13} aria-hidden />{t('chat:shareImage.asLink')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => { setShareOpen(false); imageShare.begin() }}><Image size={13} aria-hidden />{t('chat:shareImage.asImage')}</DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               ) : null}
               {!conversation.workspaceId ? (
                 <>
@@ -720,7 +731,7 @@ export default function ChatThread() {
           {conversation.messages.length === 0 && loadStatus === 'loading' ? (
             <PanelFallback scope="fill" />
           ) : (
-            <MessageList conversation={conversation} scrollToMessageId={jumpTo} jumpKey={jumpKey} />
+            <MessageList conversation={conversation} scrollToMessageId={jumpTo} jumpKey={jumpKey} onGenerativeReplyAccepted={pinToBottom} imageSelection={imageShare.phase !== 'idle' ? { selected: imageShare.selected, toggle: imageShare.toggle, disabled: imageShare.busy || imageShare.phase === 'preview' } : undefined} />
           )}
         </div>
         <div
@@ -733,12 +744,13 @@ export default function ChatThread() {
         />
         <ConversationMinimap conversation={conversation} scrollContainerRef={scrollRef} />
       </div>
-      <InlineThreadLayer conversationId={conversation.id} scrollRef={scrollRef} readOnly={isWorkspaceGuest} />
+      {imageShare.phase === 'idle' && <InlineThreadLayer conversationId={conversation.id} scrollRef={scrollRef} readOnly={isWorkspaceGuest} />}
 
       {/* Composer — a hairline separates it from the thread on phones, where it's
           a bottom-anchored bar rather than a floating card. */}
       <div className="relative bg-[var(--color-bg)]">
-        {showJump && (
+        {imageShare.phase !== 'idle' && <ImageShareToolbar count={imageShare.selected.size} busy={imageShare.busy} error={imageShare.error} onSelectAll={() => void imageShare.selectAll()} onClear={imageShare.clear} onCancel={imageShare.cancel} onGenerate={() => void imageShare.generate()} />}
+        {showJump && imageShare.phase === 'idle' && (
           <button
             type="button"
             onClick={jumpToBottom}
@@ -753,7 +765,7 @@ export default function ChatThread() {
             <ArrowDown size={14} aria-hidden />
           </button>
         )}
-        <div className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-3 sm:px-6 lg:px-8 pb-3 sm:pb-5 pt-1.5 sm:pt-2">
+        <div hidden={imageShare.phase !== 'idle'} className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-3 sm:px-6 lg:px-8 pb-3 sm:pb-5 pt-1.5 sm:pt-2">
           {/* §workspace RBAC: guests are read-only — replace the composer with
               an explainer instead of letting them type into a 404. */}
           {isWorkspaceGuest ? (
@@ -869,9 +881,13 @@ export default function ChatThread() {
 
       {/* Mobile action sheet — outline / files / rename / star / share / archive /
           delete, collapsed out of the cramped header (§ mobile redesign). */}
-      <Sheet open={actionsOpen} onOpenChange={setActionsOpen}>
+      <Sheet open={actionsOpen} onOpenChange={open => { setActionsOpen(open); if (!open) setMobileShareOptions(false) }}>
         <SheetContent side="bottom" size="sm" label={t('chat:actions.more')} className="h-auto max-h-[85dvh]">
-          <div className="flex flex-col px-2 py-2">
+          {mobileShareOptions && canShare && !isWorkspaceGuest ? <div className="flex flex-col px-2 py-2">
+            <ThreadActionRow icon={<ChevronLeft size={18} aria-hidden />} label={t('common:actions.back')} onClick={() => setMobileShareOptions(false)} />
+            <ThreadActionRow icon={<Link2 size={18} aria-hidden />} label={t('chat:shareImage.asLink')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); imageShare.cancel(); setShareOpen(true) }} />
+            <ThreadActionRow icon={<Image size={18} aria-hidden />} label={t('chat:shareImage.asImage')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); imageShare.begin() }} />
+          </div> : <div className="flex flex-col px-2 py-2">
             {!isWorkspaceGuest ? (
               <ThreadActionRow
                 icon={<GitBranch size={18} aria-hidden />}
@@ -914,7 +930,8 @@ export default function ChatThread() {
               <ThreadActionRow
                 icon={<Share2 size={18} aria-hidden />}
                 label={t('chat:sidebar.share')}
-                onClick={() => { setActionsOpen(false); setShareOpen(true) }}
+                onClick={() => setMobileShareOptions(true)}
+                trailing={<ChevronRight size={16} aria-hidden />}
               />
             ) : null}
             {project ? (
@@ -946,7 +963,7 @@ export default function ChatThread() {
 				) : null}
               </>
             ) : null}
-          </div>
+          </div>}
         </SheetContent>
       </Sheet>
 
@@ -957,6 +974,7 @@ export default function ChatThread() {
           onOpenChange={setShareOpen}
         />
       ) : null}
+      {imageShare.phase === 'preview' && imageShare.pages.length > 0 && <ConversationImagePreviewDialog pages={imageShare.pages} onClose={imageShare.cancel} onBack={imageShare.back} />}
     </div>
   )
 }
@@ -1020,11 +1038,13 @@ function ThreadActionRow({
   label,
   onClick,
   destructive = false,
+  trailing,
 }: {
   icon: ReactNode
   label: string
   onClick: () => void
   destructive?: boolean
+  trailing?: ReactNode
 }) {
   return (
     <button
@@ -1042,6 +1062,7 @@ function ThreadActionRow({
         {icon}
       </span>
       <span className="truncate">{label}</span>
+      {trailing && <span className="ml-auto shrink-0 text-[var(--color-fg-muted)]">{trailing}</span>}
     </button>
   )
 }

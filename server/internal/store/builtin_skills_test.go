@@ -28,20 +28,21 @@ func TestBuiltinSkillSeedPreservesAdministratorChanges(t *testing.T) {
 }
 
 func TestBuiltinSkillSeedUpgradesOnlyUntouchedLegacyFields(t *testing.T) {
+	// Synthetic defaults exercise fingerprint migration without retaining retired prompts.
+	const retiredDescription = "Retired built-in description"
+	const retiredInstructions = "Retired built-in instructions"
+	descriptionHashes := []string{builtinSkillFingerprint(retiredDescription)}
+	instructionHashes := []string{builtinSkillFingerprint(retiredInstructions)}
 	for _, tc := range []struct {
-		name, description, instructions string
+		name, description, instructions   string
+		wantDescription, wantInstructions string
 	}{
-		{"original", legacyGenerativeUIDescription, legacyGenerativeUIInstructions},
-		{"custom description", "CUSTOM_DESCRIPTION", legacyGenerativeUIInstructions},
-		{"custom instructions", legacyGenerativeUIDescription, "CUSTOM_INSTRUCTIONS"},
-		{"both customized", "CUSTOM_DESCRIPTION", "CUSTOM_INSTRUCTIONS"},
-		{"previous original", previousGenerativeUIDescription, previousGenerativeUIInstructions},
-		{"previous custom description", "CUSTOM_DESCRIPTION", previousGenerativeUIInstructions},
-		{"previous custom instructions", previousGenerativeUIDescription, "CUSTOM_INSTRUCTIONS"},
-		{"legacy description previous instructions", legacyGenerativeUIDescription, previousGenerativeUIInstructions},
-		{"previous description legacy instructions", previousGenerativeUIDescription, legacyGenerativeUIInstructions},
-		{"current description previous instructions", generativeUIDescription, previousGenerativeUIInstructions},
-		{"previous description current instructions", previousGenerativeUIDescription, generativeUIInstructions},
+		{"original", retiredDescription, retiredInstructions, generativeUIDescription, generativeUIInstructions},
+		{"custom description", "CUSTOM_DESCRIPTION", retiredInstructions, "CUSTOM_DESCRIPTION", generativeUIInstructions},
+		{"custom instructions", retiredDescription, "CUSTOM_INSTRUCTIONS", generativeUIDescription, "CUSTOM_INSTRUCTIONS"},
+		{"both customized", "CUSTOM_DESCRIPTION", "CUSTOM_INSTRUCTIONS", "CUSTOM_DESCRIPTION", "CUSTOM_INSTRUCTIONS"},
+		{"current description previous instructions", generativeUIDescription, retiredInstructions, generativeUIDescription, generativeUIInstructions},
+		{"previous description current instructions", retiredDescription, generativeUIInstructions, generativeUIDescription, generativeUIInstructions},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, ctx := openLibraryTestDB(t)
@@ -56,21 +57,14 @@ func TestBuiltinSkillSeedUpgradesOnlyUntouchedLegacyFields(t *testing.T) {
 				INSERT INTO model_skills(model_id,skill_id) VALUES('legacy-model','sk_generative_ui')`); err != nil {
 				t.Fatal(err)
 			}
-			if err := seedBuiltinSkills(db); err != nil {
+			if err := refreshBuiltinSkillDefaults(db, descriptionHashes, instructionHashes); err != nil {
 				t.Fatal(err)
 			}
 			skill, err := GetSkill(ctx, db, GenerativeUISkillID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantDescription, wantInstructions := tc.description, tc.instructions
-			if wantDescription == legacyGenerativeUIDescription || wantDescription == previousGenerativeUIDescription {
-				wantDescription = generativeUIDescription
-			}
-			if wantInstructions == legacyGenerativeUIInstructions || wantInstructions == previousGenerativeUIInstructions {
-				wantInstructions = generativeUIInstructions
-			}
-			if skill.Description != wantDescription || skill.Instructions != wantInstructions || skill.Enabled || skill.Name != "my-visuals" || skill.Icon != "custom-icon" {
+			if skill.Description != tc.wantDescription || skill.Instructions != tc.wantInstructions || skill.Enabled || skill.Name != "my-visuals" || skill.Icon != "custom-icon" {
 				t.Fatalf("seed failed to preserve customized fields: %+v", skill)
 			}
 			ids, err := SkillsForModel(ctx, db, "legacy-model")
@@ -80,7 +74,7 @@ func TestBuiltinSkillSeedUpgradesOnlyUntouchedLegacyFields(t *testing.T) {
 			if _, err := db.Exec(`UPDATE skills SET updated_at=123 WHERE id=?`, GenerativeUISkillID); err != nil {
 				t.Fatal(err)
 			}
-			if err := seedBuiltinSkills(db); err != nil {
+			if err := refreshBuiltinSkillDefaults(db, descriptionHashes, instructionHashes); err != nil {
 				t.Fatal(err)
 			}
 			skill, _ = GetSkill(ctx, db, GenerativeUISkillID)

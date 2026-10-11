@@ -1,4 +1,322 @@
-/* Preset tables keep their layout inside Markdown's prose container. */
+/* Theme-aware, compact controls and visualizations inside chat responses. */
+[data-generative-ui] {
+  color-scheme: light;
+  --gui-violet: oklch(55% .13 300);
+  --gui-amber: oklch(53% .12 70);
+  --gui-blue: oklch(53% .12 235);
+  --gui-rose: oklch(54% .13 350);
+}
+
+[data-theme='dark'] [data-generative-ui],
+.dark [data-generative-ui] {
+  color-scheme: dark;
+  --gui-violet: oklch(75% .13 300);
+  --gui-amber: oklch(76% .12 70);
+  --gui-blue: oklch(75% .12 235);
+  --gui-rose: oklch(76% .13 350);
+}
+
+[data-generative-ui] .gui-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+[data-generative-ui] .gui-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+[data-generative-ui] .gui-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-ui] .gui-card-single { flex-direction: row; align-items: flex-start; }
+[data-generative-ui] .gui-card-content { display: flex; min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; gap: 6px; }
+[data-generative-ui] .gui-card p { margin: 0; white-space: pre-wrap; }
+[data-generative-ui] .gui-card h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
+[data-generative-ui] .gui-card-meta { font-size: 12px; line-height: 18px; color: var(--color-fg-muted); }
+[data-generative-ui] .gui-card-description { font-size: 13px; line-height: 21px; color: var(--color-fg); }
+[data-generative-ui] .gui-card-link { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; margin-top: 4px; border-radius: 3px; font-size: 12px; line-height: 20px; color: var(--color-accent); text-decoration: none; }
+[data-generative-ui] .gui-card-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+[data-generative-ui] .gui-card-link svg { flex-shrink: 0; }
+
+[data-generative-ui] .gui-card-image {
+  position: relative;
+  display: flex;
+  height: 128px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+  color: var(--color-fg-muted);
+  background: var(--color-surface);
+  text-decoration: none;
+}
+
+[data-generative-ui] .gui-card-single .gui-card-image { width: 28%; max-width: 100px; height: auto; aspect-ratio: 1; flex-shrink: 0; }
+[data-generative-ui] .gui-card-image img { position: absolute; inset: 0; height: 100%; width: 100%; margin: 0; object-fit: contain; }
+[data-generative-ui] .gui-calculator { display: flex; flex-direction: column; gap: 16px; }
+[data-generative-ui] .gui-calculator > p { margin: 0; }
+
+/* Markdown typography must not override the preset's component layout. */
+.prose-aivory [data-generative-ui] h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-generative-ui] [data-generative-checklist] ul,
+[data-generative-ui] [data-generative-steps] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-generative-ui] [data-generative-checklist] li,
+[data-generative-ui] [data-generative-steps] li {
+  margin: 0;
+}
+
+[data-generative-ui] .gui-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--color-fg-muted);
+  background: transparent;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-button:hover:enabled {
+  color: var(--color-fg);
+  background: var(--color-bg-muted);
+}
+
+[data-generative-ui] .gui-button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+[data-generative-ui] .gui-input {
+  box-sizing: border-box;
+  height: 34px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+[data-generative-ui] .gui-input[aria-invalid='true'] {
+  background: var(--color-danger-soft);
+}
+
+[data-generative-ui] .gui-input::placeholder {
+  color: var(--color-fg-muted);
+  opacity: 1;
+}
+
+[data-generative-ui] .gui-fields,
+[data-generative-ui] .gui-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 16px;
+}
+
+[data-generative-ui] .gui-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+[data-generative-ui] .gui-results,
+[data-generative-ui] .gui-feedback {
+  border-radius: 8px;
+  background: var(--color-bg-muted);
+  padding: 14px;
+}
+
+[data-generative-ui] .gui-toggle,
+[data-generative-ui] .gui-checklist-row,
+[data-generative-ui] .gui-quiz-option {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-toggle {
+  justify-content: space-between;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-ui] .gui-check {
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+  accent-color: var(--color-accent);
+}
+
+[data-generative-ui] .gui-range {
+  height: 30px;
+  accent-color: var(--color-accent);
+}
+
+[data-generative-ui] .gui-checklist-row:hover,
+[data-generative-ui] .gui-quiz-option:hover,
+[data-generative-ui] .gui-quiz-option.gui-selected {
+  background: var(--color-bg-muted);
+}
+
+[data-generative-ui] .gui-inspection {
+  display: flex;
+  min-height: 26px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-ui] .gui-function-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-generative-ui] .gui-function-row > label {
+  max-width: 90px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-generative-ui] .gui-function-plot {
+  min-width: 0;
+}
+
+[data-generative-ui] [data-generative-question] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-generative-ui] .gui-question-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 8px;
+}
+
+[data-generative-ui] .gui-question-option {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: var(--color-bg-muted);
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-question-option .gui-check { margin-top: 3px; }
+[data-generative-ui] .gui-question-option.gui-selected { background: color-mix(in oklch, var(--color-accent) 12%, var(--color-bg-muted)); }
+[data-generative-ui] .gui-question-group:disabled .gui-question-option { cursor: default; }
+[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option:hover { background: color-mix(in oklch, var(--color-accent) 8%, var(--color-bg-muted)); }
+[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option.gui-selected:hover { background: color-mix(in oklch, var(--color-accent) 16%, var(--color-bg-muted)); }
+
+[data-generative-ui] .gui-question-textarea { height: auto; min-height: 64px; max-height: 180px; }
+
+[data-generative-ui] .gui-question-submit {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 12px;
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-question-submit:hover:enabled { opacity: .9; }
+[data-generative-ui] .gui-question-submit:disabled { opacity: .5; cursor: default; }
+[data-generative-ui] p.gui-question-feedback { margin: 0; }
+
+[data-generative-ui] [data-generative-form] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+[data-generative-ui] .gui-form-heading { display: flex; flex-direction: column; gap: 6px; }
+[data-generative-ui] .gui-form-heading p,
+[data-generative-ui] p.gui-form-feedback { margin: 0; }
+[data-generative-ui] .gui-form-wide { grid-column: 1 / -1; }
+[data-generative-ui] .gui-form-textarea { height: auto; min-height: 84px; max-height: 240px; }
+[data-generative-ui] .gui-form-options { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+[data-generative-ui] .gui-form-option { display: inline-flex; min-height: 32px; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; cursor: pointer; }
+[data-generative-ui] .gui-form-option .gui-check { margin: 0; }
+[data-generative-ui] [data-generative-form] :disabled { cursor: default; }
+[data-generative-ui] [data-generative-form] .gui-input:disabled { opacity: .65; }
+
+[data-generative-ui] .gui-legend,
+[data-generative-ui] .gui-legend-row {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: var(--color-fg-muted);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-legend-row { display: flex; width: 100%; }
+[data-generative-ui] .gui-legend[aria-pressed='false'] { text-decoration: line-through; }
+[data-generative-ui] .gui-legend:hover:enabled,
+[data-generative-ui] .gui-legend-row:hover,
+[data-generative-ui] .gui-legend-row[aria-pressed='true'] { background: var(--color-bg-muted); }
+[data-generative-ui] .gui-legend:disabled { cursor: default; }
+
+[data-generative-ui] .gui-heatmap { border-collapse: separate; border-spacing: 4px; }
+[data-generative-ui] .gui-heatmap th { padding: 3px 8px; border: 0; font-size: 11px; font-weight: 400; text-align: center; color: var(--color-fg-muted); white-space: nowrap; }
+[data-generative-ui] .gui-heatmap th[scope='row'] { text-align: left; }
+[data-generative-ui] .gui-heatmap td { padding: 0; border: 0; }
+[data-generative-ui] .gui-heatmap-cell { display: block; min-height: 34px; width: 100%; padding: 6px 10px; border: 0; border-radius: 6px; font-size: 12px; color: var(--color-fg); white-space: nowrap; font-variant-numeric: tabular-nums; cursor: pointer; }
 [data-generative-ui] [data-generative-table] th,
 [data-generative-ui] [data-generative-table] td {
   padding: 12px;
@@ -38,4 +356,24 @@
 
 [data-generative-ui] [data-generative-table] figure>a {
   text-decoration: none;
+}
+
+[data-generative-ui] [data-generative-table-controls] input,
+[data-generative-ui] [data-generative-function] input {
+  box-sizing: border-box;
+}
+
+[data-generative-ui] [data-generative-function] svg,
+[data-generative-ui] [data-generative-table] svg {
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-generative-ui] *,
+  [data-generative-ui] *::before,
+  [data-generative-ui] *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
 }

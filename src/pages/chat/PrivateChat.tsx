@@ -25,6 +25,7 @@ import { useModels } from '@/store/models'
 import { useUI } from '@/store/ui'
 import { useWorkspaces } from '@/store/workspaces'
 import { usePrivateChatPermission } from '@/hooks/use-private-chat-permission'
+import { GenerativeReplyProvider } from '@/components/chat/generative-reply'
 
 /**
  * Wire history derived from the visible transcript: strictly alternating
@@ -288,6 +289,24 @@ export default function PrivateChat() {
     await runStream(model, requestHistory, [...messages, userRow])
   }
 
+  async function answerQuestion(messageId: string, text: string): Promise<boolean> {
+    const source = messages.at(-1)
+    if (!allowed || controllerRef.current || imageReadRef.current || !model || !text.trim() ||
+      String(source?.id) !== messageId || source?.role !== 'assistant' || source.streaming) return false
+    const userRow: PrivateDisplayMessage = { id: ++sequenceRef.current, role: 'user', text, createdAt: Date.now() }
+    const requestHistory: PrivateMessage[] = [...historyFor(messages), { role: 'user', text }]
+    try {
+      validatePrivateHistory(requestHistory, model.id, model.vision, visionOutsource)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'private_invalid_request')
+      return false
+    }
+    // This reply belongs only to the in-memory private transcript. Leave any
+    // separately composed text/images intact and use the existing private API.
+    void runStream(model, requestHistory, [...messages, userRow])
+    return true
+  }
+
   /** Re-stream the newest answer: drop its reply row and reuse the question. */
   async function regenerate(id: number) {
     if (!allowed || controllerRef.current || imageReadRef.current || !model) return
@@ -454,15 +473,21 @@ export default function PrivateChat() {
         <div ref={scrollRef} data-scroll-root className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin">
           <div className="chat-thread flex flex-col px-[var(--layout-gutter-mobile)] sm:px-6 lg:px-8 py-8 mx-auto w-full max-w-[var(--layout-message-max-w)]" role="log" aria-label={t('private.title')} aria-live="polite" aria-atomic="false" aria-relevant="additions text">
             {messages.map((message, index) => (
-              <PrivateMessageRow
+              <GenerativeReplyProvider
                 key={message.id}
-                message={message}
-                model={message.role === 'assistant' ? model : undefined}
-                isLastAssistant={index === messages.length - 1 && message.role === 'assistant'}
-                locked={streaming || readingImages}
-                onRegenerate={() => void regenerate(message.id)}
-                onEdit={(text) => void editAndResend(message.id, text)}
-              />
+                messageId={String(message.id)}
+                onReply={answerQuestion}
+                status={!allowed || message.role !== 'assistant' ? 'readonly' : streaming || readingImages ? 'streaming' : index !== messages.length - 1 ? 'answered' : 'ready'}
+              >
+                <PrivateMessageRow
+                  message={message}
+                  model={message.role === 'assistant' ? model : undefined}
+                  isLastAssistant={index === messages.length - 1 && message.role === 'assistant'}
+                  locked={streaming || readingImages}
+                  onRegenerate={() => void regenerate(message.id)}
+                  onEdit={(text) => void editAndResend(message.id, text)}
+                />
+              </GenerativeReplyProvider>
             ))}
           </div>
         </div>

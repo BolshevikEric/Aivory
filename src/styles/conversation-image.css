@@ -1,0 +1,39 @@
+.conversation-image-document {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  z-index: -1;
+  box-sizing: border-box;
+  padding: 32px;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--color-fg);
+  background: var(--color-bg);
+}
+.conversation-image-document *, .conversation-image-document *::before, .conversation-image-document *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.conversation-image-heading { display: flex; flex-direction: column; gap: 20px; padding-bottom: 28px; }
+.conversation-image-brand { display: flex; align-items: center; gap: 8px; }
+.conversation-image-title { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.conversation-image-viewport { overflow: hidden; position: relative; }
+.conversation-image-messages { display: flex; flex-direction: column; gap: 32px; position: relative; }
+.conversation-image-message { min-width: 0; }
+.conversation-image-footer { padding-top: 28px; color: var(--color-fg-muted); font-size: 11px; }
+.conversation-image-note { margin: 0; padding: 16px; background: var(--color-bg-muted); color: var(--color-fg-muted); border-radius: 8px; font-size: 13px; }
+.conversation-image-document pre,
+.conversation-image-document [data-code-body] code { white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; min-width: 0 !important; }
+.conversation-image-document [data-code-body] code { display: block; width: auto !important; }
+.conversation-image-document [data-generative-table],
+.conversation-image-document .overflow-x-auto,
+.conversation-image-document .max-h-\[480px\] { overflow: visible !important; max-height: none !important; }
+.conversation-image-document table { table-layout: fixed; width: 100%; }
+.conversation-image-document th, .conversation-image-document td { min-width: 0 !important; max-width: none !important; overflow-wrap: anywhere; }
+.conversation-image-document img { max-width: 100%; }
+.conversation-image-document .prose-full { font-size: 16px; }
+.conversation-image-document .math-copy-content,
+.conversation-image-document .katex-display { overflow: visible !important; }
+.conversation-image-document .truncate { white-space: normal; overflow: visible; text-overflow: clip; }
+.conversation-image-document [data-code-toolbar] button { display: none; }
