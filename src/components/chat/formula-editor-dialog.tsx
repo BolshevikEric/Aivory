@@ -1,7 +1,7 @@
 import 'mathlive/fonts.css'
 import katex from 'katex'
 import { Sigma } from 'lucide-react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { MathfieldElement } from 'mathlive'
 import { Button } from '@/components/ui/button'
@@ -101,6 +101,14 @@ const FORMULA_TEMPLATES: Record<FormulaCategory, FormulaTemplate[]> = {
 }
 
 const CATEGORIES: FormulaCategory[] = ['basic', 'greek', 'relations', 'calculus', 'sets', 'matrices']
+const COMPACT_FORMULA_QUERY = '(max-width: 767px), (pointer: coarse), (max-height: 520px)'
+
+function readFormulaViewport() {
+  const viewport = window.visualViewport
+  return viewport && viewport.scale === 1
+    ? { top: viewport.offsetTop, height: viewport.height }
+    : { top: 0, height: window.innerHeight }
+}
 
 function mathLiveLocale(language: string | undefined): string {
   const normalized = language?.toLowerCase() ?? 'en'
@@ -173,6 +181,11 @@ export function FormulaEditorDialog({
   const [loadFailed, setLoadFailed] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [keyboardInset, setKeyboardInset] = useState(0)
+  const [dialogViewport, setDialogViewport] = useState<{
+    top: number
+    height: number
+    compact: boolean
+  } | null>(null)
   const [errorKey, setErrorKey] = useState<FormulaEditorError | null>(null)
   const error = errorKey ? t(`composer.formula.${errorKey}`) : ''
   const localeRef = useRef(mathLiveLocale(i18n.resolvedLanguage))
@@ -192,6 +205,37 @@ export function FormulaEditorDialog({
     menu: t('composer.formula.menuLabel'),
     keyboard: t('composer.formula.keyboardLabel'),
   }
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const compactQuery = window.matchMedia(COMPACT_FORMULA_QUERY)
+    const viewport = window.visualViewport
+    let frame = 0
+    const syncViewport = () => {
+      const next = { ...readFormulaViewport(), compact: compactQuery.matches }
+      setDialogViewport((previous) => (
+        previous && previous.top === next.top && previous.height === next.height && previous.compact === next.compact
+          ? previous
+          : next
+      ))
+    }
+    const scheduleViewport = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(syncViewport)
+    }
+    syncViewport()
+    compactQuery.addEventListener('change', scheduleViewport)
+    window.addEventListener('resize', scheduleViewport)
+    viewport?.addEventListener('resize', scheduleViewport)
+    viewport?.addEventListener('scroll', scheduleViewport)
+    return () => {
+      cancelAnimationFrame(frame)
+      compactQuery.removeEventListener('change', scheduleViewport)
+      window.removeEventListener('resize', scheduleViewport)
+      viewport?.removeEventListener('resize', scheduleViewport)
+      viewport?.removeEventListener('scroll', scheduleViewport)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -235,6 +279,7 @@ export function FormulaEditorDialog({
     let virtualKeyboard: typeof window.mathVirtualKeyboard | undefined
     let syncKeyboardInset: (() => void) | undefined
     let scheduleKeyboardInset: (() => void) | undefined
+    const visualViewport = window.visualViewport
     const keyboardSyncTimeouts: number[] = []
     setLatex(initialLatex)
     errorRef.current = ''
@@ -283,10 +328,14 @@ export function FormulaEditorDialog({
           virtualKeyboard = window.mathVirtualKeyboard
           virtualKeyboard.layouts = ['numeric', 'symbols', 'alphabetic', 'greek']
           syncKeyboardInset = () => {
-            const height = virtualKeyboard?.visible
-              ? Math.ceil(virtualKeyboard.boundingRect.height)
+            const viewport = readFormulaViewport()
+            const keyboardRect = virtualKeyboard?.boundingRect
+            // Reserve only the part of MathLive's keyboard still covering the
+            // visible viewport. Native keyboards may already have resized it.
+            const overlap = virtualKeyboard?.visible && keyboardRect && keyboardRect.height > 0
+              ? Math.max(0, Math.min(viewport.top + viewport.height, keyboardRect.bottom) - Math.max(viewport.top, keyboardRect.top))
               : 0
-            setKeyboardInset(Math.min(height, window.innerHeight))
+            setKeyboardInset(Math.ceil(overlap))
           }
           scheduleKeyboardInset = () => {
             keyboardSyncTimeouts.splice(0).forEach((timeout) => window.clearTimeout(timeout))
@@ -301,6 +350,8 @@ export function FormulaEditorDialog({
           virtualKeyboard.addEventListener('virtual-keyboard-toggle', scheduleKeyboardInset)
           mathfield.addEventListener('virtual-keyboard-toggle', scheduleKeyboardInset)
           window.addEventListener('resize', scheduleKeyboardInset)
+          visualViewport?.addEventListener('resize', scheduleKeyboardInset)
+          visualViewport?.addEventListener('scroll', scheduleKeyboardInset)
           // MathLive announces the toggle before its animated plate always has
           // final geometry. Calibrate briefly while the dialog is open so the
           // footer remains above both the first frame and later layout changes.
@@ -328,6 +379,8 @@ export function FormulaEditorDialog({
         virtualKeyboard.removeEventListener('virtual-keyboard-toggle', scheduleKeyboardInset)
         mountedMathfield?.removeEventListener('virtual-keyboard-toggle', scheduleKeyboardInset)
         window.removeEventListener('resize', scheduleKeyboardInset)
+        visualViewport?.removeEventListener('resize', scheduleKeyboardInset)
+        visualViewport?.removeEventListener('scroll', scheduleKeyboardInset)
       }
       keyboardSyncTimeouts.forEach((timeout) => window.clearTimeout(timeout))
       virtualKeyboard?.hide({ animate: false })
@@ -394,16 +447,18 @@ export function FormulaEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         size="lg"
-        className="formula-editor-dialog min-h-0 min-w-0 overflow-hidden"
+        className={cn(
+          'formula-editor-dialog min-h-0 min-w-0 overflow-hidden',
+          // Replace the shared modal's centering utilities before rendering a
+          // full-screen surface; retaining -50% translation clips half of it.
+          dialogViewport?.compact && 'left-0 top-0 w-full max-w-none [translate:0_0] rounded-none data-[state=open]:animate-[fade-in_160ms_var(--ease-out)]',
+        )}
         data-keyboard-open={keyboardInset > 0 ? 'true' : undefined}
-        // The layout viewport may already shrink when the system keyboard
-        // opens. Constrain the dialog to the remaining space instead of
-        // adding the keyboard height to its total size.
         style={{
-          maxHeight: keyboardInset > 0
-            ? `max(12rem, calc(100dvh - ${keyboardInset}px))`
-            : undefined,
-        }}
+          '--formula-viewport-top': `${dialogViewport?.top ?? 0}px`,
+          '--formula-viewport-height': dialogViewport ? `${dialogViewport.height}px` : '100dvh',
+          '--formula-keyboard-inset': `${keyboardInset}px`,
+        } as CSSProperties}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           requestAnimationFrame(() => fallbackFocusRef.current?.focus())
