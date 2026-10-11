@@ -31,6 +31,7 @@ describe('sandbox files drawer', () => {
       currentPath: '',
       loading: false,
       unavailable: false,
+      unavailableReason: '',
       error: false,
     })
   })
@@ -56,5 +57,36 @@ describe('sandbox files drawer', () => {
     expect(useConversationFiles.getState().open).toBe(false)
     expect(useArtifactPanel.getState().open).toBe(false)
     expect(useInlineThreadDrawer.getState().open).toBe(false)
+  })
+
+  it('shows saved files normally and clears a previous unavailable reason', async () => {
+    apiMocks.sandboxFiles.mockResolvedValueOnce({ session: 'sid', files: [], unavailable: true, unavailable_reason: 'archive_missing' })
+    useSandboxFiles.getState().openDrawer('conv-1')
+    await vi.waitFor(() => expect(useSandboxFiles.getState().loading).toBe(false))
+    expect(useSandboxFiles.getState().unavailableReason).toBe('archive_missing')
+    apiMocks.sandboxFiles.mockResolvedValueOnce({ session: 'sid', archived: true, files: [{ path: 'uploads/data.csv', size: 6 }] })
+    await useSandboxFiles.getState().load()
+    expect(useSandboxFiles.getState()).toMatchObject({ unavailable: false, unavailableReason: '', error: false, files: [{ path: 'uploads/data.csv', size: 6 }] })
+  })
+
+  it('distinguishes service failures and resets status when changing conversations', async () => {
+    apiMocks.sandboxFiles.mockRejectedValueOnce(new Error('network failure'))
+    useSandboxFiles.getState().openDrawer('conv-1')
+    await vi.waitFor(() => expect(useSandboxFiles.getState().loading).toBe(false))
+    expect(useSandboxFiles.getState()).toMatchObject({ error: true, unavailableReason: 'service_unavailable', files: [] })
+    useSandboxFiles.getState().openDrawer('conv-2')
+    expect(useSandboxFiles.getState()).toMatchObject({ error: false, unavailableReason: '', conversationId: 'conv-2' })
+    await vi.waitFor(() => expect(useSandboxFiles.getState().loading).toBe(false))
+  })
+
+  it('ignores a delayed result from a previously opened conversation', async () => {
+    let finish!: (value: unknown) => void
+    apiMocks.sandboxFiles.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    useSandboxFiles.getState().openDrawer('conv-1')
+    useSandboxFiles.getState().openDrawer('conv-2')
+    await vi.waitFor(() => expect(useSandboxFiles.getState().loading).toBe(false))
+    finish({ session: 'old', files: [], unavailable: true, unavailable_reason: 'archive_missing' })
+    await Promise.resolve()
+    expect(useSandboxFiles.getState()).toMatchObject({ conversationId: 'conv-2', session: 'sid', unavailableReason: '', unavailable: false })
   })
 })

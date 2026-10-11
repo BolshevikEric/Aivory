@@ -522,6 +522,7 @@
     "canvas": "画布"
   },
   "sidebar": {
+    "draft": "草稿",
     "reorderHint": "拖动排序；手机长按拖动；也可按 Alt + ↑ / ↓ 调整顺序",
     "reorderSaving": "正在保存对话顺序",
     "reorderFailed": "无法保存对话顺序，请稍后重试",
@@ -608,9 +609,14 @@
     "loading": "加载中…",
     "none": "此对话尚未创建沙盒工作区。",
     "empty": "此目录为空。",
-    "unavailable": "沙盒会话已过期，暂时无法浏览文件。",
+    "unavailable": "沙盒文件暂时无法浏览。",
     "loadFailed": "沙盒文件暂时不可用。",
-    "openFolder": "打开 {{name}}"
+    "openFolder": "打开 {{name}}",
+    "archive_missing": "沙盒已回收，未找到可用的文件归档。",
+    "archive_not_configured": "沙盒已回收，尚未配置文件归档存储。",
+    "archive_read_failed": "文件归档暂时无法读取，请稍后重试。",
+    "unsupported": "当前沙盒服务暂不支持文件浏览，请联系管理员更新服务。",
+    "service_unavailable": "沙盒服务暂时不可用，请稍后重试。"
   },
   "inline": {
     "ask": "提问",

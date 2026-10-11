@@ -298,8 +298,7 @@ interface ConversationStore {
   loadOlderMessages: (id: string) => Promise<void>
 
   createConversation: (modelId?: string, projectId?: string, fast?: boolean) => Promise<Conversation>
-  /** Insert a conversation created OUTSIDE the store (the home page's
-   *  attachment-scoped draft, kept off the sidebar until first send). */
+  /** Insert a conversation created outside the store, including upload drafts. */
   adoptConversation: (row: ApiConversation) => Conversation
   deleteConversation: (id: string) => Promise<boolean>
   renameConversation: (id: string, title: string) => Promise<boolean>
@@ -2158,6 +2157,11 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
         switch (ev.type) {
           case 'message_start':
             assistantStarted = true
+            set((state) => ({
+              conversations: state.conversations.map((conversation) =>
+                conversation.id === input.conversationId ? { ...conversation, isDraft: false } : conversation,
+              ),
+            }))
             input.onAccepted?.()
             serverAssistantId = ev.message_id ?? assistantId
             // Replace local id with backend id so future actions (regenerate,
@@ -3325,6 +3329,8 @@ function applyReplayEvent(
 export function toLocalConversation(c: ApiConversation): Conversation {
   return {
     id: c.id,
+    isDraft: c.is_draft === true,
+    draftScope: c.is_draft ? c.draft_scope || undefined : undefined,
     workspaceId: c.workspace_id || undefined,
     isPublic: c.is_public === true,
     creatorName: c.creator_name || undefined,
@@ -3826,6 +3832,7 @@ function mergeStreamingSummaries(
     const streaming = cur.messages.some((m) => m.streaming)
     return {
       ...next,
+      isDraft: cur.isDraft === false ? false : next.isDraft,
       // The list endpoint carries no messages — never clobber a transcript a
       // concurrent loadOne already hydrated (boot/deep-link race, workspace
       // switch while the thread is open, Privacy-page / unarchive reloads).
@@ -3838,8 +3845,8 @@ function mergeStreamingSummaries(
       title: streaming ? next.title || cur.title : next.title,
     }
   })
-  // A fresh history response excludes upload-only drafts and can race the
-  // first message commit. Keep the user's optimistic send visible while that
+  // A fresh history response can race the first message commit. Keep the
+  // user's optimistic send visible while that
   // round trip is in flight, including the temp-to-server ID handoff.
   const incomingIDs = new Set(incoming.map((conversation) => conversation.id))
   const workspaceId = activeWorkspaceId() ?? ''
@@ -3940,6 +3947,8 @@ export function sameConvListShape(a: Conversation[], b: Conversation[]): boolean
       x.pinned !== y.pinned ||
       x.starred !== y.starred ||
       x.archived !== y.archived ||
+      x.isDraft !== y.isDraft ||
+      x.draftScope !== y.draftScope ||
       x.projectId !== y.projectId ||
       x.isPublic !== y.isPublic ||
       Boolean(x.inline) !== Boolean(y.inline) ||

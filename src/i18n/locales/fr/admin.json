@@ -1915,9 +1915,14 @@
     "clear": "Vider le bac à sable",
     "cleared": "Bac à sable vidé",
     "none": "Aucune session de bac à sable pour cette conversation.",
-    "unavailable": "Session expirée ou le sidecar ne prend pas en charge la liste des fichiers.",
+    "unavailable": "Les fichiers du bac à sable sont actuellement indisponibles.",
     "empty": "Espace de travail du bac à sable vide.",
-    "open": "Ouvrir"
+    "open": "Ouvrir",
+    "archive_missing": "Le bac à sable a été recyclé et aucun fichier sauvegardé n’a été trouvé.",
+    "archive_not_configured": "Le bac à sable a été recyclé et le stockage des archives n’est pas configuré.",
+    "archive_read_failed": "Impossible de lire les fichiers sauvegardés pour le moment. Réessayez plus tard.",
+    "unsupported": "Ce service de bac à sable ne permet pas de parcourir les fichiers. Demandez à un administrateur de le mettre à jour.",
+    "service_unavailable": "Le service de bac à sable est temporairement indisponible. Réessayez plus tard."
   },
   "backup": {
     "title": "Sauvegarde et migration",

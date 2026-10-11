@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/store/auth'
 import { OAuthButtons } from '@/components/auth/oauth-buttons'
+import { useAuthFormLayout } from '@/hooks/use-auth-form-layout'
 import { PuzzleCaptchaDialog } from '@/components/auth/puzzle-captcha-dialog'
 import { authErrorText } from '@/lib/auth-errors'
 import { isPasskeyAvailable } from '@/lib/passkey'
@@ -23,6 +24,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation('auth')
+  const { compact, split, short } = useAuthFormLayout()
   const login = useAuth((s) => s.login)
   const banned = useAuth((s) => s.banned)
   const loginTwoFactor = useAuth((s) => s.loginTwoFactor)
@@ -221,9 +223,22 @@ export default function Login() {
     setErrors({})
   }
 
+  const rememberControl = !desktop ? <label className="login-remember">
+    <input
+      type="checkbox"
+      checked={rememberPassword}
+      onChange={(event) => {
+        const remember = event.target.checked
+        setRememberPassword(remember)
+        setRememberPasswordPreference(remember)
+      }}
+    />
+    <span>{t('login.rememberPassword')}</span>
+  </label> : null
+
   if (show2fa) {
     return (
-      <div className="login-content">
+      <div className="login-content" data-auth-split={split}>
         <ShieldCheck className="login-twofa-icon" size={28} aria-hidden />
         <h1 id="login-title" className="login-title">{t('twofa.title')}</h1>
         <p className="login-intro">{t('twofa.subtitle')}</p>
@@ -259,10 +274,12 @@ export default function Login() {
     )
   }
 
+  const formError = errors.general || (split ? errors.email || errors.pw : undefined)
+
   return (
-    <div className="login-content">
-      <h1 id="login-title" className={desktop ? 'sr-only' : 'login-title'}>{t(desktop ? 'login.submit' : 'login.title')}</h1>
-      {!desktop && <p className="login-intro">{t('login.subtitle')}</p>}
+    <div className="login-content" data-auth-split={split}>
+      <h1 id="login-title" className={desktop || short ? 'sr-only' : 'login-title'}>{t(desktop ? 'login.submit' : 'login.title')}</h1>
+      {!desktop && <p className="login-intro" data-auth-intro="optional">{t('login.subtitle')}</p>}
 
       {desktop ? (
         <div className="mb-4 space-y-2">
@@ -280,7 +297,7 @@ export default function Login() {
 
       {providers.length > 0 || showPasskey ? (
         <div className="login-providers">
-          <OAuthButtons providers={providers} captchaRequired={registrationCaptchaRequired} />
+          <OAuthButtons providers={providers} captchaRequired={registrationCaptchaRequired} compact={compact} />
           {showPasskey ? (
             <Button
               type="button"
@@ -308,8 +325,8 @@ export default function Login() {
           <p>{t('login.suspended.body')}</p>
         </div>
       ) : null}
-      {errors.general ? (
-        <p id="login-error" className="login-error" role="alert">{errors.general}</p>
+      {formError ? (
+        <p id="login-error" className="login-error" role="alert">{formError}</p>
       ) : null}
 
       {showPasswordLogin ? (
@@ -324,6 +341,7 @@ export default function Login() {
             type="email"
             inputMode="email"
             label={t('login.emailLabel')}
+            headingAction={short ? rememberControl : undefined}
             value={email}
             autoComplete={rememberPassword ? 'email' : 'off'}
             autoCapitalize="none"
@@ -346,18 +364,7 @@ export default function Login() {
             required
             error={errors.pw}
           />
-          {!desktop ? <label className="login-remember">
-            <input
-              type="checkbox"
-              checked={rememberPassword}
-              onChange={(event) => {
-                const remember = event.target.checked
-                setRememberPassword(remember)
-                setRememberPasswordPreference(remember)
-              }}
-            />
-            <span>{t('login.rememberPassword')}</span>
-          </label> : null}
+          {!short ? rememberControl : null}
           <Button type="submit" loading={loading} disabled={passkeyBusy} className="login-submit">
             {t('login.submit')}
           </Button>
@@ -370,7 +377,10 @@ export default function Login() {
           <Link to="/register">{t('login.noAccountAction')}</Link>
         </p>
       ) : null}
-      <p className="login-terms">
+      {short ? <p className="login-legal-compact">
+        <Link to="/terms" target="_blank" rel="noopener noreferrer">{t('register.terms')}</Link>
+        <Link to="/privacy" target="_blank" rel="noopener noreferrer">{t('register.privacy')}</Link>
+      </p> : <p className="login-terms">
         <Trans
           t={t}
           i18nKey="login.agree"
@@ -379,7 +389,7 @@ export default function Login() {
             privacy: <Link to="/privacy" target="_blank" rel="noopener noreferrer" />,
           }}
         />
-      </p>
+      </p>}
 
       {showPasswordLogin && loginCaptchaRequired ? (
         <PuzzleCaptchaDialog

@@ -522,6 +522,7 @@
     "canvas": "畫布"
   },
   "sidebar": {
+    "draft": "草稿",
     "reorderHint": "拖曳排序；手機長按拖曳；也可按 Alt + ↑ / ↓ 調整順序",
     "reorderSaving": "正在儲存對話順序",
     "reorderFailed": "無法儲存對話順序，請稍後重試",
@@ -608,9 +609,14 @@
     "loading": "載入中…",
     "none": "此對話尚未建立沙盒工作區。",
     "empty": "此資料夾是空的。",
-    "unavailable": "沙盒工作階段已過期，暫時無法瀏覽檔案。",
+    "unavailable": "沙盒檔案暫時無法瀏覽。",
     "loadFailed": "沙盒檔案暫時無法使用。",
-    "openFolder": "開啟 {{name}}"
+    "openFolder": "開啟 {{name}}",
+    "archive_missing": "沙盒已回收，未找到可用的檔案封存。",
+    "archive_not_configured": "沙盒已回收，尚未設定檔案封存儲存空間。",
+    "archive_read_failed": "檔案封存暫時無法讀取，請稍後重試。",
+    "unsupported": "目前的沙盒服務暫不支援檔案瀏覽，請聯絡管理員更新服務。",
+    "service_unavailable": "沙盒服務暫時無法使用，請稍後重試。"
   },
   "inline": {
     "ask": "提問",

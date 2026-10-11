@@ -38,7 +38,7 @@ vi.mock('@/hooks/use-toast', () => ({
   },
 }))
 
-import { useConversations } from '@/store/conversations'
+import { useConversations, sameConvListShape, toLocalConversation } from '@/store/conversations'
 import { useWorkspaces } from '@/store/workspaces'
 
 function conversation(id: string, updatedAt: number): ApiConversation {
@@ -63,6 +63,13 @@ function conversation(id: string, updatedAt: number): ApiConversation {
 }
 
 describe('conversation sidebar pagination', () => {
+  it('retains draft metadata and rerenders when the first send clears the marker', () => {
+    const draft = toLocalConversation({ ...conversation('draft', 1), title: '', is_draft: true, draft_scope: 'draw' })
+    expect(draft).toMatchObject({ isDraft: true, draftScope: 'draw', messages: [] })
+    const saved = toLocalConversation({ ...conversation('draft', 1), title: '', is_draft: false })
+    expect(sameConvListShape([draft], [saved])).toBe(false)
+    expect(toLocalConversation(conversation('older-server', 1)).isDraft).toBe(false)
+  })
   beforeEach(() => {
     apiMocks.list.mockReset()
     apiMocks.listArchived.mockReset()

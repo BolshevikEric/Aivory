@@ -143,11 +143,8 @@ export default function ChatHome() {
   // When the user attaches a file BEFORE sending, we must create the
   // conversation up front so the upload is scoped + RAG-ingested (§4.11.2).
   // Stash it here so the eventual send reuses the SAME conversation instead of
-  // spawning a second empty one. Created OUTSIDE the store on purpose: the
-  // draft stays off the sidebar (no "Untitled" row from merely attaching) and
-  // only enters the cache when the optimistic send adopts its server id. Its id
-  // is persisted so a refresh can reclaim the draft without exposing it in the
-  // sidebar.
+  // spawning a second empty one. The reservation also enters sidebar history
+  // with a draft marker; its persisted id lets a refresh reclaim the same files.
   const pendingConvRef = useRef<ApiConversation | null>(null)
   const pendingCreateRef = useRef<Promise<ApiConversation | undefined> | null>(null)
   const pendingConsumedRef = useRef(false)

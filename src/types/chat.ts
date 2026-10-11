@@ -304,6 +304,8 @@ export interface Message {
 
 export interface Conversation {
   id: string
+  isDraft?: boolean
+  draftScope?: 'chat' | 'draw'
   title: string
   createdAt: number
   updatedAt: number

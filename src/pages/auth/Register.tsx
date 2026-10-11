@@ -12,10 +12,12 @@ import { OAuthButtons } from '@/components/auth/oauth-buttons'
 import { PuzzleCaptchaDialog } from '@/components/auth/puzzle-captcha-dialog'
 import { authErrorText } from '@/lib/auth-errors'
 import { emailRetryAfterFromBody, useEmailCooldown } from '@/hooks/use-email-cooldown'
+import { useAuthFormLayout } from '@/hooks/use-auth-form-layout'
 
 export default function Register() {
   const navigate = useNavigate()
-  const { t } = useTranslation('auth')
+  const { t } = useTranslation(['auth', 'common'])
+  const { compact, split, passwordStep, showIdentity, showPassword, setPasswordStep } = useAuthFormLayout()
   const register = useAuth((s) => s.register)
   const signupOpen = useAuth((s) => s.signupOpen)
   const oauthSignupOpen = useAuth((s) => s.authPolicy.oauth_auto_provision_enabled)
@@ -67,11 +69,20 @@ export default function Register() {
     if (!name.trim()) next.name = t('errors.required')
     if (!email) next.email = t('errors.required')
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = t('errors.invalidEmail')
-    if (!pw) next.pw = t('errors.required')
-    else if (pw.length < 8) next.pw = t('errors.minPassword')
-    if (!agree) next.agree = t('errors.acceptTerms')
+    if (showPassword) {
+      if (!pw) next.pw = t('errors.required')
+      else if (pw.length < 8) next.pw = t('errors.minPassword')
+      if (!agree) next.agree = t('errors.acceptTerms')
+    }
     setErrors(next)
-    if (Object.keys(next).length) return
+    if (Object.values(next).some(Boolean)) {
+      if (next.name || next.email) setPasswordStep(false)
+      return
+    }
+    if (split && !passwordStep) {
+      setPasswordStep(true)
+      return
+    }
     // Refresh the policy before deciding whether to open the puzzle. A failed
     // probe still falls back to the server-authoritative registration response.
     submittingRef.current = true
@@ -237,88 +248,99 @@ export default function Register() {
   }
 
   const showProviders = !window.aivoryDesktop && providers.length > 0 && oauthSignupOpen
+  const formError = errors.general || errors.captcha || (split ? errors.name || errors.email || errors.pw || errors.agree : undefined)
 
   return (
-    <div className="login-content">
+    <div className="login-content" data-auth-split={split}>
       <h1 id="login-title" className="login-title">{t('register.title')}</h1>
-      <p className="login-intro">{t('register.subtitle')}</p>
-      {showProviders ? (
+      <p className="login-intro" data-auth-intro="optional">{t('register.subtitle')}</p>
+      {showProviders && showIdentity ? (
         <div className="login-providers">
-          <OAuthButtons providers={providers} captchaRequired={captchaRequired} />
+          <OAuthButtons providers={providers} captchaRequired={captchaRequired} compact={compact} />
         </div>
       ) : null}
-      {showProviders && signupOpen ? <div className="login-divider">{t('login.emailDivider')}</div> : null}
+      {showProviders && showIdentity && signupOpen ? <div className="login-divider">{t('login.emailDivider')}</div> : null}
 
       {signupOpen ? (
         <form onSubmit={(e) => void submit(e)} noValidate>
-          {errors.general || errors.captcha ? (
-            <p className="login-error" role="alert">{errors.general || errors.captcha}</p>
+          {formError ? (
+            <p className="login-error" role="alert">{formError}</p>
           ) : null}
-          <AuthField
-            id="register-name"
-            name="name"
-            label={t('register.name')}
-            value={name}
-            onChange={(e) => { setName(e.target.value); setErrors({}) }}
-            placeholder={t('register.namePlaceholder')}
-            autoComplete="name"
-            required
-            error={errors.name}
-          />
-          <AuthField
-            id="register-email"
-            name="email"
-            type="email"
-            label={t('login.emailLabel')}
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setErrors({}) }}
-            placeholder="you@example.com"
-            autoComplete="email"
-            inputMode="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            error={errors.email}
-          />
-          <AuthField
-            id="register-pw"
-            name="password"
-            type="password"
-            label={t('fields.password')}
-            value={pw}
-            onChange={(e) => { setPw(e.target.value); setErrors({}) }}
-            autoComplete="new-password"
-            placeholder={t('fields.passwordHint')}
-            description={t('fields.passwordHint')}
-            required
-            minLength={8}
-            error={errors.pw}
-          />
-          <div className="login-agreement">
-            <div className="login-agreement-label">
-              <input
-                id="register-agree"
-                type="checkbox"
-                checked={agree}
-                onChange={(e) => { setAgree(e.target.checked); setErrors((current) => ({ ...current, agree: undefined })) }}
-                aria-invalid={Boolean(errors.agree) || undefined}
-                aria-describedby={errors.agree ? 'register-agree-error' : undefined}
-              />
-              <label htmlFor="register-agree">
-                <Trans
-                  i18nKey="register.agree"
-                  t={t}
-                  components={{
-                    terms: <Link to="/terms" target="_blank" rel="noopener noreferrer" />,
-                    privacy: <Link to="/privacy" target="_blank" rel="noopener noreferrer" />,
-                  }}
-                  values={{ terms: t('register.terms'), privacy: t('register.privacy') }}
-                />
-              </label>
-            </div>
-            {errors.agree ? <p id="register-agree-error" className="login-error login-field-error" role="alert">{errors.agree}</p> : null}
+          <div hidden={!showIdentity}>
+            <AuthField
+              id="register-name"
+              name="name"
+              label={t('register.name')}
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors({}) }}
+              onFocus={() => setPasswordStep(false)}
+              placeholder={t('register.namePlaceholder')}
+              autoComplete="name"
+              required
+              error={errors.name}
+            />
+            <AuthField
+              id="register-email"
+              name="email"
+              type="email"
+              label={t('login.emailLabel')}
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setErrors({}) }}
+              onFocus={() => setPasswordStep(false)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              error={errors.email}
+            />
           </div>
-          <Button type="submit" loading={loading} className="login-submit">{t('register.submit')}</Button>
+          <div hidden={!showPassword}>
+            <AuthField
+              id="register-pw"
+              name="password"
+              type="password"
+              label={t('fields.password')}
+              value={pw}
+              onChange={(e) => { setPw(e.target.value); setErrors({}) }}
+              onFocus={() => setPasswordStep(true)}
+              autoComplete="new-password"
+              placeholder={t('fields.passwordHint')}
+              description={t('fields.passwordHint')}
+              required
+              minLength={8}
+              error={errors.pw}
+            />
+            <div className="login-agreement">
+              <div className="login-agreement-label">
+                <input
+                  id="register-agree"
+                  type="checkbox"
+                  checked={agree}
+                  onChange={(e) => { setAgree(e.target.checked); setErrors((current) => ({ ...current, agree: undefined, general: undefined })) }}
+                  aria-invalid={Boolean(errors.agree) || undefined}
+                  aria-describedby={errors.agree ? 'register-agree-error' : undefined}
+                />
+                <label htmlFor="register-agree">
+                  <Trans
+                    i18nKey="register.agree"
+                    t={t}
+                    components={{
+                      terms: <Link to="/terms" target="_blank" rel="noopener noreferrer" />,
+                      privacy: <Link to="/privacy" target="_blank" rel="noopener noreferrer" />,
+                    }}
+                    values={{ terms: t('register.terms'), privacy: t('register.privacy') }}
+                  />
+                </label>
+              </div>
+              {errors.agree ? <p id="register-agree-error" className="login-error login-field-error" role="alert">{errors.agree}</p> : null}
+            </div>
+          </div>
+          <div className={passwordStep ? 'login-step-actions' : undefined}>
+            {passwordStep ? <Button variant="ghost" disabled={loading} onClick={() => { setPasswordStep(false); setErrors({}) }}>{t('common:actions.back')}</Button> : null}
+            <Button type="submit" loading={loading} className="login-submit">{t(split && !passwordStep ? 'common:actions.continue' : 'register.submit')}</Button>
+          </div>
         </form>
       ) : (
         <p className="login-notice" role="status">

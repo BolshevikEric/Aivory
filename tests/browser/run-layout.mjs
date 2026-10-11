@@ -133,8 +133,13 @@ try {
       await page.waitForSelector(route.startsWith('/share') ? '#shared-conversation-title' : route === '/welcome' ? '[data-page-scroll]' : 'main')
       await checkDocument(`${route} ${viewport.width}x${viewport.height}`)
       if (['/login', '/register', '/forgot-password'].includes(route)) {
-        const width = await page.$eval('.login-panel', (pane) => ({ scroll: pane.scrollWidth, client: pane.clientWidth }))
-        assert.ok(width.scroll <= width.client + 1, `${route}: form has horizontal overflow ${JSON.stringify(width)}`)
+        const bounds = await page.$eval('.login-panel', (pane) => {
+          const panel = pane.getBoundingClientRect()
+          const content = pane.querySelector('.login-content').getBoundingClientRect()
+          return { scrollWidth: pane.scrollWidth, width: pane.clientWidth, scrollHeight: pane.scrollHeight, height: pane.clientHeight, top: content.top - panel.top, bottom: panel.bottom - content.bottom }
+        })
+        assert.ok(bounds.scrollWidth <= bounds.width + 1 && bounds.scrollHeight <= bounds.height + 1, `${route}: form must not scroll ${JSON.stringify(bounds)}`)
+        assert.ok(bounds.top >= -1 && bounds.bottom >= -1, `${route}: form must remain fully visible ${JSON.stringify(bounds)}`)
         if (route === '/login') {
           await page.focus('.login-input')
           const focusedWidth = await page.$eval('.login-panel', (pane) => ({ scroll: pane.scrollWidth, client: pane.clientWidth }))
@@ -144,7 +149,6 @@ try {
       if (route.startsWith('/share') || ['/privacy', '/terms', '/welcome'].includes(route)) {
         await checkScrollable('[data-page-scroll]', route)
       }
-      if (route === '/register' && viewport.height <= 500) await checkScrollable('.login-panel', 'register form')
       if (route === '/register' && viewport.width === 844) {
         await page.screenshot({ path: path.join(tmpdir(), 'aivory-layout-register-landscape.png') })
       }

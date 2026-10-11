@@ -39,6 +39,7 @@ function SandboxFilesBody({ onClose }: { onClose: () => void }) {
   const currentPath = useSandboxFiles((state) => state.currentPath)
   const loading = useSandboxFiles((state) => state.loading)
   const unavailable = useSandboxFiles((state) => state.unavailable)
+  const unavailableReason = useSandboxFiles((state) => state.unavailableReason)
   const error = useSandboxFiles((state) => state.error)
   const load = useSandboxFiles((state) => state.load)
   const enter = useSandboxFiles((state) => state.enter)
@@ -125,7 +126,7 @@ function SandboxFilesBody({ onClose }: { onClose: () => void }) {
         ) : !session ? (
           <div className="grid h-32 place-items-center px-4 text-center text-sm text-[var(--color-fg-muted)]">{t('sandbox.none')}</div>
         ) : unavailable ? (
-          <div className="grid h-32 place-items-center px-4 text-center text-sm text-[var(--color-fg-muted)]">{t('sandbox.unavailable')}</div>
+          <div className="grid h-32 place-items-center px-4 text-center text-sm text-[var(--color-fg-muted)]">{t(`sandbox.${unavailableReason || 'unavailable'}`, { defaultValue: t('sandbox.unavailable') })}</div>
         ) : entries.length === 0 ? (
           <div className="grid h-32 place-items-center px-4 text-center text-sm text-[var(--color-fg-muted)]">{t('sandbox.empty')}</div>
         ) : (

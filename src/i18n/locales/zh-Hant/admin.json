@@ -1915,9 +1915,14 @@
     "clear": "清空沙盒",
     "cleared": "沙盒已清空",
     "none": "此對話尚無沙盒工作階段。",
-    "unavailable": "工作階段已過期或 Sidecar 不支援檔案列舉。",
+    "unavailable": "沙盒檔案暫時無法瀏覽。",
     "empty": "沙盒工作區為空。",
-    "open": "開啟"
+    "open": "開啟",
+    "archive_missing": "沙盒已回收，未找到可用的檔案封存。",
+    "archive_not_configured": "沙盒已回收，尚未設定檔案封存儲存空間。",
+    "archive_read_failed": "檔案封存暫時無法讀取，請稍後重試。",
+    "unsupported": "目前的沙盒服務暫不支援檔案瀏覽，請聯絡管理員更新服務。",
+    "service_unavailable": "沙盒服務暫時無法使用，請稍後重試。"
   },
   "backup": {
     "title": "備份與遷移",

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { conversationsApi } from '@/api/endpoints'
-import type { ApiSandboxFile } from '@/api/types'
+import type { ApiSandboxFile, SandboxUnavailableReason } from '@/api/types'
 import { sandboxParentPath } from '@/lib/sandbox-browser'
 import { useConversationFiles } from './conversation-files'
 import { useArtifactPanel } from './artifact-panel'
@@ -15,6 +15,7 @@ interface SandboxFilesStore {
   currentPath: string
   loading: boolean
   unavailable: boolean
+  unavailableReason: SandboxUnavailableReason | ''
   error: boolean
   openDrawer: (conversationId: string) => void
   close: () => void
@@ -31,6 +32,7 @@ export const useSandboxFiles = create<SandboxFilesStore>((set, get) => ({
   currentPath: '',
   loading: false,
   unavailable: false,
+  unavailableReason: '',
   error: false,
 
   openDrawer(conversationId) {
@@ -44,6 +46,7 @@ export const useSandboxFiles = create<SandboxFilesStore>((set, get) => ({
       session: '',
       currentPath: '',
       unavailable: false,
+      unavailableReason: '',
       error: false,
     })
     void get().load(conversationId)
@@ -64,10 +67,11 @@ export const useSandboxFiles = create<SandboxFilesStore>((set, get) => ({
         files: result.files ?? [],
         session: result.session ?? '',
         unavailable: result.unavailable === true,
+        unavailableReason: result.unavailable ? result.unavailable_reason ?? '' : '',
       })
     } catch {
       if (get().conversationId === conversationId) {
-        set({ files: [], session: '', unavailable: false, error: true })
+        set({ files: [], session: '', unavailable: false, unavailableReason: 'service_unavailable', error: true })
       }
     } finally {
       if (get().conversationId === conversationId) set({ loading: false })
@@ -86,5 +90,5 @@ export const useSandboxFiles = create<SandboxFilesStore>((set, get) => ({
 useAuth.subscribe((state, previous) => {
   if (state.user?.id === previous.user?.id) return
   useSandboxFiles.setState({ open: false, conversationId: null, files: [], session: '',
-    currentPath: '', loading: false, unavailable: false, error: false })
+    currentPath: '', loading: false, unavailable: false, unavailableReason: '', error: false })
 })

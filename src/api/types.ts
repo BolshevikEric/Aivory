@@ -1754,11 +1754,19 @@ export interface ApiSandboxFile {
 export interface ApiSandboxFiles {
   session: string
   files: ApiSandboxFile[]
-  /** The session was recycled, or the deployed sidecar cannot list files. */
+  /** The listing was read from a saved workspace without starting a container. */
+  archived?: boolean
   unavailable?: boolean
+  unavailable_reason?: SandboxUnavailableReason | ''
 }
 
+export type SandboxUnavailableReason = 'archive_missing' | 'archive_not_configured'
+  | 'archive_read_failed' | 'unsupported' | 'service_unavailable'
+
 export interface ApiConversation {
+  /** An unused upload reservation. Optional for compatibility with older servers. */
+  is_draft?: boolean
+  draft_scope?: 'chat' | 'draw' | ''
   /** True only when an upload reservation request reused an existing draft. */
   draft_reused?: boolean
   id: string

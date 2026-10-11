@@ -1,9 +1,26 @@
 import { ApiError, conversationsApi } from '@/api'
 import type { ApiConversation } from '@/api/types'
 import i18n from '@/i18n'
+import { useAuth } from '@/store/auth'
 
 const PREFIX = 'aivory:pending-conversation:v1'
 const pendingScopeOperations = new Map<string, Promise<unknown>>()
+
+// Resolve lazily because the conversation store also imports the draft error
+// helpers. Update history immediately without waiting for a realtime echo.
+async function syncDraftHistory(userId: string, deletedIds: string[], conversation?: ApiConversation): Promise<void> {
+  const { useConversations } = await import('@/store/conversations')
+  if (useAuth.getState().user?.id !== userId) return
+  const deleted = new Set(deletedIds)
+  useConversations.setState((state) => ({
+    conversations: state.conversations.filter((row) => !deleted.has(row.id) && !(
+      conversation && row.id !== conversation.id && row.creatorId === userId && row.isDraft && row.messages.length === 0
+    )),
+  }))
+  if (conversation && !useConversations.getState().conversations.find((row) => row.id === conversation.id)?.messages.length) {
+    useConversations.getState().adoptConversation(conversation)
+  }
+}
 
 /** Keep page switches and reservations ordered; rapid navigation cannot issue a stale create last. */
 function serializeDraftScope<T>(userId: string, operation: () => Promise<T>): Promise<T> {
@@ -48,7 +65,7 @@ export function writePendingConversation(key: string, conversationId: string): v
     window.localStorage.setItem(key, conversationId)
   } catch {
     // Storage can be unavailable in hardened/private browser contexts. The
-    // Server-side drafts stay out of history until a message is sent.
+    // Server-side drafts remain recoverable through history and scope lookup.
   }
 }
 
@@ -92,6 +109,7 @@ export async function recoverPendingConversation(
       draft_scope: scope.scope,
     })
     clearDeletedPendingConversations(userId, result.deleted_ids)
+    await syncDraftHistory(userId, result.deleted_ids)
     return result
   })
   if (!selection) return undefined
@@ -100,7 +118,10 @@ export async function recoverPendingConversation(
     try {
       const loaded = await conversationsApi.get(savedId, { limit: 1 })
       const conversation = loaded.conversation
-      if (loaded.messages.length === 0 && matchesPendingScope(conversation, scope)) return conversation
+      if (loaded.messages.length === 0 && matchesPendingScope(conversation, scope)) {
+        if (isCurrent()) await syncDraftHistory(userId, [], conversation)
+        return conversation
+      }
     } catch (error) {
       // A temporary disconnect/500 must retain the recovery id for retry.
       if (!(error instanceof ApiError) || error.status !== 404) throw error
@@ -115,6 +136,7 @@ export async function recoverPendingConversation(
     const loaded = await conversationsApi.get(conversation.id, { limit: 1 })
     if (loaded.messages.length > 0 || !matchesPendingScope(loaded.conversation, scope)) return undefined
     writePendingConversation(key, conversation.id)
+    if (isCurrent()) await syncDraftHistory(userId, [], loaded.conversation)
     return loaded.conversation
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return undefined
@@ -130,16 +152,20 @@ export async function reservePendingConversation(
   if (!userId) return undefined
   return serializeDraftScope(userId, async () => {
     if (!isCurrent()) return undefined
-    return conversationsApi.create({ ...body, draft: true })
+    const conversation = await conversationsApi.create({ ...body, draft: true })
+    if (isCurrent()) await syncDraftHistory(userId, [], conversation)
+    return conversation
   })
 }
 
 /** Forget the id only after the explicit discard succeeds, so failures remain recoverable. */
 export async function discardPendingConversation(key: string, id: string): Promise<void> {
+  const userId = useAuth.getState().user?.id
   const savedId = readPendingConversation(key)
   if (!savedId || savedId === id) writePendingConversation(key, id)
   await conversationsApi.discardDraft(id)
   clearPendingConversation(key, id)
+  if (userId) await syncDraftHistory(userId, [id])
 }
 
 export function isConversationDraftLimit(error: unknown): boolean {

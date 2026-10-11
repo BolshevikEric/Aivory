@@ -18,8 +18,9 @@ const MIN_ROUNDS = 5
 // A user turn becomes "current" once its heading has scrolled to within this many
 // px of the thread viewport's top edge.
 const ACTIVE_LINE_OFFSET = 96
-// Preview label clip length (chars) before the reusable ellipsis helper trims.
-const LABEL_MAX = 44
+// Bound pasted prompts in the navigation; CSS fits the preview to the available
+// width rather than forcing every question to the same character count.
+const LABEL_MAX = 160
 
 /**
  * A slim right-edge rail — one tick per user question — for jumping around a long
@@ -43,10 +44,17 @@ export function ConversationMinimap({ conversation, scrollContainerRef }: Conver
   // Key on user-turn ids only, so streaming tokens (which mutate assistant
   // content, not the turn set) don't churn the scroll-spy subscription.
   const turnsKey = useMemo(() => userTurns.map((m) => m.id).join('|'), [userTurns])
+  const turnLabels = useMemo(() => userTurns.map((m, i) =>
+    truncate(mathContentToPlainText(m.content ?? '').replace(/\s+/g, ' ').trim(), LABEL_MAX) ||
+    t('minimap.untitled', { index: i + 1, defaultValue: 'Question {{index}}' }),
+  ), [userTurns, t])
 
   const [activeId, setActiveId] = useState<string | null>(null)
-  const navRef = useRef<HTMLElement>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const activeTickRef = useRef<HTMLButtonElement>(null)
+  const activePreviewRef = useRef<HTMLButtonElement>(null)
 
   // Scroll-spy: the current turn is the LAST user question whose heading sits at
   // or above a line near the viewport top. The thread is reverse-paginated, so
@@ -85,17 +93,30 @@ export function ConversationMinimap({ conversation, scrollContainerRef }: Conver
     }
   }, [enabled, scrollContainerRef, turnsKey])
 
-  // If the rail itself overflows (very long thread), keep the active tick visible
-  // — scroll only the rail, never nudge the message thread.
+  // The compact ticks and spacious previews scroll independently. Keep the
+  // current turn visible in both without moving the conversation itself.
   useEffect(() => {
-    const nav = navRef.current
-    const tick = activeTickRef.current
-    if (!nav || !tick || nav.scrollHeight <= nav.clientHeight) return
-    const nr = nav.getBoundingClientRect()
-    const tr = tick.getBoundingClientRect()
-    if (tr.top < nr.top) nav.scrollTop -= nr.top - tr.top + 8
-    else if (tr.bottom > nr.bottom) nav.scrollTop += tr.bottom - nr.bottom + 8
-  }, [activeId])
+    const pairs = [
+      [railRef.current, activeTickRef.current],
+      [previewRef.current, activePreviewRef.current],
+    ] as const
+    const keepActiveVisible = () => {
+      for (const [container, item] of pairs) {
+        if (!container || !item || container.scrollHeight <= container.clientHeight) continue
+        const cr = container.getBoundingClientRect()
+        const ir = item.getBoundingClientRect()
+        if (ir.top < cr.top + 4) container.scrollTop -= cr.top + 4 - ir.top
+        else if (ir.bottom > cr.bottom - 4) container.scrollTop += ir.bottom - cr.bottom + 4
+      }
+    }
+    keepActiveVisible()
+    const observer = new ResizeObserver(keepActiveVisible)
+    for (const [container, item] of pairs) {
+      if (container) observer.observe(container)
+      if (item) observer.observe(item)
+    }
+    return () => observer.disconnect()
+  }, [activeId, enabled])
 
   if (!enabled) return null
 
@@ -112,67 +133,97 @@ export function ConversationMinimap({ conversation, scrollContainerRef }: Conver
 
   return (
     <nav
-      ref={navRef}
       aria-label={t('minimap.label', { defaultValue: 'Conversation map' })}
       className={cn(
-        'group/rail absolute right-1.5 top-1/2 z-20 -translate-y-1/2',
-        'flex max-h-[62vh] flex-col items-end gap-0.5 overflow-y-auto scrollbar-none',
-        // One shared panel for the whole rail on hover/keyboard-focus — the rows
-        // themselves stay chromeless (a border per row read as visual noise).
-        'rounded-xl border border-transparent px-1 py-1',
-        'transition-colors duration-fast ease-out',
-        'hover:bg-[var(--color-surface)] hover:shadow-[var(--shadow-md)]',
-        'focus-within:border-[var(--color-border)] focus-within:bg-[var(--color-surface)] focus-within:shadow-[var(--shadow-md)]',
+        'group/rail pointer-events-none absolute inset-y-4 right-3 z-20',
+        'flex w-[min(24rem,calc(100%-1.5rem))] items-center gap-3',
       )}
     >
-      {userTurns.map((m, i) => {
-        const active = m.id === activeId
-        const text =
-          truncate(mathContentToPlainText(m.content ?? '').trim(), LABEL_MAX) ||
-          t('minimap.untitled', { index: i + 1, defaultValue: 'Question {{index}}' })
-        return (
-          <button
-            key={m.id}
-            ref={active ? activeTickRef : undefined}
-            type="button"
-            onClick={() => scrollToTurn(m.id)}
-            aria-current={active ? 'true' : undefined}
-            aria-label={`${t('minimap.jumpTo', { defaultValue: 'Jump to this question' })}: ${text}`}
-            className={cn(
-              'flex items-center justify-end rounded-md px-1 py-0.5 outline-none',
-              'transition-colors duration-fast ease-out',
-              // Row affordance without chrome: the shared rail panel carries the
-              // border; the hovered row only tints.
-              'hover:bg-[var(--color-bg-muted)]',
-              'focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-            )}
-          >
-            {/* Question preview — clipped to zero width until the rail is hovered
-                or focused, then it slides open with a small right margin. */}
-            <span
-              className={cn(
-                'max-w-0 overflow-hidden whitespace-nowrap text-xs leading-none',
-                'transition-[max-width,margin] duration-base ease-out',
-                'group-hover/rail:mr-2 group-hover/rail:max-w-64',
-                'group-focus-within/rail:mr-2 group-focus-within/rail:max-w-64',
-                active ? 'font-medium text-[var(--color-fg)]' : 'text-[var(--color-fg-muted)]',
-              )}
+      {/* Place ticks first in the tab order; focusing one reveals the list. The
+          visual order keeps them outside the panel at the right edge. */}
+      <div
+        ref={railRef}
+        data-minimap-rail
+        className="pointer-events-auto order-2 flex max-h-[min(38vh,100%)] w-8 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain scrollbar-none py-1"
+      >
+        {userTurns.map((m, i) => {
+          const active = m.id === activeId
+          const hovered = m.id === hoveredId
+          return (
+            <button
+              key={m.id}
+              ref={active ? activeTickRef : undefined}
+              type="button"
+              onClick={() => scrollToTurn(m.id)}
+              onPointerEnter={() => setHoveredId(m.id)}
+              onPointerLeave={() => setHoveredId(null)}
+              aria-current={active ? 'true' : undefined}
+              aria-label={`${t('minimap.jumpTo', { defaultValue: 'Jump to this question' })}: ${turnLabels[i]}`}
+              className="flex h-4 w-full shrink-0 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
             >
-              {text}
-            </span>
-            {/* Tick */}
-            <span
-              aria-hidden
-              className={cn(
-                'block h-0.5 shrink-0 rounded-full transition-all duration-fast ease-out',
-                active
-                  ? 'w-5 bg-[var(--color-fg)]'
-                  : 'w-3.5 bg-[var(--color-border)] group-hover/rail:bg-[var(--color-fg-subtle)]',
-              )}
-            />
-          </button>
-        )
-      })}
+              <span
+                aria-hidden
+                className={cn(
+                  'block rounded-full transition-[height,background-color] duration-fast ease-out motion-reduce:transition-none',
+                  active
+                    ? 'h-0.5 w-5 bg-[var(--color-fg)]'
+                    : hovered ? 'h-1 w-4 bg-[var(--color-fg-subtle)]' : 'h-0.5 w-4 bg-[var(--color-fg-faint)]/50',
+                )}
+              />
+            </button>
+          )
+        })}
+      </div>
+      <div
+        className={cn(
+          'invisible pointer-events-none relative order-1 flex max-h-[min(62vh,100%)] min-w-0 flex-1 flex-col rounded-xl bg-[var(--color-bg-muted)] p-1.5 opacity-0',
+          'transition-opacity duration-fast ease-out motion-reduce:transition-none',
+          'group-hover/rail:visible group-hover/rail:pointer-events-auto group-hover/rail:opacity-100',
+          'group-focus-within/rail:visible group-focus-within/rail:pointer-events-auto group-focus-within/rail:opacity-100',
+          // A transparent bridge keeps the preview open while crossing the gap
+          // between the compact rail and the larger, independently spaced list.
+          "after:absolute after:inset-y-0 after:-right-3 after:w-3 after:content-['']",
+        )}
+      >
+        <div
+          ref={previewRef}
+          data-minimap-preview
+          className="min-h-0 overflow-y-auto overscroll-contain scrollbar-none"
+        >
+          <div className="flex flex-col gap-1">
+            {userTurns.map((m, i) => {
+              const active = m.id === activeId
+              const hovered = m.id === hoveredId
+              const text = turnLabels[i]
+              return (
+                <button
+                  key={m.id}
+                  ref={active ? activePreviewRef : undefined}
+                  type="button"
+                  onClick={() => scrollToTurn(m.id)}
+                  onPointerEnter={() => setHoveredId(m.id)}
+                  onPointerLeave={() => setHoveredId(null)}
+                  aria-current={active ? 'true' : undefined}
+                  aria-label={`${t('minimap.jumpTo', { defaultValue: 'Jump to this question' })}: ${text}`}
+                  className={cn(
+                    'min-h-10 w-full shrink-0 rounded-lg px-3 py-2 text-left text-sm leading-6 outline-none',
+                    'transition-colors duration-fast ease-out motion-reduce:transition-none',
+                    'hover:bg-[color-mix(in_oklch,var(--color-fg)_6%,transparent)] hover:text-[var(--color-fg)]',
+                    'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]',
+                    active
+                      ? 'bg-[color-mix(in_oklch,var(--color-fg)_6%,transparent)] font-medium text-[var(--color-fg)]'
+                      : hovered
+                        ? 'bg-[color-mix(in_oklch,var(--color-fg)_6%,transparent)] text-[var(--color-fg)]'
+                        : 'text-[var(--color-fg-muted)]',
+                  )}
+                >
+                  <span className="block truncate">{text}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </nav>
   )
 }

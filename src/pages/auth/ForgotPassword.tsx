@@ -8,11 +8,13 @@ import { toast } from '@/hooks/use-toast'
 import { authApi, ApiError } from '@/api'
 import { authErrorText } from '@/lib/auth-errors'
 import { emailRetryAfterFromBody, useEmailCooldown } from '@/hooks/use-email-cooldown'
+import { useAuthFormLayout } from '@/hooks/use-auth-form-layout'
 
 type Step = 'email' | 'code' | 'done'
 
 export default function ForgotPassword() {
-  const { t } = useTranslation('auth')
+  const { t } = useTranslation(['auth', 'common'])
+  const { short, passwordStep, setPasswordStep } = useAuthFormLayout()
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -47,12 +49,18 @@ export default function ForgotPassword() {
     e.preventDefault()
     const errs: string[] = []
     if (!code.trim()) errs.push(t('errors.required'))
-    if (newPw.length < 8) errs.push(t('errors.minPassword'))
+    if (!short || passwordStep) {
+      if (newPw.length < 8) errs.push(t('errors.minPassword'))
+    }
     if (errs.length) {
       setError(errs.join(' '))
       return
     }
     setError(undefined)
+    if (short && !passwordStep) {
+      setPasswordStep(true)
+      return
+    }
     setLoading(true)
     try {
       await authApi.resetPassword(email, code.trim(), newPw)
@@ -95,46 +103,54 @@ export default function ForgotPassword() {
       <div className="login-content">
         <ShieldCheck size={28} className="login-twofa-icon" aria-hidden />
         <h1 id="login-title" className="login-title">{t('forgot.resetTitle')}</h1>
-        <p className="login-intro">
-          <Trans
+        <p className="login-intro" hidden={short && passwordStep}>
+          {short ? <strong>{email}</strong> : <Trans
             i18nKey="forgot.resetSubtitle"
             t={t}
             values={{ email }}
             components={{ strong: <strong /> }}
-          />
+          />}
         </p>
-        <p className="login-delivery-hint">{t('emailDeliveryHint')}</p>
+        <p className="login-delivery-hint" hidden={short && passwordStep}>{t('emailDeliveryHint')}</p>
         <form onSubmit={(e) => void submitCode(e)} noValidate>
           {error ? <p id="reset-error" className="login-error" role="alert">{error}</p> : null}
-          <AuthField
-            id="reset-code"
-            name="code"
-            label={t('forgot.codeLabel')}
-            value={code}
-            onChange={(e) => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(undefined) }}
-            placeholder={t('forgot.codePlaceholder')}
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            maxLength={6}
-            className="login-code"
-            required
-            aria-describedby={error ? 'reset-error' : undefined}
-          />
-          <AuthField
-            id="new-pw"
-            name="password"
-            type="password"
-            label={t('forgot.newPassword')}
-            value={newPw}
-            onChange={(e) => { setNewPw(e.target.value); setError(undefined) }}
-            placeholder={t('fields.passwordHint')}
-            description={t('fields.passwordHint')}
-            autoComplete="new-password"
-            required
-            minLength={8}
-            aria-describedby={error ? 'reset-error' : undefined}
-          />
-          <Button type="submit" loading={loading} className="login-submit">{t('forgot.resetSubmit')}</Button>
+          <div hidden={short && passwordStep}>
+            <AuthField
+              id="reset-code"
+              name="code"
+              label={t('forgot.codeLabel')}
+              value={code}
+              onChange={(e) => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(undefined) }}
+              placeholder={t('forgot.codePlaceholder')}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              maxLength={6}
+              className="login-code"
+              required
+              aria-describedby={error ? 'reset-error' : undefined}
+            />
+          </div>
+          <div hidden={short && !passwordStep}>
+            <AuthField
+              id="new-pw"
+              name="password"
+              type="password"
+              label={t('forgot.newPassword')}
+              value={newPw}
+              onChange={(e) => { setNewPw(e.target.value); setError(undefined) }}
+              onFocus={() => setPasswordStep(true)}
+              placeholder={t('fields.passwordHint')}
+              description={t('fields.passwordHint')}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              aria-describedby={error ? 'reset-error' : undefined}
+            />
+          </div>
+          <div className={short && passwordStep ? 'login-step-actions' : undefined}>
+            {short && passwordStep ? <Button variant="ghost" disabled={loading} onClick={() => { setPasswordStep(false); setError(undefined) }}>{t('common:actions.back')}</Button> : null}
+            <Button type="submit" loading={loading} className="login-submit">{t(short && !passwordStep ? 'common:actions.continue' : 'forgot.resetSubmit')}</Button>
+          </div>
           <button
             type="button"
             onClick={() => void resendCode()}

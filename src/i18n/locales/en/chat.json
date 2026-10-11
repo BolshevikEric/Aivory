@@ -530,6 +530,7 @@
     "canvas": "Canvas"
   },
   "sidebar": {
+    "draft": "Draft",
     "reorderHint": "Drag to reorder; on mobile, touch and hold. Or press Alt + ↑ / ↓.",
     "reorderSaving": "Saving conversation order",
     "reorderFailed": "Could not save conversation order. Please try again.",
@@ -616,9 +617,14 @@
     "loading": "Loading…",
     "none": "This conversation has not created a sandbox workspace yet.",
     "empty": "This folder is empty.",
-    "unavailable": "The sandbox session expired, so its files cannot be browsed.",
+    "unavailable": "Sandbox files are currently unavailable.",
     "loadFailed": "Sandbox files are currently unavailable.",
-    "openFolder": "Open {{name}}"
+    "openFolder": "Open {{name}}",
+    "archive_missing": "The sandbox was recycled and no saved files were found.",
+    "archive_not_configured": "The sandbox was recycled, and file archive storage is not configured.",
+    "archive_read_failed": "Saved files cannot be read right now. Please try again later.",
+    "unsupported": "This sandbox service does not support file browsing. Ask an administrator to update it.",
+    "service_unavailable": "The sandbox service is temporarily unavailable. Please try again later."
   },
   "inline": {
     "ask": "Ask",

@@ -1915,9 +1915,14 @@
     "clear": "Clear sandbox",
     "cleared": "Sandbox cleared",
     "none": "No sandbox session for this conversation.",
-    "unavailable": "Session expired or sidecar does not support file listing.",
+    "unavailable": "Sandbox files are currently unavailable.",
     "empty": "Sandbox workspace is empty.",
-    "open": "Open"
+    "open": "Open",
+    "archive_missing": "The sandbox was recycled and no saved files were found.",
+    "archive_not_configured": "The sandbox was recycled, and file archive storage is not configured.",
+    "archive_read_failed": "Saved files cannot be read right now. Please try again later.",
+    "unsupported": "This sandbox service does not support file browsing. Ask an administrator to update it.",
+    "service_unavailable": "The sandbox service is temporarily unavailable. Please try again later."
   },
   "backup": {
     "title": "Backup & Migration",

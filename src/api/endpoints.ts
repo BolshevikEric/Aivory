@@ -1588,7 +1588,7 @@ export const adminApi = {
   // Sandbox inspector (§ admin tools): list / preview / clear a conversation's
   // sandbox workspace files.
   sandboxFiles: (id: string) =>
-    api<{ session: string; files: { path: string; size: number }[] }>(
+    api<ApiSandboxFiles>(
       `/admin/conversations/${encodeURIComponent(id)}/sandbox`,
     ),
   sandboxFileUrl: (id: string, path: string) =>

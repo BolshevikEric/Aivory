@@ -1229,6 +1229,9 @@ function ConversationItem({
   const [confirm, setConfirm] = useState(false)
   const [exporting, setExporting] = useState(false)
   const displayTitle = conversation.title || t('untitled')
+  const destination = conversation.isDraft && conversation.draftScope
+    ? conversation.projectId ? `/projects/${conversation.projectId}` : conversation.draftScope === 'draw' ? '/chat?mode=draw' : '/chat'
+    : `/chat/${conversation.id}`
   const streaming = isConversationStreaming(conversation)
   const dragProps = isWorkspaceGuest ? undefined : reorder?.rowProps(conversation)
   const dragging = reorder?.draggedId === conversation.id
@@ -1273,7 +1276,7 @@ function ConversationItem({
         )}
       >
         <Link
-          to={`/chat/${conversation.id}`}
+          to={destination}
           draggable={false}
           title={dragProps?.draggable ? t('sidebar.reorderHint') : undefined}
           aria-keyshortcuts={dragProps?.draggable ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
@@ -1291,6 +1294,11 @@ function ConversationItem({
               active ? 'text-[var(--color-fg)] font-medium' : 'text-[var(--color-fg-muted)] group-hover/conv:text-[var(--color-fg)]',
             )}
           />
+          {conversation.isDraft ? (
+            <span className="shrink-0 whitespace-nowrap text-[11px] leading-5 text-[var(--color-fg-muted)]">
+              {t('sidebar.draft')}
+            </span>
+          ) : null}
           {/* The Starred group already says so; nested project rows keep a
               quiet filled star because they never appear in that group. */}
           {nested && conversation.starred ? (

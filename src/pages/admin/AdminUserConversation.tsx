@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { AdminDetailHeader } from '@/components/admin/admin-detail-header'
 import { AdminTable } from '@/components/admin/AdminTable'
 import { adminApi, ApiError } from '@/api'
-import type { ApiConversation, ApiUser } from '@/api/types'
+import type { ApiConversation, ApiUser, SandboxUnavailableReason } from '@/api/types'
 import type { Message } from '@/types/chat'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
@@ -237,6 +237,7 @@ function SandboxPanel({ convId }: { convId: string }) {
   const [session, setSession] = useState('')
   const [files, setFiles] = useState<{ path: string; size: number }[]>([])
   const [unavailable, setUnavailable] = useState(false)
+  const [unavailableReason, setUnavailableReason] = useState<SandboxUnavailableReason | ''>('')
   const [clearing, setClearing] = useState(false)
 
   async function refresh() {
@@ -245,9 +246,13 @@ function SandboxPanel({ convId }: { convId: string }) {
       const res = await adminApi.sandboxFiles(convId)
       setSession(res.session)
       setFiles(res.files ?? [])
-      setUnavailable(!!(res as { unavailable?: boolean }).unavailable)
+      setUnavailable(res.unavailable === true)
+      setUnavailableReason(res.unavailable ? res.unavailable_reason ?? '' : '')
       setLoaded(true)
     } catch (e) {
+      setFiles([])
+      setUnavailable(true)
+      setUnavailableReason('service_unavailable')
       toast.error(e instanceof ApiError ? e.message : t('common.failed'))
     } finally {
       setLoading(false)
@@ -261,6 +266,7 @@ function SandboxPanel({ convId }: { convId: string }) {
       setSession('')
       setFiles([])
       setUnavailable(false)
+      setUnavailableReason('')
       toast.success(t('sandbox.cleared', { defaultValue: 'Sandbox cleared' }))
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : t('common.failed'))
@@ -318,13 +324,13 @@ function SandboxPanel({ convId }: { convId: string }) {
 
           {loading ? (
             <PanelFallback />
+          ) : unavailable ? (
+            <div className="text-sm text-[var(--color-fg-subtle)]">
+              {t(`sandbox.${unavailableReason || 'unavailable'}`, { defaultValue: t('sandbox.unavailable') })}
+            </div>
           ) : !session ? (
             <div className="text-sm text-[var(--color-fg-subtle)]">
               {t('sandbox.none', { defaultValue: 'No sandbox session for this conversation.' })}
-            </div>
-          ) : unavailable ? (
-            <div className="text-sm text-[var(--color-fg-subtle)]">
-              {t('sandbox.unavailable', { defaultValue: 'Session expired or sidecar does not support file listing.' })}
             </div>
           ) : files.length === 0 ? (
             <div className="text-sm text-[var(--color-fg-subtle)]">

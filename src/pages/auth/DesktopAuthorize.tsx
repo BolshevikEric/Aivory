@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/store/auth'
 import { clearDesktopAuthorization } from '@/lib/desktop'
 import { parseClientDevice } from '@/lib/client-device'
+import { useAuthFormLayout } from '@/hooks/use-auth-form-layout'
 
 type AuthorizationInfo = {
   expires_at: number
@@ -16,6 +17,7 @@ type AuthorizationInfo = {
 
 export default function DesktopAuthorize() {
   const { t } = useTranslation(['auth', 'common'])
+  const { short } = useAuthFormLayout()
   const [params] = useSearchParams()
   const id = params.get('request_id') || ''
   const user = useAuth((s) => s.user)
@@ -90,7 +92,7 @@ export default function DesktopAuthorize() {
     <div className="login-content login-authorization">
       {status === 'approved' ? <Check className="login-twofa-icon" size={28} aria-hidden /> : <Monitor className="login-twofa-icon" size={28} aria-hidden />}
       <h1 id="login-title" className="login-title">{t(complete ? `desktop.${status}Title` : 'desktop.title')}</h1>
-      <p className="login-intro">{t(complete ? `desktop.${status}Description` : 'desktop.description')}</p>
+      <p className="login-intro">{t(complete ? `desktop.${status}Description` : short ? 'desktop.compactDescription' : 'desktop.description')}</p>
       {status === 'loading' ? <p role="status" className="text-sm text-[var(--color-fg-muted)]">{t('desktop.loading')}</p> : null}
       {status === 'ready' || status === 'failed' ? (
         <>

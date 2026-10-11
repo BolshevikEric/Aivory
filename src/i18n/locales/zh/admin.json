@@ -1919,9 +1919,14 @@
     "clear": "清空沙盒",
     "cleared": "沙盒已清空",
     "none": "该对话还没有沙盒会话。",
-    "unavailable": "会话已过期或 Sidecar 不支持文件列举。",
+    "unavailable": "沙盒文件暂时无法浏览。",
     "empty": "沙盒工作区为空。",
-    "open": "打开"
+    "open": "打开",
+    "archive_missing": "沙盒已回收，未找到可用的文件归档。",
+    "archive_not_configured": "沙盒已回收，尚未配置文件归档存储。",
+    "archive_read_failed": "文件归档暂时无法读取，请稍后重试。",
+    "unsupported": "当前沙盒服务暂不支持文件浏览，请联系管理员更新服务。",
+    "service_unavailable": "沙盒服务暂时不可用，请稍后重试。"
   },
   "backup": {
     "title": "备份与迁移",
