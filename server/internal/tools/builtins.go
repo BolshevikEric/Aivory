@@ -821,11 +821,14 @@ func (t *fetchImageTool) Execute(ctx context.Context, input []byte, tc *llm.Tool
 func (t *fetchImageTool) ensureSession(ctx context.Context, tc *llm.ToolContext) (string, error) {
 	unlock := lockConvSandbox(tc.ConvID)
 	defer unlock()
-	sessionID, _ := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	sessionID, err := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	if err != nil {
+		return "", err
+	}
 	if sessionID != "" {
 		return sessionID, nil
 	}
-	sessionID, err := t.sandbox.NewSession(ctx, tc.ConvID)
+	sessionID, err = t.sandbox.NewSession(ctx, tc.ConvID)
 	if err != nil {
 		if t.logger != nil {
 			t.logger.Printf("fetch_image: sandbox NewSession failed: %v", err)
@@ -833,7 +836,7 @@ func (t *fetchImageTool) ensureSession(ctx context.Context, tc *llm.ToolContext)
 		return "", fmt.Errorf("sandbox session: %w", err)
 	}
 	if err := store.SetConvProviderStateKeyForUser(ctx, tc.DB, tc.ConvID, tc.MessageID, tc.UserID, "sandbox_id", sessionID); err != nil {
-		_ = t.sandbox.Release(ctx, sessionID)
+		releaseUntrackedSandbox(ctx, t.sandbox, tc.DB, tc.ConvID, sessionID)
 		return "", fmt.Errorf("persist sandbox session: %w", err)
 	}
 	return sessionID, nil
@@ -842,7 +845,10 @@ func (t *fetchImageTool) ensureSession(ctx context.Context, tc *llm.ToolContext)
 func (t *fetchImageTool) rebuildSession(ctx context.Context, tc *llm.ToolContext, previous string) (string, error) {
 	unlock := lockConvSandbox(tc.ConvID)
 	defer unlock()
-	current, _ := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	current, err := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	if err != nil {
+		return "", err
+	}
 	if current != "" && current != previous {
 		return current, nil
 	}
@@ -851,7 +857,7 @@ func (t *fetchImageTool) rebuildSession(ctx context.Context, tc *llm.ToolContext
 		return "", fmt.Errorf("sandbox session (rebuild): %w", err)
 	}
 	if err := store.SetConvProviderStateKeyForUser(ctx, tc.DB, tc.ConvID, tc.MessageID, tc.UserID, "sandbox_id", sessionID); err != nil {
-		_ = t.sandbox.Release(ctx, sessionID)
+		releaseUntrackedSandbox(ctx, t.sandbox, tc.DB, tc.ConvID, sessionID)
 		return "", fmt.Errorf("persist sandbox session (rebuild): %w", err)
 	}
 	return sessionID, nil
@@ -1191,7 +1197,12 @@ func (t *pythonExecuteTool) Execute(ctx context.Context, input []byte, tc *llm.T
 		unlockConv = lockConvSandbox(tc.ConvID)
 	}
 	if hasConv {
-		sessionID, _ = store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+		var err error
+		sessionID, err = store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+		if err != nil {
+			unlockConv()
+			return "", nil, err
+		}
 	}
 	if sessionID == "" {
 		archiveKey := ""
@@ -1217,7 +1228,7 @@ func (t *pythonExecuteTool) Execute(ctx context.Context, input []byte, tc *llm.T
 				// We created a container but couldn't durably record its id, so the
 				// next call would provision a SECOND session and leak this one until
 				// the 30-min reaper. Release it now and fail fast.
-				_ = t.sandbox.Release(ctx, sessionID)
+				releaseUntrackedSandbox(ctx, t.sandbox, tc.DB, tc.ConvID, sessionID)
 				if unlockConv != nil {
 					unlockConv()
 				}
@@ -1445,7 +1456,10 @@ func (t *pythonExecuteTool) rebuildPythonSession(ctx context.Context, tc *llm.To
 
 	unlock := lockConvSandbox(tc.ConvID)
 	defer unlock()
-	current, _ := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	current, err := store.GetConvProviderStateKey(ctx, tc.DB, tc.ConvID, "sandbox_id")
+	if err != nil {
+		return "", err
+	}
 	if current != "" && current != previousID {
 		return current, nil
 	}
@@ -1455,7 +1469,7 @@ func (t *pythonExecuteTool) rebuildPythonSession(ctx context.Context, tc *llm.To
 		return "", fmt.Errorf("sandbox session (rebuild): %w", err)
 	}
 	if err := store.SetConvProviderStateKeyForUser(ctx, tc.DB, tc.ConvID, tc.MessageID, tc.UserID, "sandbox_id", sid); err != nil {
-		_ = t.sandbox.Release(ctx, sid)
+		releaseUntrackedSandbox(ctx, t.sandbox, tc.DB, tc.ConvID, sid)
 		return "", fmt.Errorf("persist sandbox session (rebuild): %w", err)
 	}
 	return sid, nil

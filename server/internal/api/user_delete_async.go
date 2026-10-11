@@ -234,6 +234,7 @@ func runUserDeletionJob(d Deps, userID string) {
 			userDeletions.finish(userID, "failed", err.Error())
 			return
 		}
+		sweepPendingSandboxCleanupContext(ctx, d)
 		deletedConvs += len(ids)
 		userDeletions.progress(userID, fmt.Sprintf("conversations: %d deleted", deletedConvs))
 	}
@@ -272,6 +273,8 @@ func runUserDeletionJob(d Deps, userID string) {
 		return
 	}
 	invalidateAuthUser(d, userID)
+	sweepPendingSandboxCleanup(d)
+	sweepAvatarCleanup(context.Background(), d)
 
 	// Physical bytes, driven by the durable ledger — NOT the request-scoped
 	// context: if the 2h job budget is nearly spent by now, the cleanup must
@@ -323,6 +326,7 @@ func resumeUserDeletions(d Deps) {
 		}
 	}
 	sweepPendingStorageCleanup(d)
+	sweepPendingSandboxCleanup(d)
 }
 
 // sweepPendingStorageCleanup finishes physical deletions a crashed process
@@ -331,9 +335,13 @@ func resumeUserDeletions(d Deps) {
 // belong to a deletion job that is running (or about to resume); they are
 // left for that job and swept here only once orphaned.
 func sweepPendingStorageCleanup(d Deps) {
-	ctx, cancel := context.WithTimeout(context.Background(), userDeleteFinalCleanupTimeout)
+	sweepPendingStorageCleanupContext(context.Background(), d)
+}
+
+func sweepPendingStorageCleanupContext(ctx context.Context, d Deps) {
+	ctx, cancel := context.WithTimeout(ctx, min(userDeleteFinalCleanupTimeout, 2*time.Minute))
 	defer cancel()
-	paths, err := store.ListPendingStorageCleanup(ctx, d.DB)
+	paths, err := store.PendingStorageCleanupBatch(ctx, d.DB)
 	if err != nil {
 		logStorageCleanup(d, "storage cleanup sweep: %v", err)
 		return
@@ -344,12 +352,17 @@ func sweepPendingStorageCleanup(d Deps) {
 	obj := objectStorageClient(d)
 	swept := 0
 	for _, p := range paths {
+		if ctx.Err() != nil {
+			break
+		}
 		referenced, err := cleanupOneStoragePath(ctx, d, obj, p)
 		if err != nil {
 			logStorageCleanup(d, "storage cleanup sweep %q: %v", p, err)
+			recordStorageCleanupAttempt(ctx, d, p, err)
 			continue
 		}
 		if referenced {
+			recordStorageCleanupAttempt(ctx, d, p, nil)
 			continue // its owner's job will handle (and forget) it
 		}
 		if err := store.DeletePendingStorageCleanup(ctx, d.DB, p); err != nil {

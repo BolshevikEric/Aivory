@@ -1094,7 +1094,51 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_providers_name_unique ON oauth_provi
 CREATE TABLE IF NOT EXISTS pending_storage_cleanup (
   path       TEXT PRIMARY KEY,
   user_id    TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
+
+-- Explicit conversation deletion: retry container and archive destruction.
+-- No FK, since this work must survive the conversation/user being removed.
+CREATE TABLE IF NOT EXISTS pending_sandbox_cleanup (
+  conversation_id TEXT NOT NULL,
+  session_id TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (conversation_id, session_id)
+);
+
+CREATE TABLE IF NOT EXISTS pending_vector_cleanup (
+  document_id TEXT PRIMARY KEY,
+  created_at BIGINT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_pending_vector_cleanup_retry ON pending_vector_cleanup(attempts,created_at);
+CREATE TABLE IF NOT EXISTS document_vector_writes (
+  write_id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_document_vector_writes_document ON document_vector_writes(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_vector_writes_expiry ON document_vector_writes(expires_at);
+CREATE TABLE IF NOT EXISTS avatar_objects (
+  filename TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  expires_at BIGINT NOT NULL,
+  write_until BIGINT NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_avatar_objects_owner ON avatar_objects(user_id);
+CREATE INDEX IF NOT EXISTS idx_avatar_objects_cleanup ON avatar_objects(state,expires_at);
+
+CREATE TABLE IF NOT EXISTS resource_lifecycle_migrations (
+  key TEXT PRIMARY KEY
 );
 
 CREATE TABLE IF NOT EXISTS oauth_identities (

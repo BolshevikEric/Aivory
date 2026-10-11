@@ -806,6 +806,7 @@ type ProjectDeletionState struct {
 	ConversationIDs  []string
 	AffectedUserIDs  []string
 	StoragePaths     []string
+	SandboxDiscards  []ConversationSandboxDiscard
 }
 
 // DeleteProjectOptions controls whether project conversations are detached or
@@ -1011,6 +1012,21 @@ func DeleteProjectWithOptions(ctx context.Context, db *sql.DB, id, userID string
 		}
 	}
 
+	var sandboxDiscards []ConversationSandboxDiscard
+	for start := 0; start < len(conversationIDs); start += 200 {
+		// Include every deleted conversation's stable archive, even if its
+		// active container has already been removed by the idle reaper.
+		end := min(start+200, len(conversationIDs))
+		state, err := queueConversationCleanupTx(ctx, tx, conversationIDs[start:end], nil, projectUserID)
+		if err != nil {
+			return nil, err
+		}
+		sandboxDiscards = append(sandboxDiscards, state.SandboxDiscards...)
+	}
+	if err := insertPendingStorageCleanupTx(ctx, tx, projectUserID, keys(diskPathSet)); err != nil {
+		return nil, err
+	}
+
 	for start := 0; start < len(conversationIDs); start += 200 {
 		end := min(start+200, len(conversationIDs))
 		batch := conversationIDs[start:end]
@@ -1121,6 +1137,7 @@ func DeleteProjectWithOptions(ctx context.Context, db *sql.DB, id, userID string
 		ConversationIDs:  conversationIDs,
 		AffectedUserIDs:  keys(affectedUserSet),
 		StoragePaths:     diskPaths,
+		SandboxDiscards:  sandboxDiscards,
 	}, nil
 }
 

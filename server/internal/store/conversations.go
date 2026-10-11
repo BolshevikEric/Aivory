@@ -58,8 +58,7 @@ func SetConvProviderStateKey(ctx context.Context, db *sql.DB, convID, key, value
 
 // ListConversations returns conversations for a user, optionally filtered by
 // project. archivedFilter "any" returns all; "active" hides archived.
-// User-facing active/archived history excludes unused upload-only drafts;
-// upload-scoped drafts remain accessible by ID until their first send.
+// Active history includes the owner's unused drafts, marked with IsDraft.
 // limit controls the page size (default 20, max 500); offset is the row offset.
 func ListConversations(ctx context.Context, db *sql.DB, userID, projectID, archivedFilter string, limit, offset int) ([]Conversation, error) {
 	if limit <= 0 {
@@ -70,9 +69,9 @@ func ListConversations(ctx context.Context, db *sql.DB, userID, projectID, archi
 	}
 	// Personal listing ONLY: workspace conversations are fully isolated from the
 	// personal space (§workspaces) and are listed via ListWorkspaceConversations.
-	q := `SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public FROM conversations WHERE user_id=? AND COALESCE(inline_source_conv,'')='' AND COALESCE(workspace_id,'')=''`
+	q := `SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public, ` + conversationDraftSelect("conversations") + ` FROM conversations WHERE user_id=? AND COALESCE(inline_source_conv,'')='' AND COALESCE(workspace_id,'')=''`
 	args := []any{userID}
-	if archivedFilter == "active" || archivedFilter == "archived" {
+	if archivedFilter == "archived" {
 		q += " AND " + conversationHistoryPredicate("conversations")
 	}
 	if projectID == "_none_" {
@@ -214,14 +213,16 @@ func listWorkspaceConversations(ctx context.Context, db *sql.DB, workspaceID, pr
 	if limit > listWorkspaceConversationsLimit2 {
 		limit = listWorkspaceConversationsLimit2
 	}
-	q := `SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,'')
+	q := `SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,''), ` + conversationDraftSelect("c") + `
 	 FROM conversations c LEFT JOIN users u ON u.id = c.user_id
 	 WHERE c.workspace_id=? AND COALESCE(c.inline_source_conv,'')=''`
 	args := []any{workspaceID}
 	if userID != "" {
 		q += " AND " + conversationResourceAccessPredicate("c")
 		args = append(args, workspaceResourceAccessArgs(userID)...)
-		q += " AND " + conversationHistoryPredicate("c")
+		// Never expose another member's unsent reservation through public history.
+		q += " AND (" + conversationHistoryPredicate("c") + " OR c.user_id=?)"
+		args = append(args, userID)
 	}
 	if projectID == "_none_" {
 		q += " AND c.project_id IS NULL"
@@ -244,9 +245,9 @@ func listWorkspaceConversations(ctx context.Context, db *sql.DB, workspaceID, pr
 	out := []Conversation{}
 	for rows.Next() {
 		var c Conversation
-		var pinned, archived, starred, fastI, publicI int
+		var pinned, archived, starred, fastI, publicI, draftI int
 		var kbIDs, sumBlocks, provState, settings string
-		if err := rows.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI, &c.CreatorName, &settings); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI, &c.CreatorName, &settings, &draftI, &c.DraftScope); err != nil {
 			return nil, err
 		}
 		c.Pinned = pinned == 1
@@ -254,6 +255,10 @@ func listWorkspaceConversations(ctx context.Context, db *sql.DB, workspaceID, pr
 		c.Starred = starred == 1
 		c.Fast = fastI == 1
 		c.IsPublic = publicI == 1
+		c.IsDraft = draftI == 1
+		if !c.IsDraft {
+			c.DraftScope = ""
+		}
 		c.KBIDs = json.RawMessage(orDefault(kbIDs, "[]"))
 		c.RAGMode = NormalizeConversationRAGMode(c.RAGMode)
 		c.SummaryBlocks = json.RawMessage(orDefault(sumBlocks, "[]"))
@@ -269,7 +274,7 @@ func listWorkspaceConversations(ctx context.Context, db *sql.DB, workspaceID, pr
 // inline-thread markers on a conversation's messages (§ text-selection threads).
 func ListInlineThreads(ctx context.Context, db *sql.DB, sourceConvID, userID string) ([]Conversation, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public
+		`SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public, `+conversationDraftSelect("conversations")+`
 		 FROM conversations WHERE inline_source_conv=? AND user_id=? ORDER BY created_at ASC`, sourceConvID, userID)
 	if err != nil {
 		return nil, err
@@ -299,7 +304,7 @@ func GetConversation(ctx context.Context, db *sql.DB, id, userID string) (*Conve
 	args := []any{id}
 	args = append(args, workspaceResourceAccessArgs(userID)...)
 	row := db.QueryRowContext(ctx,
-		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,'')
+		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,''), `+conversationDraftSelect("c")+`
 		 FROM conversations c LEFT JOIN users u ON u.id = c.user_id
 		 WHERE c.id=? AND `+conversationResourceAccessPredicate("c"), args...)
 	c, err := scanConversationWithCreator(row)
@@ -316,9 +321,9 @@ func GetConversation(ctx context.Context, db *sql.DB, id, userID string) (*Conve
 // name + avatar (from users.name / users.settings). Mirrors the list-query scan.
 func scanConversationWithCreator(s scanner) (Conversation, error) {
 	var c Conversation
-	var pinned, archived, starred, fastI, publicI int
+	var pinned, archived, starred, fastI, publicI, draftI int
 	var kbIDs, sumBlocks, provState, settings string
-	if err := s.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI, &c.CreatorName, &settings); err != nil {
+	if err := s.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI, &c.CreatorName, &settings, &draftI, &c.DraftScope); err != nil {
 		return c, err
 	}
 	c.Pinned = pinned == 1
@@ -326,6 +331,10 @@ func scanConversationWithCreator(s scanner) (Conversation, error) {
 	c.Starred = starred == 1
 	c.Fast = fastI == 1
 	c.IsPublic = publicI == 1
+	c.IsDraft = draftI == 1
+	if !c.IsDraft {
+		c.DraftScope = ""
+	}
 	c.KBIDs = json.RawMessage(orDefault(kbIDs, "[]"))
 	c.RAGMode = NormalizeConversationRAGMode(c.RAGMode)
 	c.SummaryBlocks = json.RawMessage(orDefault(sumBlocks, "[]"))
@@ -339,7 +348,7 @@ func scanConversationWithCreator(s scanner) (Conversation, error) {
 // per-user surfaces must go through GetConversation.
 func GetConversationByID(ctx context.Context, db *sql.DB, id string) (*Conversation, error) {
 	row := db.QueryRowContext(ctx,
-		`SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public
+		`SELECT id, user_id, COALESCE(project_id, ''), title, provider, model_id, fast, kb_ids, rag_mode, summary_blocks, COALESCE(active_leaf_id, ''), provider_state, pinned, archived, starred, created_at, updated_at, COALESCE(inline_source_conv, ''), COALESCE(inline_parent_id, ''), COALESCE(inline_quote, ''), COALESCE(workspace_id, ''), is_public, `+conversationDraftSelect("conversations")+`
 		 FROM conversations WHERE id=?`, id)
 	c, err := scanConversation(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -353,9 +362,9 @@ func GetConversationByID(ctx context.Context, db *sql.DB, id string) (*Conversat
 
 func scanConversation(s scanner) (Conversation, error) {
 	var c Conversation
-	var pinned, archived, starred, fastI, publicI int
+	var pinned, archived, starred, fastI, publicI, draftI int
 	var kbIDs, sumBlocks, provState string
-	if err := s.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI); err != nil {
+	if err := s.Scan(&c.ID, &c.UserID, &c.ProjectID, &c.Title, &c.Provider, &c.ModelID, &fastI, &kbIDs, &c.RAGMode, &sumBlocks, &c.ActiveLeafID, &provState, &pinned, &archived, &starred, &c.CreatedAt, &c.UpdatedAt, &c.InlineSourceConv, &c.InlineParentID, &c.InlineQuote, &c.WorkspaceID, &publicI, &draftI, &c.DraftScope); err != nil {
 		return c, err
 	}
 	c.Pinned = pinned == 1
@@ -363,6 +372,10 @@ func scanConversation(s scanner) (Conversation, error) {
 	c.Starred = starred == 1
 	c.Fast = fastI == 1
 	c.IsPublic = publicI == 1
+	c.IsDraft = draftI == 1
+	if !c.IsDraft {
+		c.DraftScope = ""
+	}
 	c.KBIDs = json.RawMessage(orDefault(kbIDs, "[]"))
 	c.RAGMode = NormalizeConversationRAGMode(c.RAGMode)
 	c.SummaryBlocks = json.RawMessage(orDefault(sumBlocks, "[]"))
@@ -377,8 +390,8 @@ func orDefault(s, def string) string {
 	return s
 }
 
-// CreateConversation inserts a new row. Blank unsent rows are bounded per
-// account, including requests from older clients that do not mark uploads.
+// CreateConversation creates an independent normal conversation for a first
+// send. Upload reservations use ReserveConversationDraft and its account cap.
 func CreateConversation(ctx context.Context, db *sql.DB, c Conversation) (*Conversation, error) {
 	return createConversation(ctx, db, c, false)
 }
@@ -480,9 +493,14 @@ func createConversation(ctx context.Context, db *sql.DB, c Conversation, reserve
 					return reused, err
 				}
 			}
-		}
-		if err := checkConversationDraftLimit(ctx, tx, c.UserID); err != nil {
-			return nil, err
+			if err := checkConversationDraftLimit(ctx, tx, c.UserID); err != nil {
+				return nil, err
+			}
+		} else {
+			// A first send creates its row before posting the message. Do not count
+			// that interval as an upload draft or let a scope switch discard it.
+			// If posting fails, this normal row stays visible and can be retried/deleted.
+			draftScope = "sending"
 		}
 	}
 	var projectID any
@@ -517,7 +535,7 @@ func createConversation(ctx context.Context, db *sql.DB, c Conversation, reserve
 
 func finishConversationCreation(ctx context.Context, tx *sql.Tx, id string) (*Conversation, error) {
 	created, err := scanConversationWithCreator(tx.QueryRowContext(ctx,
-		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,'')
+		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,''), `+conversationDraftSelect("c")+`
 		 FROM conversations c LEFT JOIN users u ON u.id=c.user_id WHERE c.id=?`, id))
 	if err != nil {
 		return nil, err
@@ -693,7 +711,7 @@ func UpdateConversation(ctx context.Context, db *sql.DB, id, userID string, p Co
 		}
 	}
 	updated, err := scanConversationWithCreator(tx.QueryRowContext(ctx,
-		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,'')
+		`SELECT c.id, c.user_id, COALESCE(c.project_id, ''), c.title, c.provider, c.model_id, c.fast, c.kb_ids, c.rag_mode, c.summary_blocks, COALESCE(c.active_leaf_id, ''), c.provider_state, c.pinned, c.archived, c.starred, c.created_at, c.updated_at, COALESCE(c.inline_source_conv, ''), COALESCE(c.inline_parent_id, ''), COALESCE(c.inline_quote, ''), COALESCE(c.workspace_id, ''), c.is_public, COALESCE(u.name,''), COALESCE(u.settings,''), `+conversationDraftSelect("c")+`
 		   FROM conversations c LEFT JOIN users u ON u.id=c.user_id WHERE c.id=?`, id))
 	if err != nil {
 		return nil, err
@@ -894,6 +912,10 @@ func DeleteConversationWithState(ctx context.Context, db *sql.DB, id, userID str
 	if err != nil {
 		return nil, err
 	}
+	state, err := queueConversationCleanupTx(ctx, tx, ids, storagePaths, ownerID)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE conversation_id IN (`+idPlaceholders(len(ids))+`)`, anySlice(ids)...); err != nil {
 		return nil, err
 	}
@@ -912,7 +934,7 @@ func DeleteConversationWithState(ctx context.Context, db *sql.DB, id, userID str
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &ConversationDeletionState{ConversationIDs: ids, StoragePaths: storagePaths}, nil
+	return state, nil
 }
 
 // DeleteConversation preserves the historical store API for callers that only
@@ -931,21 +953,40 @@ func DeleteConversation(ctx context.Context, db *sql.DB, id, userID string) ([]s
 // via FK ON DELETE CASCADE; inline sub-conversations are removed recursively
 // (their id list is returned for side-state cleanup).
 func DeleteConversationByID(ctx context.Context, db *sql.DB, id string) ([]string, error) {
-	children, err := inlineDescendants(ctx, db, id)
+	state, err := DeleteConversationByIDWithState(ctx, db, id)
 	if err != nil {
 		return nil, err
 	}
-	ids := append([]string{id}, children...)
+	return state.ConversationIDs[1:], nil
+}
+
+func DeleteConversationByIDWithState(ctx context.Context, db *sql.DB, id string) (*ConversationDeletionState, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback() //nolint:errcheck
-	var exists int
-	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM conversations WHERE id=?`, id).Scan(&exists); err != nil {
+	var ownerID string
+	if err := tx.QueryRowContext(ctx, `SELECT user_id FROM conversations WHERE id=?`, id).Scan(&ownerID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE conversations SET id=id WHERE id=?`, id); err != nil {
+		return nil, err
+	}
+	children, err := inlineDescendants(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	ids := append([]string{id}, children...)
+	paths, err := storagePathsForConversationIDs(ctx, tx, ids)
+	if err != nil {
+		return nil, err
+	}
+	state, err := queueConversationCleanupTx(ctx, tx, ids, paths, ownerID)
+	if err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE conversation_id IN (`+idPlaceholders(len(ids))+`)`, anySlice(ids)...); err != nil {
@@ -960,12 +1001,14 @@ func DeleteConversationByID(ctx context.Context, db *sql.DB, id string) ([]strin
 		return nil, ErrNotFound
 	}
 	for _, cid := range children {
-		_, _ = tx.ExecContext(ctx, "DELETE FROM conversations WHERE id=?", cid)
+		if _, err := tx.ExecContext(ctx, "DELETE FROM conversations WHERE id=?", cid); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return children, nil
+	return state, nil
 }
 
 // ResolveConversationAppendParent validates the stored/preferred leaf used by

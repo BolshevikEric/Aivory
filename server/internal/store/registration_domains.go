@@ -571,7 +571,7 @@ func ListDomainPersonalConversations(ctx context.Context, db *sql.DB, userID str
 	}
 	rows, err := db.QueryContext(ctx, `SELECT id,user_id,COALESCE(project_id,''),title,provider,model_id,fast,kb_ids,rag_mode,summary_blocks,
 		COALESCE(active_leaf_id,''),provider_state,pinned,archived,starred,created_at,updated_at,
-		COALESCE(inline_source_conv,''),COALESCE(inline_parent_id,''),COALESCE(inline_quote,''),COALESCE(workspace_id,''),is_public
+		COALESCE(inline_source_conv,''),COALESCE(inline_parent_id,''),COALESCE(inline_quote,''),COALESCE(workspace_id,''),is_public, `+conversationDraftSelect("conversations")+`
 	 FROM conversations
 	 WHERE user_id=? AND COALESCE(workspace_id,'')=''
 	 ORDER BY created_at,id LIMIT ? OFFSET ?`, userID, limit, offset)

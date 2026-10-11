@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -15,60 +14,11 @@ import (
 // provider_state ("sandbox_id"); an empty id means no sandbox has been spun up.
 
 func sandboxFilesAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
-	convID := pathParam(r, "id")
-	sb := d.Tools.Sandbox()
-	if sb == nil || !sb.Enabled() {
-		writeError(w, 400, errors.New("sandbox not configured"))
-		return
-	}
-	sid, _ := store.GetConvProviderStateKey(r.Context(), d.DB, convID, "sandbox_id")
-	if sid == "" {
-		writeJSON(w, 200, map[string]any{"session": "", "files": []any{}})
-		return
-	}
-	files, err := sb.ListFiles(r.Context(), sid)
-	if err != nil {
-		// An old sandbox-sidecar (pre /files/list) returns 404, and a recycled
-		// session is also "gone". Degrade to an empty list + a flag instead of a
-		// scary 502 so the admin UI stays usable across a version skew.
-		msg := err.Error()
-		if strings.Contains(msg, "404") || strings.Contains(strings.ToLower(msg), "not found") {
-			writeJSON(w, 200, map[string]any{"session": sid, "files": []any{}, "unavailable": true})
-			return
-		}
-		writeError(w, 502, err)
-		return
-	}
-	writeJSON(w, 200, map[string]any{"session": sid, "files": files})
+	serveSandboxBrowserList(d, w, r, "", true)
 }
 
 func sandboxFileGetAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
-	convID := pathParam(r, "id")
-	filePath := r.URL.Query().Get("path")
-	if !validSandboxFilePath(filePath) {
-		writeError(w, 400, errInvalidInput)
-		return
-	}
-	sb := d.Tools.Sandbox()
-	if sb == nil || !sb.Enabled() {
-		writeError(w, 400, errors.New("sandbox not configured"))
-		return
-	}
-	sid, _ := store.GetConvProviderStateKey(r.Context(), d.DB, convID, "sandbox_id")
-	if sid == "" {
-		writeError(w, 404, errNotFound)
-		return
-	}
-	data, err := sb.GetFile(r.Context(), sid, filePath)
-	if err != nil {
-		writeError(w, 502, err)
-		return
-	}
-	if data == nil {
-		writeError(w, 404, errNotFound)
-		return
-	}
-	serveSandboxFile(w, filePath, data)
+	serveSandboxBrowserFile(d, w, r, "", true)
 }
 
 // validSandboxFilePath accepts only the relative paths returned by the
@@ -100,6 +50,7 @@ func serveSandboxFile(w http.ResponseWriter, filePath string, data []byte) {
 	// anything that isn't a known-inert preview type is force-downloaded with an
 	// opaque content-type instead of rendered inline. Mirrors serveIcon's SVG
 	// hardening in admin_uploads.go.
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data: blob:; style-src 'unsafe-inline'; sandbox")
 	disposition := "attachment"

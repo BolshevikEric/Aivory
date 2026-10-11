@@ -201,6 +201,14 @@ func (s *settingsSandbox) ListFiles(ctx context.Context, sessionID string) ([]sa
 	return s.backend().ListFiles(ctx, sessionID)
 }
 
+func (s *settingsSandbox) ListArchivedFiles(ctx context.Context, archiveKey, sessionID string) ([]sandbox.SandboxFile, error) {
+	return s.backend().(sandbox.ArchiveBrowser).ListArchivedFiles(ctx, archiveKey, sessionID)
+}
+
+func (s *settingsSandbox) GetArchivedFile(ctx context.Context, archiveKey, sessionID, path string) ([]byte, error) {
+	return s.backend().(sandbox.ArchiveBrowser).GetArchivedFile(ctx, archiveKey, sessionID, path)
+}
+
 func (s *settingsSandbox) Release(ctx context.Context, sessionID string) error {
 	return s.backend().Release(ctx, sessionID)
 }

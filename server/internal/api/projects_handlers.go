@@ -459,7 +459,9 @@ func deleteProjectHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		msgcache.Bump(d.Cache, conversationID)
 		cleanupRAGConversation(r.Context(), d, conversationID, "delete project "+id)
 	}
-	cleanupStoragePaths(r.Context(), d, deletion.StoragePaths, "delete project "+id)
+	cleanupDeletedConversationResources(r.Context(), d, &store.ConversationDeletionState{
+		ConversationIDs: deletion.ConversationIDs, StoragePaths: deletion.StoragePaths, SandboxDiscards: deletion.SandboxDiscards,
+	})
 	// Conversations either lost their project grouping or were deleted. A
 	// generic event makes every affected user's devices re-sync their sidebar.
 	for _, userID := range deletion.AffectedUserIDs {

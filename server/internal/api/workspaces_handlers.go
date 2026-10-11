@@ -760,19 +760,12 @@ func teardownWorkspace(d Deps, r *http.Request, ws *store.Workspace) (returnErr 
 		}
 	}
 	for _, cid := range convIDs {
-		ids, _ := store.ConversationTreeIDs(r.Context(), d.DB, cid)
-		storagePaths, _ := store.StoragePathsForConversations(r.Context(), d.DB, ids)
-		if _, err := store.DeleteConversationByID(r.Context(), d.DB, cid); err != nil {
+		deletion, err := store.DeleteConversationByIDWithState(r.Context(), d.DB, cid)
+		if err != nil {
 			recordTeardownError("conversation", cid, err)
 			continue
 		}
-		if len(ids) == 0 {
-			ids = []string{cid}
-		}
-		for _, id := range ids {
-			cleanupRAGConversation(r.Context(), d, id, "workspace "+ws.ID+" conversation "+cid)
-		}
-		cleanupStoragePaths(r.Context(), d, storagePaths, "workspace "+ws.ID+" conversation "+cid)
+		finishConversationDeletion(r.Context(), d, r, "", cid, deletion)
 	}
 	for _, kid := range kbIDs {
 		// The owner is a member, so the member-aware DeleteKB admits them; it also

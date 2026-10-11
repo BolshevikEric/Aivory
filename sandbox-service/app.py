@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import gzip
+import io
 from contextlib import contextmanager
 from dataclasses import dataclass
 import mimetypes
@@ -43,6 +45,7 @@ import select
 import selectors
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 import uuid
@@ -167,6 +170,11 @@ STORAGE_DEFAULT_PREFIX = "workspaces/"
 # /workspace exceeds this, the archive is skipped (logged) rather than buffered
 # unbounded into the sidecar — the session is still reaped/deleted as before.
 MAX_ARCHIVE_BYTES = int(os.environ.get("SANDBOX_MAX_ARCHIVE_BYTES", str(200 * 1024 * 1024)))
+# Archive inspection buffers only the compressed object and the selected file.
+# Bound decompression, metadata and concurrency independently of compression.
+MAX_ARCHIVE_SCAN_BYTES = int(os.environ.get("SANDBOX_MAX_ARCHIVE_SCAN_BYTES", str(1024 * 1024 * 1024)))
+MAX_ARCHIVE_MEMBERS = int(os.environ.get("SANDBOX_MAX_ARCHIVE_MEMBERS", "20000"))
+_archive_browser_slots = threading.BoundedSemaphore(2)
 # /storage/put carries whole documents (the RAG pipeline uploads PDFs up to
 # ~200 MiB, then hands MinerU a presigned URL). Those payloads dwarf the F5
 # control-plane cap that protects /exec & /files, so the body-size guard lets
@@ -353,6 +361,23 @@ def _is_running(session_id: str) -> bool:
     except subprocess.TimeoutExpired:
         return False
     return cp.returncode == 0 and cp.stdout.strip() == b"true"
+
+
+def _require_browsable_session(session_id: str) -> None:
+    """Only a genuinely missing/stopped container permits archive fallback."""
+    try:
+        cp = _docker(["inspect", "-f", "{{.State.Running}}", _container(session_id)], timeout=20)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise HTTPException(status_code=503, detail=f"sandbox service unavailable: {exc}") from exc
+    if cp.returncode != 0:
+        detail = cp.stderr.decode(errors="replace")
+        if "no such container" in detail.lower() or "no such object" in detail.lower():
+            raise HTTPException(status_code=404, detail="session not found or not running")
+        raise HTTPException(status_code=503, detail=f"sandbox service unavailable: {detail}")
+    if cp.stdout.strip() == b"false":
+        raise HTTPException(status_code=404, detail="session not found or not running")
+    if cp.stdout.strip() != b"true":
+        raise HTTPException(status_code=503, detail="invalid sandbox service response")
 
 
 @dataclass
@@ -718,6 +743,13 @@ class ListFilesBody(BaseModel):
     session_id: str
 
 
+class ArchiveFilesBody(BaseModel):
+    archive_key: str = Field(max_length=128)
+    session_id: str = Field(default="", max_length=32)
+    path: str = Field(default="", max_length=4096)
+    storage: Optional[dict[str, Any]] = None
+
+
 # `storage` is a free-form snake_case block the Go side forwards verbatim
 # (provider, prefix, s3_*, oss_*); all fields optional. Modelling it as a dict
 # keeps the sidecar agnostic to which fields a given provider needs.
@@ -1048,18 +1080,44 @@ def delete_session(session_id: str, body: Optional[DeleteBody] = Body(default=No
     _set_terminating(session_id, True)
     try:
         with _session_lock(session_id):
+            purge_error = None
             if discard:
                 # §4.5-F admin "clear": DON'T archive, and delete the existing
                 # archive so a later create can't restore the "cleared" workspace.
-                _purge_archive(session_id, storage, archive_key)
+                try:
+                    _purge_archive(session_id, storage, archive_key)
+                except Exception as exc:
+                    # Still destroy the live container if storage is down. The
+                    # non-2xx response keeps the API's durable retry record.
+                    purge_error = exc
             else:
                 # §4.5: archive /workspace before tearing the container down (best-
                 # effort; no-op without effective storage — dev: deleted = gone).
                 _archive_workspace(session_id, storage)
-            _docker(["rm", "-f", _container(session_id)], timeout=30)
+            removed = _docker(["rm", "-f", _container(session_id)], timeout=30)
+            if removed.returncode != 0:
+                error_text = removed.stderr.decode(errors="replace")
+                # A previously reaped session is expected during deletion; a
+                # stopped/unreachable daemon or permissions error is not.
+                if "no such container" not in error_text.lower() and "no such object" not in error_text.lower():
+                    raise HTTPException(status_code=500, detail=f"sandbox destruction failed: {error_text[:1000]}")
             _forget(session_id)
+            if purge_error is not None:
+                detail = getattr(purge_error, "detail", str(purge_error))
+                raise HTTPException(status_code=500, detail=f"workspace archive purge failed: {detail}")
     finally:
         _set_terminating(session_id, False)
+    return {"ok": True}
+
+
+@app.delete("/archives/{archive_key}")
+def delete_archive(archive_key: str, body: Optional[DeleteBody] = Body(default=None)):
+    # Archive-only deletion after a session ID has been cleared/reaped. This
+    # endpoint cannot create a container or archive an existing workspace.
+    if _sanitize_archive_key(archive_key) != archive_key:
+        raise HTTPException(status_code=400, detail="invalid archive_key")
+    storage = body.storage if body is not None else None
+    _purge_archive("", storage, archive_key)
     return {"ok": True}
 
 
@@ -1078,8 +1136,7 @@ def get_file(body: GetFileBody):
         raise HTTPException(status_code=400, detail="path must be under /workspace")
 
     with _session_lock(sid):
-        if not _is_running(sid):
-            raise HTTPException(status_code=404, detail="session not found or not running")
+        _require_browsable_session(sid)
         # F9-style symlink guard: resolve the real target inside the container
         # and re-verify it stays under /workspace before reading it back out.
         real_path = _resolve_in_container(name, path)
@@ -1109,8 +1166,7 @@ def list_files(body: ListFilesBody):
         raise HTTPException(status_code=400, detail="invalid session_id")
     name = _container(sid)
     with _session_lock(sid):
-        if not _is_running(sid):
-            raise HTTPException(status_code=404, detail="session not found or not running")
+        _require_browsable_session(sid)
         # `find` prints "<size>\t<path>" per file, NUL-TERMINATED so a filename
         # containing a newline can't forge extra rows in the admin inspector. The
         # byte cap keeps a runaway workspace from flooding the response; the count
@@ -1120,6 +1176,8 @@ def list_files(body: ListFilesBody):
              f"find {WORKSPACE} -maxdepth 6 -type f -printf '%s\\t%P\\0' 2>/dev/null | head -c 1000000"],
             timeout=30,
         )
+        if cp.returncode != 0:
+            raise HTTPException(status_code=502, detail=f"file listing failed: {cp.stderr.decode(errors='replace')}")
         _touch(sid)
         files = []
         if cp.returncode == 0:
@@ -1134,6 +1192,120 @@ def list_files(body: ListFilesBody):
                 files.append({"path": rel, "size": size})
         files.sort(key=lambda f: f["path"])
         return {"files": files[:500]}
+
+
+def _archive_relative_path(path: str) -> Optional[str]:
+    # GNU tar emits ./ paths. Strip that prefix only; never normalise away a
+    # traversal segment, and never follow archive links or extract onto disk.
+    while path.startswith("./"):
+        path = path[2:]
+    if not path or len(path) > 4096 or path.startswith("/") or "\\" in path or "\x00" in path:
+        return None
+    if any(part in ("", ".", "..") for part in path.split("/")):
+        return None
+    return path
+
+
+class _ArchiveScanReader:
+    def __init__(self, reader):
+        self.reader = reader
+        self.remaining = MAX_ARCHIVE_SCAN_BYTES
+        self.deadline = time.monotonic() + ARCHIVE_TIMEOUT_S
+
+    def read(self, size: int = -1) -> bytes:
+        if time.monotonic() > self.deadline:
+            raise ValueError("archive inspection timed out")
+        cap = self.remaining + 1
+        data = self.reader.read(cap if size < 0 else min(size, cap))
+        self.remaining -= len(data)
+        if self.remaining < 0:
+            raise ValueError("archive exceeds decompressed inspection limit")
+        return data
+
+
+class _ArchiveTarInfo(tarfile.TarInfo):
+    # tarfile reads extended headers before yielding a member. Reject oversized
+    # metadata before that allocation, including compressed long-name attacks.
+    def _proc_pax(self, archive):
+        if self.size > 65536:
+            raise ValueError("archive metadata exceeds inspection limit")
+        return super()._proc_pax(archive)
+
+    def _proc_gnulong(self, archive):
+        if self.size > 65536:
+            raise ValueError("archive metadata exceeds inspection limit")
+        return super()._proc_gnulong(archive)
+
+
+def _inspect_workspace_archive(data: bytes, path: str = "") -> dict:
+    files = {}
+    selected = None
+    members = 0
+    with gzip.GzipFile(fileobj=io.BytesIO(data)) as decoded:
+        with tarfile.open(fileobj=_ArchiveScanReader(decoded), mode="r|", tarinfo=_ArchiveTarInfo) as archive:
+            for member in archive:
+                members += 1
+                if members > MAX_ARCHIVE_MEMBERS:
+                    raise ValueError("archive contains too many entries")
+                rel = _archive_relative_path(member.name)
+                if rel is None or not member.isfile() or member.issparse():
+                    continue
+                if member.size < 0 or member.size > MAX_ARCHIVE_SCAN_BYTES:
+                    raise ValueError("archive contains oversized entry")
+                if len(rel.split("/")) <= 6:
+                    files[rel] = {"path": rel, "size": member.size}
+                if path and rel == path:
+                    if member.size > MAX_UPLOAD_BYTES:
+                        raise ValueError("file exceeds preview limit")
+                    source = archive.extractfile(member)
+                    if source is None:
+                        raise ValueError("archive file cannot be read")
+                    with source:
+                        selected = source.read(MAX_UPLOAD_BYTES + 1)
+                    if len(selected) != member.size:
+                        raise ValueError("archive file is truncated")
+    if path:
+        if selected is None:
+            return {"archive_status": "file_missing"}
+        return {"archive_status": "ready", "data_base64": base64.b64encode(selected).decode("ascii")}
+    return {"archive_status": "ready", "files": [files[key] for key in sorted(files)[:500]]}
+
+
+def _browse_workspace_archive(body: ArchiveFilesBody, *, get_file: bool) -> dict:
+    if _sanitize_archive_key(body.archive_key) != body.archive_key:
+        raise HTTPException(status_code=400, detail="invalid archive_key")
+    if body.session_id and not _valid_session(body.session_id):
+        raise HTTPException(status_code=400, detail="invalid session_id")
+    if get_file and (_archive_relative_path(body.path) != body.path or not body.path):
+        raise HTTPException(status_code=400, detail="invalid file path")
+    if not _storage_effective(body.storage):
+        return {"archive_status": "not_configured"}
+    with _slot(_archive_browser_slots, "archive browser"):
+        try:
+            key = _workspace_archive_key(body.storage, body.archive_key)
+            data = _storage_get_object(body.storage, key, max_bytes=MAX_ARCHIVE_BYTES)
+            # Old sidecars stored session-key archives; prefer the conversation
+            # key and consult the legacy key only when it genuinely is absent.
+            if data is None and body.session_id and body.session_id != body.archive_key:
+                key = _workspace_archive_key(body.storage, body.session_id)
+                data = _storage_get_object(body.storage, key, max_bytes=MAX_ARCHIVE_BYTES)
+            if data is None:
+                return {"archive_status": "missing"}
+            return _inspect_workspace_archive(data, body.path if get_file else "")
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001 - retain storage/corruption errors
+            raise HTTPException(status_code=502, detail=f"archive read failed: {exc}") from exc
+
+
+@app.post("/archives/files/list")
+def list_archived_files(body: ArchiveFilesBody):
+    return _browse_workspace_archive(body, get_file=False)
+
+
+@app.post("/archives/files/get")
+def get_archived_file(body: ArchiveFilesBody):
+    return _browse_workspace_archive(body, get_file=True)
 
 
 @app.post("/storage/put")
@@ -1810,20 +1982,20 @@ def _archive_workspace(session_id: str, storage: Optional[dict]) -> None:
 
 
 def _purge_archive(session_id: str, storage: Optional[dict], archive_key: Optional[str]) -> None:
-    """Best-effort: delete this session's workspace tarball so an admin "clear"
-    is a real purge that stable-key restore (§4.5-C G2) can't undo. Prefers the
-    forwarded archive_key (works even if the session was already reaped and its
-    remembered key is gone); falls back to the session's stem. Never raises."""
+    """Idempotent purge; failures propagate so the API can durably retry.
+
+    The conversation key works after idle recycling. Also remove archives from
+    older sidecars that keyed the same workspace by its session ID.
+    """
     if not _storage_effective(storage):
         return
     stem = _sanitize_archive_key(archive_key) or _archive_stem(session_id)
-    try:
+    stems = {stem}
+    if session_id:
+        stems.add(session_id)
+    for stem in stems:
         _storage_delete_object(storage, _workspace_archive_key(storage, stem))
         print(f"[sandbox] purged workspace archive (key={stem})")
-    except HTTPException as exc:
-        print(f"[sandbox] warning: purge archive for {session_id} failed: {exc.detail}")
-    except Exception as exc:  # noqa: BLE001 - purge is best-effort
-        print(f"[sandbox] warning: purge archive for {session_id} failed: {exc}")
 
 
 def _restore_workspace(session_id: str, storage: Optional[dict]) -> None:

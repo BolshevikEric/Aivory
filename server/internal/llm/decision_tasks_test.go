@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,44 @@ import (
 	"aivory/server/internal/store"
 	"aivory/server/internal/typesafe"
 )
+
+func TestOpenRouterDecisionToolScopeResolvedModel(t *testing.T) {
+	db := decisionTestDB(t)
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/api/alpha/decisions" {
+			t.Errorf("wrong Decision endpoint: %s", r.URL.Path)
+		}
+		var req typesafe.Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Model != "microsoft/decision-1" {
+			t.Errorf("incorrect configured routing model: model=%s err=%v", req.Model, err)
+		}
+		fmt.Fprint(w, `{"answers":{"scope":{"choice":"search_only","confidence":0.9881778647009158,"probabilities":{"full_tools":0.005911067649542063,"search_only":0.9940889323504579},"type":"choice"}},"id":"gen-dec-1791698927-hanuwJ492oi497Gb8cwY","model":"microsoft/microsoft-decision-1-20261009","provider":"Azure","usage":{"cost":0.000008274,"input_tokens":100,"output_tokens":10}}`)
+	}))
+	defer srv.Close()
+	seedDecisionModel(t, db, srv.URL, "microsoft/decision-1")
+	if _, err := db.Exec(`UPDATE models SET protocol='openrouter.decisions' WHERE id='decision-model'`); err != nil {
+		t.Fatal(err)
+	}
+	model, err := store.GetModel(t.Context(), db, "decision-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := NewTaskLLM(db, nil, nil)
+	needsFullTools, err := task.decisionToolScope(t.Context(), model, "Summarize this message", typesafe.Metadata{UserID: "decision-user", MessageID: "decision-message"})
+	if err != nil || needsFullTools || calls != 1 {
+		t.Fatalf("valid tool scope rejected/retried: full_tools=%v calls=%d err=%v", needsFullTools, calls, err)
+	}
+	var count, input, output int
+	if err := db.QueryRow(`SELECT COUNT(*),SUM(input_tokens),SUM(output_tokens) FROM billing_usage`).Scan(&count, &input, &output); err != nil || count != 1 || input != 100 || output != 10 {
+		t.Fatalf("decision usage lost/duplicated: count=%d input=%d output=%d err=%v", count, input, output, err)
+	}
+	var status, detail string
+	if err := db.QueryRow(`SELECT status,error FROM usage_logs`).Scan(&status, &detail); err != nil || status != "ok" || detail != "" {
+		t.Fatalf("successful OpenRouter Decision recorded as error: status=%s error=%s err=%v", status, detail, err)
+	}
+}
 
 func TestDecisionPolicyWorkflows(t *testing.T) {
 	db := decisionTestDB(t)

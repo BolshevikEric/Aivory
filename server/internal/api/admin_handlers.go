@@ -1249,9 +1249,7 @@ func deleteConversationAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	if conv, err := store.GetConversationByID(r.Context(), d.DB, id); err == nil {
 		ownerID = conv.UserID
 	}
-	ids, _ := store.ConversationTreeIDs(r.Context(), d.DB, id)
-	storagePaths, _ := store.StoragePathsForConversations(r.Context(), d.DB, ids)
-	children, err := store.DeleteConversationByID(r.Context(), d.DB, id)
+	deletion, err := store.DeleteConversationByIDWithState(r.Context(), d.DB, id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, 404, errNotFound)
@@ -1260,19 +1258,7 @@ func deleteConversationAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, err)
 		return
 	}
-	if len(ids) == 0 {
-		ids = append([]string{id}, children...)
-	}
-	for _, cid := range ids {
-		cancelConversationGenerations(d, cid)
-	}
-	// Drop RAG vectors for the conversation and every inline sub-conversation
-	// removed alongside it.
-	for _, cid := range ids {
-		cleanupRAGConversation(r.Context(), d, cid, "admin delete conversation "+id)
-	}
-	cleanupStoragePaths(r.Context(), d, storagePaths, "admin delete conversation "+id)
-	publishUserEvent(d, r, ownerID, "conversation.deleted", id) // §23 (owner's devices)
+	finishConversationDeletion(r.Context(), d, r, ownerID, id, deletion)
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 

@@ -872,18 +872,20 @@ func clearAllConversationsHandler(d Deps, w http.ResponseWriter, r *http.Request
 // finishConversationDeletion performs the non-transactional cleanup required
 // after DeleteConversationWithState has committed its database changes.
 func finishConversationDeletion(ctx context.Context, d Deps, r *http.Request, userID, rootID string, deletion *store.ConversationDeletionState) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
 	for _, cid := range deletion.ConversationIDs {
 		cancelConversationGenerations(d, cid)
 	}
 	// Conversation uploads cascade-delete (documents.conversation_id ON DELETE
-	// CASCADE); files are physically deleted by DeleteConversation. Drop vectors
+	// CASCADE); physical cleanup is durable and detached from the request. Drop vectors
 	// and storage objects for the conversation and every inline sub-conversation
 	// that was removed with it.
 	for _, cid := range deletion.ConversationIDs {
 		msgcache.Bump(d.Cache, cid)
 		cleanupRAGConversation(ctx, d, cid, "delete conversation "+rootID)
 	}
-	cleanupStoragePaths(ctx, d, deletion.StoragePaths, "delete conversation "+rootID)
+	cleanupDeletedConversationResources(ctx, d, deletion)
 	publishUserEvent(d, r, userID, "conversation.deleted", rootID)
 }
 

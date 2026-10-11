@@ -1803,9 +1803,16 @@ func prepareDocument(d *Document) (kbID, convID any, now int64, err error) {
 
 // UpdateDocumentStatus moves the document along the pipeline state machine.
 func UpdateDocumentStatus(ctx context.Context, db *sql.DB, id, status, errMsg string, chunkCount int) error {
-	_, err := db.ExecContext(ctx,
+	res, err := db.ExecContext(ctx,
 		`UPDATE documents SET status=?, error=?, chunk_count=?, ingest_updated_at=? WHERE id=?`,
 		status, errMsg, chunkCount, time.Now().Unix(), id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		return ErrNotFound
+	}
 	return err
 }
 

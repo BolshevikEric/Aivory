@@ -213,13 +213,19 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 		return nil, err
 	}
 	expected := strings.TrimSpace(opts.ExpectedModel)
-	if !isFloatingDecisionModel(req.Model, c.openRouterModels) {
+	// OpenRouter Decisions accepts a routing ID and reports the resolved model.
+	// Its documented request/response IDs differ; do not infer a version pin from
+	// the request or assume every provider follows Jev's release naming scheme.
+	if c.cfg.Protocol != OpenRouterDecisionsProtocol && !isFloatingDecisionModel(req.Model, c.openRouterModels) {
 		if expected != "" && !decisionModelsMatch(req.Model, expected, c.openRouterModels, true) {
 			return nil, failure(ErrValidation, "expected release conflicts with pinned request model")
 		}
 		if expected == "" {
 			expected = req.Model
 		}
+	}
+	responseFailure := func(kind ErrorKind, message string) *Error {
+		return &Error{Kind: kind, StatusCode: record.StatusCode, RequestID: record.RequestID, Message: message}
 	}
 	for attempt := 0; ; attempt++ {
 		if err := callCtx.Err(); err != nil {
@@ -276,7 +282,7 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 			return nil, contextError(readErr)
 		}
 		if int64(len(raw)) > c.cfg.MaxResponseBytes {
-			return nil, failure(ErrResponse, "response exceeds byte limit")
+			return nil, responseFailure(ErrResponse, "response exceeds byte limit")
 		}
 		// Decode envelope/usage first so invalid answers do not erase known costs.
 		var envelope struct {
@@ -291,7 +297,7 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 			} `json:"usage"`
 		}
 		if json.Unmarshal(raw, &envelope) != nil {
-			return nil, failure(ErrResponse, "response is not valid JSON")
+			return nil, responseFailure(ErrResponse, "response is not valid JSON")
 		}
 		record.ServedModel = envelope.Model
 		if record.RequestID == "" {
@@ -299,25 +305,29 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 		}
 		result = &Response{ID: envelope.ID, Provider: envelope.Provider, Model: envelope.Model, RequestedModel: req.Model, RequestID: record.RequestID}
 		if envelope.Usage == nil || envelope.Usage.Input == nil || envelope.Usage.Output == nil || *envelope.Usage.Input < 0 || *envelope.Usage.Output < 0 {
-			return result, failure(ErrResponse, "missing or invalid token usage")
+			return result, responseFailure(ErrResponse, "missing or invalid token usage")
 		}
 		result.Usage = Usage{InputTokens: *envelope.Usage.Input, OutputTokens: *envelope.Usage.Output, Cost: envelope.Usage.Cost}
 		record.Usage, record.UsageKnown = result.Usage, true
 		if json.Unmarshal(envelope.Answers, &result.Answers) != nil {
 			result.Answers = nil
-			return result, failure(ErrResponse, "invalid answers JSON")
+			return result, responseFailure(ErrResponse, "invalid answers JSON")
 		}
 		validationExpected := expected
 		if c.openRouterModels && expected != "" {
 			if !decisionModelsMatch(expected, result.Model, true, strings.TrimSpace(opts.ExpectedModel) == "") {
 				result.Answers = nil
-				return result, failure(ErrModelVersion, "served model does not match expected release")
+				return result, responseFailure(ErrModelVersion, "served model does not match expected release")
 			}
 			validationExpected = ""
 		}
 		if err := validateDecisionResponse(snapshot, result, validationExpected, c.cfg.Protocol == OpenRouterDecisionsProtocol); err != nil {
 			// Preserve usage/version for accounting, but never expose invalid judgments.
 			result.Answers = nil
+			if apiErr, ok := err.(*Error); ok {
+				apiErr.StatusCode = record.StatusCode
+				apiErr.RequestID = record.RequestID
+			}
 			return result, err
 		}
 		return result, nil

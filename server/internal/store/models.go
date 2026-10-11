@@ -494,9 +494,12 @@ type Conversation struct {
 	ProviderState json.RawMessage `json:"provider_state"`
 	Pinned        bool            `json:"pinned"`
 	Archived      bool            `json:"archived"`
-	Starred       bool            `json:"starred"`
-	CreatedAt     int64           `json:"created_at"`
-	UpdatedAt     int64           `json:"updated_at"`
+	// Derived from the unsent reservation predicate, never trusted on writes.
+	IsDraft    bool   `json:"is_draft"`
+	DraftScope string `json:"draft_scope,omitempty"`
+	Starred    bool   `json:"starred"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
 	// Inline-thread linkage (§ text-selection sub-conversations). When set, this
 	// conversation is a sub-conversation anchored to a quoted excerpt of a
 	// message in another conversation; it is hidden from the normal list and its

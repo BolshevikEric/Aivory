@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 )
 
 // ErrLastAdmin is returned when an account mutation would leave no active
@@ -90,6 +89,31 @@ func DeleteConversationRows(ctx context.Context, db *sql.DB, userID string, ids 
 		  AND ` + userDeletionResourceScope("deletion_conversation")
 	args := anySlice(ids)
 	args = append(args, userDeletionResourceScopeArgs(userID)...)
+	rows, err := tx.QueryContext(ctx, scopedIDs, args...)
+	if err != nil {
+		return err
+	}
+	var actualIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		actualIDs = append(actualIDs, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	paths, err := storagePathsForConversationIDs(ctx, tx, actualIDs)
+	if err != nil {
+		return err
+	}
+	if _, err := queueConversationCleanupTx(ctx, tx, actualIDs, paths, userID); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE conversation_id IN (`+scopedIDs+`)`, args...); err != nil {
 		return err
 	}
@@ -151,15 +175,8 @@ func InsertPendingStorageCleanup(ctx context.Context, db *sql.DB, userID string,
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
-	for _, p := range paths {
-		if p == "" {
-			continue
-		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO pending_storage_cleanup(path, user_id, created_at) VALUES(?,?,?) ON CONFLICT(path) DO NOTHING`,
-			p, userID, time.Now().Unix()); err != nil {
-			return err
-		}
+	if err := insertPendingStorageCleanupTx(ctx, tx, userID, paths); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

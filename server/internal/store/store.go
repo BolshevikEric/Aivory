@@ -538,6 +538,12 @@ func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrateCleanupLedger(db); err != nil {
+		return fmt.Errorf("migrate cleanup ledger: %w", err)
+	}
+	if err := migrateResourceLifecycles(db); err != nil {
+		return fmt.Errorf("migrate resource lifecycles: %w", err)
+	}
 	if err := migrateAuditColumns(db); err != nil {
 		return err
 	}

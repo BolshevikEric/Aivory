@@ -180,7 +180,7 @@ func (s *Service) RebuildMissingVectors(ctx context.Context, progress func(Vecto
 				if len(points) == 0 {
 					continue
 				}
-				if err := s.vec.Upsert(ctx, dim, points); err != nil {
+				if err := s.upsertDocumentVectors(ctx, dim, points); err != nil {
 					out.Failed += len(points)
 					for _, ch := range pointChunks[dim] {
 						out.Issues = appendLimitedVectorIssue(out.Issues, vectorIssueFromChunk(ch, dim, "upsert_failed"))

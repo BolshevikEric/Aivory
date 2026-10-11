@@ -70,3 +70,34 @@ func TestHTTPSandboxResetInputsConvertsStructuredGoneResponse(t *testing.T) {
 		t.Fatalf("ResetInputs error=%v, want ErrSessionGone", err)
 	}
 }
+
+func TestHTTPSandboxDiscardUsesStableArchiveAndReportsFailures(t *testing.T) {
+	for _, sessionID := range []string{"active-session", ""} {
+		t.Run(sessionID, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				want := "/sessions/" + sessionID
+				if sessionID == "" {
+					want = "/archives/conv_123"
+				}
+				if r.Method != "DELETE" || r.URL.Path != want {
+					t.Errorf("discard=%s %s", r.Method, r.URL.Path)
+				}
+				var body struct {
+					Discard    bool   `json:"discard"`
+					ArchiveKey string `json:"archive_key"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !body.Discard || body.ArchiveKey != "conv_123" {
+					t.Errorf("discard body=%+v err=%v", body, err)
+				}
+				w.WriteHeader(500)
+				_, _ = w.Write([]byte(`{"detail":"archive purge failed"}`))
+			}))
+			defer server.Close()
+			err := New(server.URL, "").ReleaseDiscard(context.Background(), sessionID, "conv_123")
+			var httpErr *HTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != 500 {
+				t.Fatalf("purge failure=%v", err)
+			}
+		})
+	}
+}

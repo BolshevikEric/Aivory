@@ -186,7 +186,7 @@ func main() {
 	ragSvc.SetTaskLLM(taskRouterAdapter{t: taskLLM})
 	orchestrator := llm.NewOrchestrator(db, providers, toolRegistry, ragSvc, cacheLayer, q, taskLLM, memoryWorker, logger, cfg.UploadDir, cfg.ArtifactDir)
 
-	router := api.NewRouter(api.Deps{
+	apiDeps := api.Deps{
 		Config:       cfg,
 		DB:           db,
 		Cache:        cacheLayer,
@@ -200,7 +200,11 @@ func main() {
 		Logger:       logger,
 		Passkeys:     api.NewPasskeyService("Aivory"),
 		AppVersion:   buildVersion,
-	})
+	}
+	router := api.NewRouter(apiDeps)
+	resourceCleanupCtx, stopResourceCleanup := context.WithCancel(context.Background())
+	defer stopResourceCleanup()
+	go api.RunPendingResourceCleanup(resourceCleanupCtx, apiDeps)
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,

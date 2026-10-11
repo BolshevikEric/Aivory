@@ -887,6 +887,9 @@ func restoreInto(ctx context.Context, ex store.RowExecer, zr *zip.Reader, man ba
 	if err := store.BackfillModelProtocols(ctx, ex); err != nil {
 		return nil, err
 	}
+	if err := store.BackfillManagedAvatarOwnership(ctx, ex); err != nil {
+		return nil, fmt.Errorf("restore avatar ownership: %w", err)
+	}
 	if err := validateImportedContextCompactionModel(ctx, ex); err != nil {
 		return nil, err
 	}

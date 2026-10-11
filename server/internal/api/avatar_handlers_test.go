@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -10,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"aivory/server/internal/config"
@@ -39,6 +39,7 @@ func TestAvatarUploadAndServeUseConfiguredObjectStorage(t *testing.T) {
 	}
 	d := Deps{DB: db, Config: config.Config{LocalStorageDir: localStorageDir}}
 	user := &store.User{ID: "u-avatar", Role: "user", Status: "active"}
+	mustExec(t, db, `INSERT INTO users(id,email,password_hash) VALUES('u-avatar','avatar@test','h')`)
 
 	uploadRec := httptest.NewRecorder()
 	uploadAvatar(d, uploadRec, uploadRequestWithFile(t, "/api/me/avatar", user, "portrait.png", pngBytes))
@@ -63,6 +64,9 @@ func TestAvatarUploadAndServeUseConfiguredObjectStorage(t *testing.T) {
 	if !bytes.Equal(storedBytes, pngBytes) {
 		t.Fatal("directly stored avatar bytes differ from upload")
 	}
+	if _, err := store.UpdateUserSettings(context.Background(), db, user.ID, map[string]any{"avatar_url": uploaded.URL}); err != nil {
+		t.Fatal(err)
+	}
 
 	mx := newMux()
 	mx.handle(http.MethodGet, "/api/avatars/:filename", func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +83,7 @@ func TestAvatarUploadAndServeUseConfiguredObjectStorage(t *testing.T) {
 	if got := serveRec.Header().Get("Content-Type"); got != "image/png" {
 		t.Fatalf("content type = %q", got)
 	}
-	if got := serveRec.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+	if got := serveRec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("cache control = %q", got)
 	}
 }

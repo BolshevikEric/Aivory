@@ -120,10 +120,18 @@ func (r *Registry) EnsureConversationSandbox(ctx context.Context, convID, userID
 		return "", err
 	}
 	if err := store.SetConvProviderStateKeyForMember(ctx, r.db, convID, userID, "sandbox_id", sessionID); err != nil {
-		_ = r.sandbox.Release(ctx, sessionID)
+		releaseUntrackedSandbox(ctx, r.sandbox, r.db, convID, sessionID)
 		return "", err
 	}
 	return sessionID, nil
+}
+
+// Serialize explicit deletion with session provisioning. A late provision that
+// loses its DB row is separately discarded and queued by releaseUntrackedSandbox.
+func (r *Registry) DiscardConversationSandbox(ctx context.Context, convID, sessionID string) error {
+	unlock := lockConvSandbox(convID)
+	defer unlock()
+	return r.sandbox.ReleaseDiscard(ctx, sessionID, convID)
 }
 
 // NewRegistry builds the default registry with the built-in tools.

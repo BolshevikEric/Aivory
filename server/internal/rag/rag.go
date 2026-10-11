@@ -317,6 +317,7 @@ func (s *Service) RequeueIncomplete(ctx context.Context) {
 // so multiple API replicas can run this loop without enqueueing the same stale
 // document in the same recovery window.
 func (s *Service) RunIngestRecovery(ctx context.Context) {
+	s.SweepDeletedDocumentVectors(ctx)
 	s.RequeueIncomplete(ctx)
 	ticker := time.NewTicker(ingestRecoveryInterval)
 	defer ticker.Stop()
@@ -325,6 +326,7 @@ func (s *Service) RunIngestRecovery(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			s.SweepDeletedDocumentVectors(ctx)
 			s.RequeueStaleIngests(ctx)
 		}
 	}
@@ -656,7 +658,9 @@ func (s *Service) runPipeline(ctx context.Context, docID string, cache *parseCac
 	if s.logger != nil {
 		s.logger.Printf("rag: pre-ingest cleanup done doc=%s took=%s", docID, time.Since(cleanupStart).Round(time.Millisecond))
 	}
-	_ = store.UpdateDocumentStatus(ctx, s.db, docID, "parsing", "", 0)
+	if err := store.UpdateDocumentStatus(ctx, s.db, docID, "parsing", "", 0); err != nil {
+		return err
+	}
 
 	// Resolve MinerU + storage from admin settings (live), falling back to env
 	// values supplied at boot. MinerU source uploads prefer direct Go-side
@@ -842,7 +846,9 @@ func (s *Service) runPipeline(ctx context.Context, docID string, cache *parseCac
 		dim    int
 	)
 	if !skipEmbed {
-		_ = store.UpdateDocumentStatus(ctx, s.db, docID, "embedding", "", 0)
+		if err := store.UpdateDocumentStatus(ctx, s.db, docID, "embedding", "", 0); err != nil {
+			return err
+		}
 		if d.KBID != "" {
 			em, emName, dim, err = s.resolveEmbedderForKB(ctx, d.KBID)
 			if err != nil {
@@ -973,7 +979,7 @@ func (s *Service) runPipeline(ctx context.Context, docID string, cache *parseCac
 	}
 	if s.vec.Enabled() && len(points) > 0 {
 		stageStart = time.Now()
-		if err := s.vec.Upsert(ctx, dim, points); err != nil {
+		if err := s.upsertDocumentVectors(ctx, dim, points); err != nil {
 			return fmt.Errorf("vector upsert failed: %w", err)
 		}
 		if s.logger != nil {
@@ -2094,7 +2100,18 @@ func interleaveKnowledgeBaseCandidates(cands []retrievalCandidate, kbIDs []strin
 // stays in sync with the relational chunk rows the store deletes. No-op when
 // the vector backend is disabled.
 func (s *Service) OnDocumentDeleted(ctx context.Context, documentID string) error {
-	return s.vec.DeleteByDocument(ctx, documentID)
+	if !s.vec.Enabled() {
+		return nil
+	}
+	if err := s.vec.DeleteByDocument(ctx, documentID); err != nil {
+		_ = store.CompleteVectorCleanup(context.WithoutCancel(ctx), s.db, documentID, err)
+		return err
+	}
+	ready, err := store.VectorCleanupReady(ctx, s.db, documentID)
+	if err != nil || !ready {
+		return err
+	}
+	return store.CompleteVectorCleanup(context.WithoutCancel(ctx), s.db, documentID, nil)
 }
 
 // PromoteDocument moves a conversation-scoped document into a KB and RE-EMBEDS

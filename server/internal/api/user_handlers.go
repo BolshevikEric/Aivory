@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -250,10 +251,17 @@ func updateMeSettingsHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	}
 	upd, err := store.UpdateUserSettings(r.Context(), d.DB, u.ID, patch)
 	if err != nil {
+		if errors.Is(err, store.ErrAvatarUnavailable) {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 		writeError(w, 500, err)
 		return
 	}
 	invalidateAuthUser(d, u.ID)
+	if _, changed := patch["avatar_url"]; changed {
+		sweepAvatarCleanup(context.WithoutCancel(r.Context()), d)
+	}
 	writeJSON(w, 200, json.RawMessage(upd.Settings))
 }
 

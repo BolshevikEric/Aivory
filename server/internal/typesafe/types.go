@@ -124,6 +124,7 @@ type Options struct {
 	// Zero uses Config.Timeout; a caller's earlier deadline always wins.
 	Timeout time.Duration
 	// ExpectedModel optionally locks an alias to a tested concrete release.
-	// Pinned requests already enforce that the returned model matches the pin.
+	// TypeSafe pinned requests enforce their version automatically. OpenRouter
+	// Decisions reports a resolved model ID and only enforces an explicit pin.
 	ExpectedModel string
 }

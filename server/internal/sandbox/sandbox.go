@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -398,10 +399,14 @@ type SandboxFile struct {
 // `POST /files/list {session_id}` → {files:[{path,size}]}.
 func (s *HTTPSandbox) ListFiles(ctx context.Context, sessionID string) ([]SandboxFile, error) {
 	var res struct {
-		Files []SandboxFile `json:"files"`
+		Files       []SandboxFile `json:"files"`
+		SessionGone bool          `json:"session_gone"`
 	}
 	if err := s.do(ctx, "/files/list", map[string]any{"session_id": sessionID}, &res); err != nil {
 		return nil, err
+	}
+	if res.SessionGone {
+		return nil, ErrSessionGone
 	}
 	return res.Files, nil
 }
@@ -422,7 +427,7 @@ func (s *HTTPSandbox) Release(ctx context.Context, sessionID string) error {
 // existing archive keyed by archiveKey so a stable-key restore (§4.5-C G2)
 // can't resurrect the "cleared" workspace. Idempotent.
 func (s *HTTPSandbox) ReleaseDiscard(ctx context.Context, sessionID, archiveKey string) error {
-	if sessionID == "" {
+	if sessionID == "" && archiveKey == "" {
 		return nil
 	}
 	payload := map[string]any{"discard": true}
@@ -431,6 +436,9 @@ func (s *HTTPSandbox) ReleaseDiscard(ctx context.Context, sessionID, archiveKey 
 	}
 	if archiveKey != "" {
 		payload["archive_key"] = archiveKey
+	}
+	if sessionID == "" {
+		return s.doMethod(ctx, "DELETE", "/archives/"+url.PathEscape(archiveKey), payload, nil)
 	}
 	return s.doMethod(ctx, "DELETE", "/sessions/"+sessionID, payload, nil)
 }

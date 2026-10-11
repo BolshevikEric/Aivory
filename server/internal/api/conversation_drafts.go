@@ -119,21 +119,5 @@ func finishConversationDraftDeletion(ctx context.Context, d Deps, r *http.Reques
 		cleanupRAGConversation(cleanupCtx, d, draftID, "discard conversation draft "+draftID)
 		publishUserEvent(d, r, userID, "conversation.deleted", draftID)
 	}
-	if d.Tools != nil && d.Tools.Sandbox() != nil {
-		for _, sandbox := range deletion.SandboxDiscards {
-			if err := d.Tools.Sandbox().ReleaseDiscard(cleanupCtx, sandbox.SessionID, sandbox.ConversationID); err != nil {
-				logStorageCleanup(d, "discard conversation draft sandbox %s: %v", sandbox.SessionID, err)
-			}
-		}
-	}
-	obj := objectStorageClient(d)
-	for _, path := range deletion.StoragePaths {
-		if _, err := cleanupOneStoragePath(cleanupCtx, d, obj, path); err != nil {
-			logStorageCleanup(d, "discard conversation draft storage %s: %v", path, err)
-			continue // durable ledger retries on a later sweep or restart
-		}
-		if err := store.DeletePendingStorageCleanup(cleanupCtx, d.DB, path); err != nil {
-			logStorageCleanup(d, "discard conversation draft storage %s: forget path: %v", path, err)
-		}
-	}
+	cleanupDeletedConversationResources(cleanupCtx, d, deletion)
 }

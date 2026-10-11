@@ -44,7 +44,9 @@ var backupTableOrder = []string{
 	"aippt_decks",
 	"usage_stats", "usage_logs", "tool_call_logs", "artifacts", "refresh_tokens", "oauth_identities", "passkeys",
 	"workspace_invites", "workspace_policies", "workspace_announcements", "workspace_audit_logs", "admin_audit_logs",
-	"site_notifications", "site_notification_states", "pending_storage_cleanup",
+	"site_notifications", "site_notification_states", "pending_storage_cleanup", "pending_sandbox_cleanup",
+	"avatar_objects", "pending_vector_cleanup", "document_vector_writes",
+	"resource_lifecycle_migrations",
 }
 
 // configTableOrder is the non-user, non-conversation admin configuration slice.
@@ -447,6 +449,11 @@ var tablePrimaryKeys = map[string][]string{
 	"oauth_identities":                {"provider_id", "subject"},
 	"passkeys":                        {"id"},
 	"pending_storage_cleanup":         {"path"},
+	"pending_sandbox_cleanup":         {"conversation_id", "session_id"},
+	"avatar_objects":                  {"filename"},
+	"pending_vector_cleanup":          {"document_id"},
+	"document_vector_writes":          {"write_id"},
+	"resource_lifecycle_migrations":   {"key"},
 }
 
 // UpsertTable merges rows from a JSONL table dump by primary key. Config import

@@ -510,6 +510,9 @@ func UpdateUserSettings(ctx context.Context, db *sql.DB, userID string, patch ma
 	if raw != "" {
 		_ = json.Unmarshal([]byte(raw), &current)
 	}
+	if err := updateAvatarSettingsTx(ctx, tx, userID, current, patch); err != nil {
+		return nil, err
+	}
 	for k, v := range patch {
 		if isLegacyUserToolModeSettingKey(k) {
 			continue
@@ -1583,6 +1586,9 @@ func DeleteUser(ctx context.Context, db *sql.DB, userID string, storageRoots ...
 	plan, err := buildUserCleanupPlan(ctx, tx, userID)
 	if err != nil {
 		return fmt.Errorf("delete user: build cleanup plan: %w", err)
+	}
+	if _, err := queueConversationCleanupTx(ctx, tx, plan.ConversationIDs, plan.StoragePaths, userID); err != nil {
+		return fmt.Errorf("delete user: queue resource cleanup: %w", err)
 	}
 	if err := transferUserWorkspaceResourcesTx(ctx, tx, userID, workspaces); err != nil {
 		return fmt.Errorf("delete user: transfer workspace resources: %w", err)

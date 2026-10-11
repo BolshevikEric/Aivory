@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -52,6 +53,15 @@ func cleanupOneStoragePath(ctx context.Context, d Deps, obj *storage.Client, p s
 	if ref {
 		return true, nil
 	}
+	remote := strings.Contains(p, "://")
+	if remote && (obj == nil || !obj.Enabled()) {
+		return false, fmt.Errorf("object storage unavailable for %q; deletion retained for retry", p)
+	}
+	if remote {
+		if _, ok := objectStorageKey(p, obj); !ok {
+			return false, fmt.Errorf("unrecognized object storage path %q", p)
+		}
+	}
 	if looksLocalStoragePath(p) {
 		// ResolveExisting performs the real (symlink-aware) check, but first
 		// establish lexical containment. An attacker-controlled absolute path
@@ -80,13 +90,21 @@ func cleanupOneStoragePath(ctx context.Context, d Deps, obj *storage.Client, p s
 		}
 	}
 	if key, ok := objectStorageKey(p, obj); ok {
-		dctx, cancel := context.WithTimeout(context.Background(), objectStorageDeleteTimeout)
+		dctx, cancel := context.WithTimeout(ctx, objectStorageDeleteTimeout)
 		defer cancel()
 		if err := obj.Delete(dctx, key); err != nil {
 			return false, err
 		}
 	}
 	return false, nil
+}
+
+func recordStorageCleanupAttempt(ctx context.Context, d Deps, path string, failure error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := store.RecordStorageCleanupAttempt(ctx, d.DB, path, failure); err != nil {
+		logStorageCleanup(d, "record storage cleanup attempt %q: %v", path, err)
+	}
 }
 
 func cleanupRAGDocument(ctx context.Context, d Deps, docID, label string) {

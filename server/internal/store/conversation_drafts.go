@@ -3,10 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 )
 
 // Older composers already create blank, message-less conversations for upload
@@ -15,16 +13,26 @@ import (
 // excluded so deleting all messages never makes their retained files disposable.
 const unusedConversationDraftSQL = `
 	c.title='' AND c.pinned=0 AND c.starred=0 AND c.archived=0
+	AND c.draft_scope<>'sending'
 	AND COALESCE(c.inline_source_conv,'')=''
 	AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id=c.id)
 	AND NOT EXISTS (SELECT 1 FROM conversations child WHERE child.inline_source_conv=c.id)
 	AND NOT EXISTS (SELECT 1 FROM conversation_shares s WHERE s.conversation_id=c.id)
 	AND NOT EXISTS (SELECT 1 FROM files f WHERE f.conversation_id=c.id AND (f.draft=0 OR f.user_id<>c.user_id))`
 
-// The same definition controls visibility, creation limits and explicit discard, so a
-// deliberately retained empty conversation remains visible and manageable.
+func conversationDraftPredicate(alias string) string {
+	return strings.ReplaceAll(unusedConversationDraftSQL, "c.", alias+".")
+}
+
+// Read draft state with the conversation so a first send is reflected without
+// maintaining another persisted flag or issuing a query for each list row.
+func conversationDraftSelect(alias string) string {
+	return "CASE WHEN " + conversationDraftPredicate(alias) + " THEN 1 ELSE 0 END, " + alias + ".draft_scope"
+}
+
+// Saved history operations such as archive-all still exclude unused drafts.
 func conversationHistoryPredicate(alias string) string {
-	return "NOT (" + strings.ReplaceAll(unusedConversationDraftSQL, "c.", alias+".") + ")"
+	return "NOT (" + conversationDraftPredicate(alias) + ")"
 }
 
 const MaxConversationDrafts = 1
@@ -45,18 +53,9 @@ const conversationDraftScopePredicate = `
 	c.user_id=? AND COALESCE(c.workspace_id,'')=? AND COALESCE(c.project_id,'')=?
 	AND (c.draft_scope=? OR (
 		c.draft_scope=''
-		AND EXISTS (SELECT 1 FROM files legacy_file WHERE legacy_file.conversation_id=c.id AND legacy_file.draft=1)
 		AND CASE WHEN EXISTS (SELECT 1 FROM models legacy_model WHERE legacy_model.id=c.model_id AND legacy_model.kind='image')
 		    THEN 'draw' ELSE 'chat' END=?
 	)) AND ` + unusedConversationDraftSQL
-
-// Legacy empty first-send rows use their model kind to determine the scope;
-// marked upload reservations keep a stable scope even after a model is removed.
-const conversationDraftSameScopeSQL = `
-	COALESCE(c.workspace_id,'')=? AND COALESCE(c.project_id,'')=?
-	AND CASE WHEN c.draft_scope<>'' THEN c.draft_scope
-	    WHEN EXISTS (SELECT 1 FROM models scope_model WHERE scope_model.id=c.model_id AND scope_model.kind='image')
-	    THEN 'draw' ELSE 'chat' END=?`
 
 type draftQueryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
@@ -65,7 +64,9 @@ type draftQueryer interface {
 func findConversationDraftID(ctx context.Context, db draftQueryer, userID, workspaceID, projectID, scope string) (string, error) {
 	var id string
 	err := db.QueryRowContext(ctx, `SELECT c.id FROM conversations c WHERE `+conversationDraftScopePredicate+
-		` ORDER BY c.updated_at DESC, c.id DESC LIMIT 1`, userID, workspaceID, projectID, scope, scope).Scan(&id)
+		` ORDER BY CASE WHEN c.draft_scope<>'' THEN 0
+		  WHEN EXISTS (SELECT 1 FROM files draft_file WHERE draft_file.conversation_id=c.id AND draft_file.draft=1) THEN 1 ELSE 2 END,
+		  c.updated_at DESC, c.id DESC LIMIT 1`, userID, workspaceID, projectID, scope, scope).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -149,9 +150,14 @@ func SwitchConversationDraftScope(ctx context.Context, db *sql.DB, userID, works
 }
 
 func discardOtherConversationDraftScopes(ctx context.Context, tx *sql.Tx, userID, workspaceID, projectID, scope string) (*ConversationDeletionState, error) {
+	keepID, err := findConversationDraftID(ctx, tx, userID, workspaceID, projectID, scope)
+	if err != nil {
+		return nil, err
+	}
+	// Retain the newest matching reservation only. Legacy clients could leave
+	// several same-scope blank rows; recover one and explicitly discard the rest.
 	rows, err := tx.QueryContext(ctx, `SELECT c.id FROM conversations c WHERE c.user_id=?
-		AND `+unusedConversationDraftSQL+` AND NOT (`+conversationDraftSameScopeSQL+`) ORDER BY c.id`,
-		userID, workspaceID, projectID, scope)
+		AND `+unusedConversationDraftSQL+` AND c.id<>? ORDER BY c.id`, userID, keepID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,31 +245,15 @@ func deleteConversationDraftTx(ctx context.Context, tx *sql.Tx, id, userID strin
 	if err != nil {
 		return nil, err
 	}
-	var providerState string
-	if err := tx.QueryRowContext(ctx, `SELECT provider_state FROM conversations WHERE id=?`, id).Scan(&providerState); err != nil {
+	state, err := queueConversationCleanupTx(ctx, tx, []string{id}, paths, userID)
+	if err != nil {
 		return nil, err
-	}
-	var sandboxState struct {
-		ID string `json:"sandbox_id"`
-	}
-	_ = json.Unmarshal([]byte(providerState), &sandboxState)
-	for _, path := range paths {
-		if path == "" {
-			continue
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO pending_storage_cleanup(path,user_id,created_at) VALUES(?,?,?) ON CONFLICT(path) DO NOTHING`, path, userID, time.Now().Unix()); err != nil {
-			return nil, err
-		}
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE conversation_id=?`, id); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM conversations WHERE id=? AND user_id=?`, id, userID); err != nil {
 		return nil, err
-	}
-	state := &ConversationDeletionState{ConversationIDs: []string{id}, StoragePaths: paths}
-	if sandboxState.ID != "" {
-		state.SandboxDiscards = []ConversationSandboxDiscard{{ConversationID: id, SessionID: sandboxState.ID}}
 	}
 	return state, nil
 }
