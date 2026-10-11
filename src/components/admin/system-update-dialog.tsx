@@ -33,6 +33,11 @@ interface Props {
 function progressLabelKey(progress?: string): string {
   switch (progress) {
     case 'pulling_image': return 'pulling'
+    case 'checking_sandbox': return 'checkingSandbox'
+    case 'pulling_sandbox': return 'pullingSandbox'
+    case 'recreating_sandbox': return 'restartingSandbox'
+    case 'waiting_for_sandbox_health': return 'checkingSandboxHealth'
+    case 'rolling_back': return 'rollingBack'
     case 'recreating_app': return 'restarting'
     case 'waiting_for_health': return 'checkingHealth'
     case 'completed': return 'completed'
@@ -207,7 +212,12 @@ export function SystemUpdateDialog({ open, onOpenChange, onSummaryChange }: Prop
                 {jobCompleted && (
                   <div className="flex items-start gap-2 rounded-[8px] border border-[var(--color-success)]/20 bg-[var(--color-success-soft)] p-3.5 text-sm text-[var(--color-success)]">
                     <CheckCircle2 className="mt-0.5 shrink-0" size={15} aria-hidden />
-                    {t('userMenu.systemUpdate.success')}
+                    <div>
+                      {t('userMenu.systemUpdate.success')}
+                      {(state?.job?.sandbox_status === 'updated' || state?.job?.sandbox_status === 'unchanged') && (
+                        <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{t(`userMenu.systemUpdate.sandbox.${state.job.sandbox_status}`)}</p>
+                      )}
+                    </div>
                   </div>
                 )}
                 {(jobFailed || state?.check_error || state?.updater_error || !state?.configured) && (

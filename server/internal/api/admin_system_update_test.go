@@ -140,3 +140,24 @@ func TestCallSystemUpdaterAuthenticatesWithTokenFile(t *testing.T) {
 		t.Fatalf("status=%d configured=%v err=%v body=%q", status, configured, err, body)
 	}
 }
+
+func TestSystemUpdaterStatusPreservesSandboxProgress(t *testing.T) {
+	updater := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"job":{"status":"completed","version":"2.5.1-beta.15","sandbox_status":"unchanged","progress":"completed"}}`))
+	}))
+	defer updater.Close()
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("0123456789abcdef0123456789abcdef"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, configured, err := systemUpdaterStatus(Deps{Config: config.Config{
+		SystemUpdaterURL: updater.URL, SystemUpdaterTokenFile: tokenFile,
+	}})
+	if err != nil || !configured || job == nil || job.SandboxStatus != "unchanged" || job.Status != "completed" {
+		t.Fatalf("sandbox result lost: job=%+v configured=%v err=%v", job, configured, err)
+	}
+	encoded, err := json.Marshal(job)
+	if err != nil || !bytes.Contains(encoded, []byte(`"sandbox_status":"unchanged"`)) {
+		t.Fatalf("sandbox result not forwarded: %s err=%v", encoded, err)
+	}
+}

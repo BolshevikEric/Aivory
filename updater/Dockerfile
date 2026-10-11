@@ -3,7 +3,7 @@ FROM python:3.13-alpine
 RUN apk add --no-cache docker-cli docker-cli-compose
 
 WORKDIR /opt/aivory-updater
-COPY updater/updater.py ./updater.py
+COPY updater/updater.py updater/sandbox_sources.py ./
 
 ENV AIVORY_UPDATER_LISTEN=0.0.0.0:8790 \
     AIVORY_UPDATER_STATE_DIR=/var/lib/aivory-updater \

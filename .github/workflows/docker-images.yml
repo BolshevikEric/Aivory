@@ -70,6 +70,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Identify sandbox source
+        id: sandbox
+        run: python3 updater/sandbox_sources.py >> "$GITHUB_OUTPUT"
+
       # ghcr image paths must be lowercase; the owner may contain capitals.
       - name: Compute lowercase owner
         id: vars
@@ -112,6 +116,7 @@ jobs:
             org.opencontainers.image.description=Aivory — multi-model AI chat platform
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
+            io.aivory.sandbox.source=${{ steps.sandbox.outputs.sandbox_source }}
 
       - name: Build and push ${{ matrix.name }}
         uses: docker/build-push-action@v6

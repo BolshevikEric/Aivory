@@ -786,13 +786,22 @@
       "releaseUnavailable": "GitHub のリリース情報を一時的に取得できません。しばらくしてから再試行してください。",
       "updaterUnavailable": "アップデーターを利用できません。updater コンテナが起動しているか確認してください。",
       "notConfigured": "この環境ではアップデーターが有効になっていません。新しい Compose で updater サービスを起動してください。",
+      "sandbox": {
+        "updated": "サンドボックスも更新されました。",
+        "unchanged": "サンドボックスのコードに変更がないため、現在のバージョンを維持しました。"
+      },
       "progress": {
         "preparing": "更新を準備しています…",
         "pulling": "新しいイメージを取得しています…",
         "restarting": "アプリケーションコンテナを置き換えています…",
         "checkingHealth": "アプリが起動しました。正常性を確認しています…",
         "completed": "更新完了",
-        "failed": "更新失敗"
+        "failed": "更新失敗",
+        "checkingSandbox": "サンドボックスの変更を確認しています…",
+        "pullingSandbox": "更新されたサンドボックスイメージを取得しています…",
+        "restartingSandbox": "サンドボックスサービスを更新しています…",
+        "checkingSandboxHealth": "サンドボックスの正常性を確認しています…",
+        "rollingBack": "更新前のバージョンに戻しています…"
       }
     }
   },

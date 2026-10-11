@@ -173,12 +173,27 @@ docker compose --env-file .env.personal -f docker-compose.personal.yml up -d
 ```
 
 此后日常应用升级可直接在后台完成。更新器会先拉取精确的语义版本镜像，保持旧应用在线；
-拉取成功后把 `APP_IMAGE_TAG` 原子写入实际环境文件，只重建 `app`，并等待健康检查通过。
-如果重建或健康检查失败，它会恢复更新前的环境值并尝试重新启动旧版本。任务状态保存在
+拉取成功后把 `APP_IMAGE_TAG` 原子写入实际环境文件，并等待健康检查通过。
+如果同一部署中有正在运行的内置沙盒，更新器还会比对镜像中的源码内容指纹；比对范围包括
+控制服务代码、两个 Dockerfile 和依赖文件，版本号或说明文档变化不会触发沙盒更新。
+旧镜像会按 GitHub 构建提交比对源码。代码相同则跳过沙盒镜像拉取和重启；代码有变化则先
+拉取并核对两张对应版本的沙盒镜像，全部准备好后更新 `SANDBOX_IMAGE_TAG`、重建沙盒，
+沙盒健康检查通过后才替换 `app`。外部或自定义沙盒、未启用的个人版沙盒会被跳过。
+如果重建或健康检查失败，会恢复原环境文件，并按更新前的实际本地镜像 ID 恢复已经替换
+的服务，避免 `latest` 等可变标签影响回退。任务状态保存在
 `update-state` 卷中，即使 `app` 正在被替换也不会丢失。
 
-更新器不会自动移动沙箱镜像；`IMAGE_TAG` / `SANDBOX_IMAGE_TAG` 仍控制沙箱版本。需要配套
-沙箱变更的版本会在发布日志中注明，届时仍应按上面的 Compose 命令更新整个栈。
+现有部署需要在新版更新器镜像发布后，先手动更新一次更新器。在实际完整版部署目录执行：
+
+```bash
+docker compose --env-file .env -f docker-compose.prod.yml pull updater
+docker compose --env-file .env -f docker-compose.prod.yml up -d --no-deps updater
+```
+
+个人版将文件名替换为 `.env.personal` 和 `docker-compose.personal.yml`。
+需要使用支持 `APP_IMAGE_TAG`、`SANDBOX_IMAGE_TAG` 且包含运行环境保活服务的当前部署文件。
+无法核实镜像源码信息时（包括旧镜像比对时 GitHub 不可用），会在替换服务前停止更新。
+已有对话的沙盒容器保留原运行环境，新建会话使用更新后的环境；数据卷和工作区归档保留。
 
 `updater` 为控制宿主机 Docker 而挂载了 `/var/run/docker.sock`，该权限等同宿主机 root。
 因此它不发布任何端口，只能由 `app` 经内部网络访问；双方凭据由更新器首次启动时随机

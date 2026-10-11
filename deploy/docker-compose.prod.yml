@@ -152,7 +152,7 @@ services:
 
   # Internal update controller. It is deliberately not published on a host
   # port. The app authenticates through a random token generated in DATA_DIR;
-  # the controller only accepts a semantic app version, never arbitrary Docker
+  # the controller only accepts a semantic release version, never arbitrary Docker
   # commands or image names.
   updater:
     image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_OWNER:-hjxwz123}/aivory-updater:${UPDATER_IMAGE_TAG:-latest}

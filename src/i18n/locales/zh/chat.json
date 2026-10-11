@@ -786,13 +786,22 @@
       "releaseUnavailable": "暂时无法读取 GitHub 发布版本，请稍后重试。",
       "updaterUnavailable": "更新器暂时不可用，请确认 updater 容器正在运行。",
       "notConfigured": "当前部署尚未启用更新器。请先使用新版 Compose 启动 updater 服务。",
+      "sandbox": {
+        "updated": "沙盒已同步更新。",
+        "unchanged": "沙盒代码没有变化，已保留当前版本。"
+      },
       "progress": {
         "preparing": "正在准备更新…",
         "pulling": "正在拉取新版镜像…",
         "restarting": "正在替换应用容器…",
         "checkingHealth": "应用已启动，正在检查健康状态…",
         "completed": "更新完成",
-        "failed": "更新失败"
+        "failed": "更新失败",
+        "checkingSandbox": "正在检查沙盒代码变更…",
+        "pullingSandbox": "正在拉取新版沙盒镜像…",
+        "restartingSandbox": "正在更新沙盒服务…",
+        "checkingSandboxHealth": "正在检查沙盒健康状态…",
+        "rollingBack": "正在恢复更新前的版本…"
       }
     }
   },

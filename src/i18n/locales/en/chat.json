@@ -794,13 +794,22 @@
       "releaseUnavailable": "GitHub release information is temporarily unavailable. Try again shortly.",
       "updaterUnavailable": "The updater is unavailable. Confirm that the updater container is running.",
       "notConfigured": "This deployment has not enabled the updater. Start the updater service with the current Compose file first.",
+      "sandbox": {
+        "updated": "The sandbox was updated with this release.",
+        "unchanged": "Sandbox code is unchanged; its current version was kept."
+      },
       "progress": {
         "preparing": "Preparing the update…",
         "pulling": "Pulling the new image…",
         "restarting": "Replacing the application container…",
         "checkingHealth": "The app has started; checking its health…",
         "completed": "Update complete",
-        "failed": "Update failed"
+        "failed": "Update failed",
+        "checkingSandbox": "Checking sandbox changes…",
+        "pullingSandbox": "Downloading updated sandbox images…",
+        "restartingSandbox": "Updating sandbox services…",
+        "checkingSandboxHealth": "Checking sandbox health…",
+        "rollingBack": "Restoring the previous version…"
       }
     }
   },

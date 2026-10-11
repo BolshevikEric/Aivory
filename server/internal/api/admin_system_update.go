@@ -18,13 +18,14 @@ import (
 const systemUpdateResponseLimit = 2 << 20
 
 type systemUpdateJob struct {
-	ID          string `json:"id,omitempty"`
-	Status      string `json:"status"`
-	Progress    string `json:"progress,omitempty"`
-	Version     string `json:"version,omitempty"`
-	Error       string `json:"error,omitempty"`
-	StartedAt   int64  `json:"started_at,omitempty"`
-	CompletedAt int64  `json:"completed_at,omitempty"`
+	ID            string `json:"id,omitempty"`
+	Status        string `json:"status"`
+	Progress      string `json:"progress,omitempty"`
+	Version       string `json:"version,omitempty"`
+	SandboxStatus string `json:"sandbox_status,omitempty"`
+	Error         string `json:"error,omitempty"`
+	StartedAt     int64  `json:"started_at,omitempty"`
+	CompletedAt   int64  `json:"completed_at,omitempty"`
 }
 
 type systemUpdateRelease struct {

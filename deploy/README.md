@@ -202,14 +202,33 @@ docker compose --env-file .env.personal -f docker-compose.personal.yml up -d
 
 After that, routine application releases can be installed in the UI. The updater
 pulls an exact semantic app tag while the old app remains online, atomically writes
-`APP_IMAGE_TAG` to the active environment file, recreates only `app`, and waits for
-its health check. A failed restart or health check restores the previous environment
-value and attempts to bring the old app back. Job state lives in the `update-state`
+`APP_IMAGE_TAG` to the active environment file and waits for its health check.
+For a running bundled sandbox it also compares the source-content fingerprint
+recorded in the images. The fingerprint covers the sidecar code, both Dockerfiles,
+and their dependency files; release numbers and documentation changes do not trigger
+a sandbox update. Older images are compared using their GitHub build commit.
+Unchanged sandboxes are neither downloaded nor restarted. Changed sandboxes have
+both release images pulled and verified before any service is replaced, then
+`SANDBOX_IMAGE_TAG` is updated and the sandbox health check must pass before `app`
+is replaced. External/custom sandboxes and disabled personal profiles are skipped.
+A failed restart or health check restores the previous environment and the exact
+local image IDs of services already replaced. Job state lives in the `update-state`
 volume, independently of the app being replaced.
 
-Sandbox images are not moved automatically. `IMAGE_TAG` / `SANDBOX_IMAGE_TAG` still
-control them; a release that requires matching sandbox changes will say so in its
-upgrade notes and should be installed with the full Compose commands above.
+Existing installations must install the new updater once after its image has been
+published. In the active full-stack deployment directory, run:
+
+```bash
+docker compose --env-file .env -f docker-compose.prod.yml pull updater
+docker compose --env-file .env -f docker-compose.prod.yml up -d --no-deps updater
+```
+
+For personal deployments substitute `.env.personal` and `docker-compose.personal.yml`.
+Use the current deployment file with `APP_IMAGE_TAG`, `SANDBOX_IMAGE_TAG`, and the
+runtime keepalive service. If image source metadata cannot be verified (including
+GitHub being unavailable for legacy images), the update stops before replacing any
+service. Existing conversation containers keep running with their original runtime;
+new sessions use the updated runtime. Data volumes and workspace archives are retained.
 
 The updater mounts `/var/run/docker.sock`, which is equivalent to host root access.
 It therefore publishes no host port, accepts only fixed app-update operations, and

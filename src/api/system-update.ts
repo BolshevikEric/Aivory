@@ -7,6 +7,7 @@ export interface SystemUpdateJob {
   status: SystemUpdateJobStatus
   progress?: string
   version?: string
+  sandbox_status?: 'checking' | 'not_running' | 'external' | 'unchanged' | 'updating' | 'updated' | 'rolled_back'
   error?: string
   started_at?: number
   completed_at?: number

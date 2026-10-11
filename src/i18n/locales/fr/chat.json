@@ -786,13 +786,22 @@
       "releaseUnavailable": "Les informations de publication GitHub sont temporairement indisponibles. Réessayez plus tard.",
       "updaterUnavailable": "Le service de mise à jour est indisponible. Vérifiez que le conteneur updater fonctionne.",
       "notConfigured": "Le service de mise à jour n’est pas activé. Démarrez updater avec le fichier Compose actuel.",
+      "sandbox": {
+        "updated": "Le bac à sable a également été mis à jour.",
+        "unchanged": "Le code du bac à sable est inchangé ; la version actuelle a été conservée."
+      },
       "progress": {
         "preparing": "Préparation de la mise à jour…",
         "pulling": "Téléchargement de la nouvelle image…",
         "restarting": "Remplacement du conteneur de l’application…",
         "checkingHealth": "L’application a démarré, vérification de son état…",
         "completed": "Mise à jour terminée",
-        "failed": "Échec de la mise à jour"
+        "failed": "Échec de la mise à jour",
+        "checkingSandbox": "Vérification des modifications du bac à sable…",
+        "pullingSandbox": "Téléchargement des nouvelles images du bac à sable…",
+        "restartingSandbox": "Mise à jour des services du bac à sable…",
+        "checkingSandboxHealth": "Vérification du fonctionnement du bac à sable…",
+        "rollingBack": "Restauration de la version précédente…"
       }
     }
   },

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A narrowly scoped, persistent updater for the Aivory app container."""
+"""Persistent updates for the app and changed, running bundled sandbox."""
 
 from __future__ import annotations
 
@@ -10,13 +10,21 @@ import re
 import secrets
 import stat
 import subprocess
+import tempfile
 import threading
 import time
+import urllib.parse
+import urllib.request
 import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+try:
+    from sandbox_sources import SOURCE_LABEL, source_fingerprint
+except ModuleNotFoundError:
+    from updater.sandbox_sources import SOURCE_LABEL, source_fingerprint
 
 
 VERSION_RE = re.compile(
@@ -147,6 +155,89 @@ class UpdateManager:
             "-f", str(self.settings.compose_file), *args,
         ], timeout=timeout, env=command_env)
 
+    def _compose_up(self, services: list[str], overrides: dict[str, Any] | None = None) -> None:
+        if not overrides:
+            self._compose("up", "-d", "--no-deps", "--force-recreate", *services)
+            return
+        # A local image ID override makes rollback independent of mutable tags
+        # such as latest. This temporary file never changes the deployment YAML.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", dir=self.settings.state_dir) as override:
+            json.dump({"services": overrides}, override)
+            override.flush()
+            self._compose("-f", override.name, "up", "-d", "--no-deps", "--force-recreate", *services)
+
+    def _service_snapshot(self, service: str) -> dict[str, Any] | None:
+        ids = self._compose("--profile", "*", "ps", "-q", service, timeout=30).split()
+        if not ids:
+            return None
+        if len(ids) != 1:
+            raise RuntimeError(f"automatic updates require one {service} container")
+        return json.loads(self._command(["docker", "inspect", ids[0]], timeout=30))[0]
+
+    def _image_labels(self, image: str) -> dict[str, str]:
+        return json.loads(self._command([
+            "docker", "image", "inspect", "--format", "{{json .Config.Labels}}", image,
+        ], timeout=30)) or {}
+
+    def _source_fingerprint(self, labels: dict[str, str], cache: dict[str, str]) -> str:
+        fingerprint = labels.get(SOURCE_LABEL, "")
+        if re.fullmatch(r"[a-f0-9]{64}", fingerprint):
+            return fingerprint
+        # Compatibility with published images that predate content labels.
+        # Read their build commit's tree, not the current release or branch.
+        source = urllib.parse.urlparse(labels.get("org.opencontainers.image.source", ""))
+        revision = labels.get("org.opencontainers.image.revision", "")
+        repository = source.path.strip("/").removesuffix(".git")
+        if source.scheme != "https" or source.netloc != "github.com" or not re.fullmatch(r"[\w.-]+/[\w.-]+", repository) or not re.fullmatch(r"(?:[a-f0-9]{40}|[a-f0-9]{64})", revision):
+            raise RuntimeError("sandbox image lacks source metadata; cannot safely determine whether its code changed")
+        key = f"{repository}/{revision}"
+        if key not in cache:
+            request = urllib.request.Request(
+                f"https://api.github.com/repos/{repository}/git/trees/{revision}?recursive=1",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Aivory-Updater"},
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read(8 * 1024 * 1024 + 1)
+            if len(body) > 8 * 1024 * 1024:
+                raise RuntimeError("sandbox source metadata is too large")
+            tree = json.loads(body)
+            if tree.get("truncated"):
+                raise RuntimeError("sandbox source metadata is incomplete")
+            cache[key] = source_fingerprint({entry["path"]: entry["sha"] for entry in tree["tree"] if entry["type"] == "blob"})
+        return cache[key]
+
+    def _sandbox_plan(self, config: dict[str, Any], app_image: str) -> dict[str, Any] | None:
+        services = config.get("services", {})
+        sandbox = services.get("sandbox")
+        if not sandbox:
+            self._set(sandbox_status="not_running")
+            return None
+        prefix = f"{self.settings.image_registry}/{self.settings.image_owner}/"
+        if not sandbox.get("image", "").startswith(prefix + "aivory-sandbox-sidecar:"):
+            self._set(sandbox_status="external")
+            return None
+        snapshot = self._service_snapshot("sandbox")
+        if not snapshot:
+            # In particular, never enable the optional personal sandbox profile.
+            self._set(sandbox_status="not_running")
+            return None
+        environment = dict(value.split("=", 1) for value in snapshot["Config"].get("Env", []) if "=" in value)
+        runtime_image = environment.get("SANDBOX_IMAGE", "")
+        if not runtime_image.startswith(prefix + "aivory-sandbox:"):
+            self._set(sandbox_status="external")
+            return None
+        cache: dict[str, str] = {}
+        target = self._source_fingerprint(self._image_labels(app_image), cache)
+        current = self._source_fingerprint(self._image_labels(snapshot["Image"]), cache)
+        keepalive = self._service_snapshot("sandbox-image-keepalive") if "sandbox-image-keepalive" in services else None
+        runtime = self._source_fingerprint(self._image_labels(keepalive["Image"] if keepalive else runtime_image), cache)
+        if target == current == runtime:
+            self._set(sandbox_status="unchanged")
+            return None
+        if not keepalive:
+            raise RuntimeError("running bundled sandbox needs sandbox-image-keepalive from the current deployment Compose file")
+        return {"sandbox": snapshot, "sandbox-image-keepalive": keepalive, "source": target, "runtime_image": runtime_image}
+
     def _write_env_value(self, key: str, value: str) -> str | None:
         if not ENV_KEY_RE.fullmatch(key) or "\n" in value or "\r" in value:
             raise ValueError("invalid environment value")
@@ -198,14 +289,15 @@ class UpdateManager:
         ]
         self._atomic_write_env("".join(output))
 
-    def _container_id(self) -> str:
-        return self._compose("ps", "-q", self.settings.app_service, timeout=30).strip()
+    def _container_id(self, service: str | None = None) -> str:
+        return self._compose("--profile", "*", "ps", "-q", service or self.settings.app_service, timeout=30).strip()
 
-    def _wait_healthy(self) -> None:
+    def _wait_healthy(self, service: str | None = None, healthcheck: bool = True) -> None:
+        service = service or self.settings.app_service
         deadline = time.monotonic() + self.settings.health_timeout
         last = "container_missing"
         while time.monotonic() < deadline:
-            container_id = self._container_id()
+            container_id = self._container_id(service)
             if container_id:
                 try:
                     last = self._command([
@@ -213,25 +305,61 @@ class UpdateManager:
                     ], timeout=15)
                 except (subprocess.SubprocessError, OSError):
                     last = "inspect_failed"
-                if last == "healthy":
+                if last == "healthy" or (not healthcheck and last == "running"):
                     return
                 if last in {"exited", "dead"}:
                     break
             time.sleep(3)
-        raise RuntimeError(f"updated app did not become healthy ({last})")
+        raise RuntimeError(f"updated {service} did not become healthy ({last})")
 
     def _run(self, version: str) -> None:
-        previous_tag: str | None = None
+        original_env: str | None = None
         env_changed = False
+        restarted: list[str] = []
+        snapshots: dict[str, Any] = {}
         image = f"{self.settings.image_repository}:{version}"
         try:
             if not self.settings.compose_file.is_file():
                 raise RuntimeError("deployment compose file is unavailable")
             self._command(["docker", "pull", image], timeout=1800)
-            previous_tag = self._write_env_value("APP_IMAGE_TAG", version)
+            config = json.loads(self._compose("--profile", "*", "config", "--format", "json", timeout=30))
+            app = self._service_snapshot(self.settings.app_service)
+            if not app:
+                raise RuntimeError("running application container is unavailable")
+            snapshots[self.settings.app_service] = app
+            self._set(progress="checking_sandbox", sandbox_status="checking")
+            plan = self._sandbox_plan(config, image)
+            if plan:
+                self._set(progress="pulling_sandbox", sandbox_status="updating")
+                for name in ("aivory-sandbox-sidecar", "aivory-sandbox"):
+                    sandbox_image = f"{self.settings.image_registry}/{self.settings.image_owner}/{name}:{version}"
+                    self._command(["docker", "pull", sandbox_image], timeout=1800)
+                    if self._source_fingerprint(self._image_labels(sandbox_image), {}) != plan["source"]:
+                        raise RuntimeError(f"{name} source does not match the selected application release")
+                snapshots.update({service: plan[service] for service in ("sandbox", "sandbox-image-keepalive")})
+            original_env = self.settings.env_file.read_text(encoding="utf-8") if self.settings.env_file.exists() else None
             env_changed = True
+            self._write_env_value("APP_IMAGE_TAG", version)
+            if plan:
+                self._write_env_value("SANDBOX_IMAGE_TAG", version)
+            updated = json.loads(self._compose("--profile", "*", "config", "--format", "json", timeout=30))["services"]
+            if updated[self.settings.app_service]["image"] != image:
+                raise RuntimeError("deployment Compose does not support APP_IMAGE_TAG; refresh the deployment file first")
+            if plan:
+                prefix = f"{self.settings.image_registry}/{self.settings.image_owner}"
+                runtime_image = f"{prefix}/aivory-sandbox:{version}"
+                if updated["sandbox"]["image"] != f"{prefix}/aivory-sandbox-sidecar:{version}" or updated["sandbox"].get("environment", {}).get("SANDBOX_IMAGE") != runtime_image or updated["sandbox-image-keepalive"]["image"] != runtime_image:
+                    raise RuntimeError("deployment Compose does not support SANDBOX_IMAGE_TAG; refresh the deployment file first")
+                self._set(status="restarting", progress="recreating_sandbox")
+                restarted.extend(["sandbox-image-keepalive", "sandbox"])
+                self._compose_up(["sandbox-image-keepalive", "sandbox"])
+                self._set(status="checking", progress="waiting_for_sandbox_health")
+                self._wait_healthy("sandbox-image-keepalive", healthcheck=False)
+                self._wait_healthy("sandbox")
+                self._set(sandbox_status="updated")
             self._set(status="restarting", progress="recreating_app")
-            self._compose("up", "-d", "--no-deps", "--force-recreate", self.settings.app_service, timeout=600)
+            restarted.append(self.settings.app_service)
+            self._compose_up([self.settings.app_service])
             self._set(status="checking", progress="waiting_for_health")
             self._wait_healthy()
             self._set(status="completed", progress="completed", completed_at=int(time.time()), error="")
@@ -239,9 +367,20 @@ class UpdateManager:
             rollback_error = ""
             if env_changed:
                 try:
-                    self._restore_env_value("APP_IMAGE_TAG", previous_tag)
-                    self._compose("up", "-d", "--no-deps", "--force-recreate", self.settings.app_service, timeout=600)
-                    self._wait_healthy()
+                    self._set(status="restarting", progress="rolling_back")
+                    if original_env is None:
+                        self.settings.env_file.unlink(missing_ok=True)
+                    else:
+                        self._atomic_write_env(original_env)
+                    if restarted:
+                        overrides = {service: {"image": snapshots[service]["Image"], "pull_policy": "never"} for service in restarted}
+                        if "sandbox" in restarted:
+                            overrides["sandbox"]["environment"] = {"SANDBOX_IMAGE": plan["runtime_image"]}
+                        self._compose_up(restarted, overrides)
+                        for service in restarted:
+                            self._wait_healthy(service, healthcheck=service != "sandbox-image-keepalive")
+                        if "sandbox" in restarted:
+                            self._set(sandbox_status="rolled_back")
                 except Exception as rollback_exc:  # noqa: BLE001
                     rollback_error = f"; rollback failed: {rollback_exc}"
             self._set(
