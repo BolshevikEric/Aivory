@@ -394,9 +394,16 @@ export function FormulaEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         size="lg"
-        className="formula-editor-dialog min-w-0 overflow-hidden"
+        className="formula-editor-dialog min-h-0 min-w-0 overflow-hidden"
         data-keyboard-open={keyboardInset > 0 ? 'true' : undefined}
-        style={{ paddingBottom: keyboardInset > 0 ? `${keyboardInset}px` : undefined }}
+        // The layout viewport may already shrink when the system keyboard
+        // opens. Constrain the dialog to the remaining space instead of
+        // adding the keyboard height to its total size.
+        style={{
+          maxHeight: keyboardInset > 0
+            ? `max(12rem, calc(100dvh - ${keyboardInset}px))`
+            : undefined,
+        }}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           requestAnimationFrame(() => fallbackFocusRef.current?.focus())
@@ -416,7 +423,7 @@ export function FormulaEditorDialog({
           <DialogDescription className="sr-only">{t('composer.formula.description')}</DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="formula-editor-body flex min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden px-4 pb-3 sm:px-5">
+        <DialogBody className="formula-editor-body flex min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden overscroll-contain px-4 pb-3 sm:px-5">
           <div
             ref={fallbackFocusRef}
             tabIndex={-1}
