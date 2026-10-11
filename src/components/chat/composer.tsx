@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowUp,
   AudioWaveform,
+  Camera,
   Paperclip,
   Image as ImageIcon,
   FolderUp,
@@ -902,6 +903,7 @@ export function Composer({
   // (Gemini/ChatGPT-mobile pattern) so the row never overflows and tap targets
   // stay large. 639px = Tailwind's `sm` breakpoint minus 1.
   const isMobile = useMediaQuery('(max-width: 639px)')
+  const isTouchDevice = useMediaQuery('(pointer: coarse)')
   const [moreOpen, setMoreOpen] = useState(false)
   const [toolUsePanel, setToolUsePanel] = useState<ToolUsePanel>('root')
   // Turn-feature menu (the "+" left of attach): research / verify / tool use
@@ -1006,6 +1008,7 @@ export function Composer({
   const ref = useRef<RichComposerEditorHandle>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
+  const cameraFileRef = useRef<HTMLInputElement>(null)
   const folderFileRef = useRef<HTMLInputElement>(null)
   /**
    * True while a File System Access directory pick is in flight.
@@ -3859,6 +3862,18 @@ export function Composer({
               e.currentTarget.value = ''
             }}
           />
+          <input
+            type="file"
+            ref={cameraFileRef}
+            hidden
+            accept="image/*"
+            capture="environment"
+            aria-label={t('composer.takePhoto')}
+            onChange={(e) => {
+              void handleAttach(e.currentTarget.files)
+              e.currentTarget.value = ''
+            }}
+          />
           {/* Fallback directory picker. The primary path is the File System
               Access API (see `pickAndAttachFolder`); `webkitdirectory` is a
               non-standard attribute, so this input is what remains on a host
@@ -3961,6 +3976,19 @@ export function Composer({
                     >
                       <ImageIcon size={18} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
                       {t('composer.addImage')}
+                    </button>
+                  ) : null}
+                  {canUploadFiles ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        cameraFileRef.current?.click()
+                      }}
+                      className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-[15px] text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)] active:bg-[var(--color-bg-muted)]"
+                    >
+                      <Camera size={18} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
+                      {t('composer.takePhoto')}
                     </button>
                   ) : null}
                   {canUploadFolder ? (
@@ -4118,6 +4146,19 @@ export function Composer({
                   className="inline-flex items-center justify-center size-8 rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                 >
                   <ImageIcon size={15} aria-hidden />
+                </button>
+              </Tooltip>
+            ) : null}
+
+            {canUploadFiles && isTouchDevice ? (
+              <Tooltip content={t('composer.takePhoto')}>
+                <button
+                  type="button"
+                  onClick={() => cameraFileRef.current?.click()}
+                  aria-label={t('composer.takePhoto')}
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                >
+                  <Camera size={18} aria-hidden />
                 </button>
               </Tooltip>
             ) : null}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowUp, ImagePlus, Menu, ShieldOff, Square, X } from 'lucide-react'
+import { ArrowUp, Camera, ImagePlus, Menu, ShieldOff, Square, X } from 'lucide-react'
 import { modelsApi } from '@/api'
 import type { ApiModel } from '@/api/types'
 import { streamSSE } from '@/api/client'
@@ -12,6 +12,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { HOME_SWAP_STATE, HomeLayout } from '@/components/chat/home-layout'
 import { PrivateMessageRow, type PrivateDisplayMessage } from '@/components/chat/private-message-row'
 import { PRIVATE_IMAGE_TYPES, privateImageURL, readPrivateImage, validatePrivateHistory, type PrivateImage, type PrivateMessage } from '@/lib/private-chat'
+import { prepareImageForUpload } from '@/lib/image-upload'
 import { blockReload } from '@/lib/sync-guards'
 import { isModelCatalogReadyForScope } from '@/lib/model-selection'
 import { workspaceModelPolicyKey } from '@/lib/workspace-permissions'
@@ -93,6 +94,8 @@ export default function PrivateChat() {
   const { workspaceId, allowed, canUpload } = usePrivateChatPermission()
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const isPhone = useMediaQuery('(max-width: 639px)')
+  const isTouchDevice = useMediaQuery('(pointer: coarse)')
+  const showCamera = isPhone || isTouchDevice
   const [initialCatalog] = useState(() => cachedPrivateCatalog(workspaceId))
   const [models, setModels] = useState<ApiModel[]>(() => initialCatalog?.models ?? [])
   const [modelId, setModelId] = useState(() => (initialCatalog ? pickPrivateModel(initialCatalog) : ''))
@@ -107,6 +110,7 @@ export default function PrivateChat() {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraFileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -129,6 +133,7 @@ export default function PrivateChat() {
     setReadingImages(false)
     setError('')
     if (fileRef.current) fileRef.current.value = ''
+    if (cameraFileRef.current) cameraFileRef.current.value = ''
   }, [])
 
   useEffect(() => {
@@ -192,7 +197,7 @@ export default function PrivateChat() {
     if (messages.length || draft || images.length || readingImages || streaming) return blockReload()
   }, [messages.length, draft, images.length, readingImages, streaming])
 
-  async function pickImages(event: ChangeEvent<HTMLInputElement>) {
+  async function pickImages(event: ChangeEvent<HTMLInputElement>, fromCamera = false) {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (!allowed || !canUpload || !(model?.vision || visionOutsource) || controllerRef.current || imageReadRef.current || files.length === 0) return
@@ -206,7 +211,9 @@ export default function PrivateChat() {
     setReadingImages(true)
     setError('')
     try {
-      const picked = await Promise.all(files.map(readPrivateImage))
+      const picked = await Promise.all(files.map(async (file) =>
+        readPrivateImage(fromCamera ? await prepareImageForUpload(file) : file),
+      ))
       if (epoch === epochRef.current) setImages((current) => [...current, ...picked])
     } catch (cause) {
       if (epoch === epochRef.current) setError(cause instanceof Error ? cause.message : 'private_image_invalid')
@@ -358,22 +365,24 @@ export default function PrivateChat() {
             {t('private.badge')}
           </span>
         </Tooltip>
-        <div className="min-w-0 max-w-[min(70%,20rem)]">
+        <div className="min-w-0 max-w-[min(70%,20rem)] flex-1">
           <Select value={modelId} onValueChange={(value) => {
             if (!models.some((item) => item.id === value)) return
             setModelId(value)
             setImages([])
             setError('')
           }} disabled={streaming || readingImages || loadingModels || models.length === 0}>
-            <SelectTrigger aria-label={t('private.model')} className="h-9 border-0 bg-transparent px-2 text-xs shadow-none"><SelectValue placeholder={t(loadingModels ? 'private.loadingModels' : 'private.noModels')} /></SelectTrigger>
+            <SelectTrigger aria-label={t('private.model')} className="h-9 min-w-0 border-0 bg-transparent px-2 text-xs shadow-none [&>span:first-child]:min-w-0 [&>span:first-child]:truncate"><SelectValue placeholder={t(loadingModels ? 'private.loadingModels' : 'private.noModels')} /></SelectTrigger>
             <SelectContent>{models.map((item) => <SelectItem key={item.id} value={item.id} disabled={hasImageHistory && !item.vision && !visionOutsource}>{item.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         {(model?.vision || visionOutsource) && canUpload && <>
           <input ref={fileRef} type="file" accept={PRIVATE_IMAGE_TYPES.join(',')} multiple className="hidden" onChange={(event) => void pickImages(event)} aria-label={t('private.addImage')} />
-          <Tooltip content={t('private.addImage')}><Button variant="ghost" size="icon" loading={readingImages} disabled={streaming || readingImages} aria-label={t('private.addImage')} onClick={() => fileRef.current?.click()}><ImagePlus size={18} aria-hidden /></Button></Tooltip>
+          {showCamera ? <input ref={cameraFileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void pickImages(event, true)} aria-label={t('private.takePhoto')} /> : null}
+          <Tooltip content={t('private.addImage')}><Button variant="ghost" size="icon" className="shrink-0" loading={readingImages} disabled={streaming || readingImages} aria-label={t('private.addImage')} onClick={() => fileRef.current?.click()}><ImagePlus size={18} aria-hidden /></Button></Tooltip>
+          {showCamera ? <Tooltip content={t('private.takePhoto')}><Button variant="ghost" size="icon-lg" className="shrink-0" disabled={streaming || readingImages} aria-label={t('private.takePhoto')} onClick={() => cameraFileRef.current?.click()}><Camera size={18} aria-hidden /></Button></Tooltip> : null}
         </>}
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           {/* Same primary action as the ordinary composer: ink when ready,
               muted when there is nothing to send. */}
           {streaming ? (
