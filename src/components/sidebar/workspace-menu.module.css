@@ -1,0 +1,37 @@
+/* The rail, title and wrapping actions need more room than a small keyboard
+   viewport allows. Keep the complete management form in document order. */
+.management[data-workspace-compact='true'] {
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.management[data-workspace-compact='true'] .rail,
+.management[data-workspace-compact='true'] .main {
+  width: auto;
+  flex: none;
+}
+
+.management[data-workspace-compact='true'] .nav {
+  flex: none;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.management[data-workspace-compact='true'] .nav > button {
+  width: auto;
+  min-height: 2.75rem;
+}
+
+.management[data-workspace-compact='true'] .pane {
+  flex: none;
+  overflow: visible;
+}
+
+/* DialogBody's old per-form limit must not clip it after the shared tiny
+   viewport fallback hands scrolling to the root dialog. */
+:global(.viewport-dialog[data-compact-scroll='true']) .permissionsBody {
+  max-height: none;
+}

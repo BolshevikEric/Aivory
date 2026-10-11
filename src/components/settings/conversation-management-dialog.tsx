@@ -34,11 +34,16 @@ export function ConversationManagementDialog({ open, mode, onOpenChange, returnF
   const userId = useAuth((state) => state.user?.id)
   return (
     <Dialog open={open && Boolean(userId)} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="min-h-[min(18rem,calc(100dvh-2rem))] max-h-[min(34rem,calc(100dvh-2rem))]" onCloseAutoFocus={(event) => {
-        event.preventDefault()
-        const settings = useSettingsModal.getState()
-        if (settings.open && settings.tab === 'privacy') returnFocus?.current?.focus()
-      }}>
+      <DialogContent
+        size="lg"
+        data-conversation-management-dialog={mode}
+        className="min-h-[min(18rem,max(0px,calc(var(--surface-viewport-height)-2rem)))] max-h-[min(34rem,max(0px,calc(var(--surface-viewport-height)-2rem)))]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          const settings = useSettingsModal.getState()
+          if (settings.open && settings.tab === 'privacy') returnFocus?.current?.focus()
+        }}
+      >
         <DialogHeader className="pr-14">
           <DialogTitle>{t(`privacy.management.${mode === 'archived' ? 'archivedTitle' : 'linksTitle'}`)}</DialogTitle>
           <DialogDescription>{t(`privacy.management.${mode === 'archived' ? 'archivedDescription' : 'linksDescription'}`)}</DialogDescription>

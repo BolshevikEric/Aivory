@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck } from 'lucide-react'
 import { authApi, ApiError } from '@/api'
 import { useAuth } from '@/store/auth'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,8 @@ export function SetPasswordGate() {
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
 
   const passwordPolicy = user?.oauth_initial_password_policy ?? authPolicy.oauth_initial_password_policy
   const open = status === 'authenticated' && user?.has_password === false && passwordPolicy === 'required'
@@ -58,61 +60,75 @@ export function SetPasswordGate() {
     // user can only leave by setting a password.
     <Dialog open onOpenChange={() => {}}>
       <DialogContent
+        ref={dialogRef}
         size="md"
+        scrollMode="body"
         showClose={false}
+        data-password-gate
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          const compact = window.matchMedia('(max-width: 639px), (pointer: coarse), (max-height: 520px)').matches
+          if (compact) dialogRef.current?.focus({ preventScroll: true })
+          else passwordRef.current?.focus({ preventScroll: true })
+        }}
         onEscapeKeyDown={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         className="p-0 overflow-hidden"
       >
         <form
+          data-slot="dialog-form"
           onSubmit={(e) => {
             e.preventDefault()
             void submit()
           }}
-          className="flex flex-col"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          <div className="px-6 sm:px-8 pt-8 pb-2">
-            <span className="inline-flex items-center justify-center size-11 rounded-[12px] bg-[var(--color-bg-muted)] text-[var(--color-secondary)]">
-              <ShieldCheck size={20} aria-hidden />
-            </span>
-            <DialogTitle className="mt-5">
-              {t('welcome:setPassword.title')}
-            </DialogTitle>
-            <DialogDescription className="mt-2 text-sm leading-relaxed text-[var(--color-fg-muted)]">
-              {t('welcome:setPassword.subtitle')}
-            </DialogDescription>
-          </div>
-
-          <div className="px-6 sm:px-8 pt-5 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="set-pw-new">{t('welcome:setPassword.newLabel')}</Label>
-              <Input
-                id="set-pw-new"
-                type="password"
-                autoComplete="new-password"
-                autoFocus
-                value={next}
-                onChange={(e) => setNext(e.target.value)}
-              />
-              <p className="text-[12px] text-[var(--color-fg-subtle)]">{t('welcome:setPassword.hint')}</p>
+          <DialogBody className="px-6 pb-5 pt-8 sm:px-8">
+            <div className="pb-2">
+              <span className="inline-flex items-center justify-center size-11 rounded-[12px] bg-[var(--color-bg-muted)] text-[var(--color-secondary)]">
+                <ShieldCheck size={20} aria-hidden />
+              </span>
+              <DialogTitle className="mt-5">
+                {t('welcome:setPassword.title')}
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-sm leading-relaxed text-[var(--color-fg-muted)]">
+                {t('welcome:setPassword.subtitle')}
+              </DialogDescription>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="set-pw-confirm">{t('welcome:setPassword.confirmLabel')}</Label>
-              <Input
-                id="set-pw-confirm"
-                type="password"
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-              />
-            </div>
-          </div>
 
-          <DialogFooter className="mt-7 px-6 sm:px-8">
+            <div className="pt-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="set-pw-new">{t('welcome:setPassword.newLabel')}</Label>
+                <Input
+                  ref={passwordRef}
+                  id="set-pw-new"
+                  type="password"
+                  autoComplete="new-password"
+                  className="max-sm:text-base"
+                  value={next}
+                  onChange={(e) => setNext(e.target.value)}
+                />
+                <p className="text-[12px] text-[var(--color-fg-subtle)]">{t('welcome:setPassword.hint')}</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="set-pw-confirm">{t('welcome:setPassword.confirmLabel')}</Label>
+                <Input
+                  id="set-pw-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  className="max-sm:text-base"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                />
+              </div>
+            </div>
+          </DialogBody>
+
+          <DialogFooter className="px-6 sm:px-8">
             <Button
               type="submit"
-              className="w-full"
+              className="w-full min-h-11 whitespace-normal break-words py-2 text-center"
               loading={saving}
               disabled={next.length < 8 || confirm.length < 8}
             >

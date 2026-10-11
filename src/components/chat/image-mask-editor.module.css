@@ -1,7 +1,9 @@
 .dialog {
-  width: min(96vw, 76rem);
-  max-width: 76rem;
-  height: min(92dvh, 50rem);
+  width: min(calc(var(--surface-viewport-width) * 0.96), 76rem);
+  max-width: min(var(--surface-viewport-width), 76rem);
+  height: min(calc(var(--surface-viewport-height) * 0.92), 50rem);
+  max-height: max(0px, calc(var(--surface-viewport-height) - 2rem));
+  min-height: 0;
   overflow: hidden;
   border-radius: 8px;
   letter-spacing: 0;
@@ -89,14 +91,14 @@
 .footer .cancel, .footer .submit { min-height: 40px; border-radius: 8px; padding-inline: 16px; }
 
 @media (max-width: 767px) {
-  .dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); height: calc(100dvh - 32px); }
+  .dialog { width: max(0px, calc(var(--surface-viewport-width) - 16px)); height: max(0px, calc(var(--surface-viewport-height) - 32px)); }
   .header { gap: 10px; padding: 12px 16px; }
   .filename { font-size: 14px; line-height: 20px; }
   .body { flex-direction: column; }
   .workspace { flex: none; }
   .toolbar { gap: 4px; min-height: 60px; padding: 6px 8px; }
   .separator { margin: 0; }
-  .stage { flex: none; height: 36dvh; min-height: 184px; padding: 16px 16px 8px; }
+  .stage { flex: none; height: calc(var(--surface-viewport-height) * 0.36); min-height: min(184px, calc(var(--surface-viewport-height) * 0.52)); padding: 16px 16px 8px; }
   .imageInfo { min-height: 32px; font-size: 14px; }
   .inspector { flex: 1; width: auto; min-height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--color-divider); }
   .brushControl { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; align-items: center; gap: 12px; padding: 8px 16px; }
@@ -111,6 +113,37 @@
   .model { font-size: 14px; }
   .footer .cancel, .footer .submit { min-height: 44px; }
   .footer .cancel { margin-left: auto; }
+}
+
+/* A keyboard or landscape viewport needs room for the canvas even when the
+   screen is wide. Scroll the complete editor before its controls squeeze it. */
+.dialog[data-image-mask-compact='true'] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dialog[data-image-mask-compact='true'] .body {
+  flex: none;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.dialog[data-image-mask-compact='true'] .workspace {
+  flex: none;
+}
+
+.dialog[data-image-mask-compact='true'] .inspector {
+  flex: none;
+  width: auto;
+  overflow: visible;
+  border-left: 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.dialog[data-image-mask-compact='true'] .stage {
+  flex: none;
+  height: max(10rem, calc(var(--surface-viewport-height) * 0.36));
+  min-height: 10rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

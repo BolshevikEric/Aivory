@@ -97,7 +97,8 @@ export function ChatSidePanel({ open, title, onClose, children }: ChatSidePanelP
         side="right"
         size="lg"
         label={title}
-        className="w-[min(28rem,94vw)] !border-l-0 bg-[var(--color-surface-sunken)] p-0"
+        scrollMode="body"
+        className="w-[min(28rem,94vw)] !border-l-0 bg-[var(--color-surface-sunken)]"
       >
         {children}
       </SheetContent>
@@ -129,7 +130,7 @@ export function ChatSidePanelHeader({
           type="button"
           onClick={onClose}
           aria-label={closeLabel}
-          className="interactive inline-flex size-8 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+          className="interactive inline-flex size-8 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] max-lg:size-11"
         >
           <X size={14} aria-hidden />
         </button>

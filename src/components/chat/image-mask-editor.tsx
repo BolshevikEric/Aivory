@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip } from '@/components/ui/tooltip'
+import { useSurfaceViewport } from '@/hooks/use-app-viewport'
 import { cn } from '@/lib/utils'
 import { imageApi } from '@/api/endpoints'
 import { drawMaskStroke, exportImageMask, maskPoint, validMaskDimensions, type MaskPoint, type MaskStroke } from '@/lib/image-mask'
@@ -20,6 +21,8 @@ interface Props {
 
 export function ImageMaskEditor({ image, modelLabel, onClose, onSubmit }: Props) {
   const { t } = useTranslation('chat')
+  const viewport = useSurfaceViewport()
+  const compact = viewport.height < 360
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [display, setDisplay] = useState({ width: 0, height: 0 })
@@ -165,7 +168,7 @@ export function ImageMaskEditor({ image, modelLabel, onClose, onSubmit }: Props)
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !busyRef.current) onClose() }}>
-      <DialogContent size="full" showClose={false} aria-describedby={undefined} className={styles.dialog} onInteractOutside={(event) => event.preventDefault()}>
+      <DialogContent size="full" scrollMode={compact ? 'content' : 'body'} data-image-mask-compact={compact ? 'true' : undefined} showClose={false} aria-describedby={undefined} className={styles.dialog} onInteractOutside={(event) => event.preventDefault()}>
         <DialogHeader className={styles.header}>
           <ImageIcon size={21} className={styles.headerIcon} aria-hidden />
           <div className={styles.heading}>
