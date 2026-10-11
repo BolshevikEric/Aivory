@@ -197,6 +197,12 @@ func IsToolNoProgress(err error) bool {
 // ToolNoProgressMessage is safe to expose if the single closing request fails.
 func ToolNoProgressMessage() string { return publicToolNoProgressMessage }
 
+// ToolNoProgressOutput is the exact tool-result text exposed to the model when
+// a duplicate, repeated, or no-new-evidence call is skipped. It is also useful
+// to diagnostics consumers that need to show the same reason an operator saw
+// in the conversation trace.
+func ToolNoProgressOutput() string { return toolNoProgressOutput }
+
 func toolBudgetErrorFromResults(results []toolCallResult) *ErrToolBudgetExceeded {
 	for _, result := range results {
 		var budgetErr *ErrToolBudgetExceeded

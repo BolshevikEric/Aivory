@@ -83,6 +83,51 @@ func (r *Registry) enqueueToolLog(pending pendingToolLog) {
 	}
 }
 
+// LogToolFailure records failures raised by the orchestrator's execution
+// tracker after the registry call has already returned. These failures include
+// duplicate requests, repeated failed routes, and searches that produced no
+// new evidence. They must still be visible in the same admin tool log even
+// though they never reach Registry.Run's defer-based logger.
+func (r *Registry) LogToolFailure(ctx context.Context, name string, input []byte, tc *llm.ToolContext, toolErr error) {
+	if r == nil || r.db == nil || tc == nil || tc.UserID == "" || toolErr == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	started := time.Now()
+	bodies := r.toolLogBool("log_request_bodies", true)
+	errorsOnly := r.toolLogBool("log_tool_errors_only", true)
+	ctx, collector := tooldiagnostics.Start(ctx, bodies)
+	collector.CaptureSecrets(string(input))
+	r.mu.RLock()
+	binding, isMCP := r.mcpBindings[name]
+	r.mu.RUnlock()
+	kind := "builtin"
+	if isMCP {
+		kind = "mcp"
+		collector.ServerID, collector.RemoteName = binding.ServerID, binding.RemoteName
+	}
+	callID := tooldiagnostics.CallID(ctx)
+	if callID == "" {
+		callID = "internal_" + uuid.NewString()
+	}
+	log := store.ToolCallLog{
+		ID: "tl_" + uuid.NewString(), CallID: callID, ToolName: name, ToolKind: kind,
+		UserID: tc.UserID, ConversationID: tc.ConvID, MessageID: tc.MessageID, WorkspaceID: tc.WorkspaceID,
+		ModelID: tc.ModelID, Status: "error", DurationMS: time.Since(started).Milliseconds(), CreatedAtMS: started.UnixMilli(),
+		Error: toolErr.Error(), BodiesRecorded: bodies,
+	}
+	if bodies {
+		log.Input, log.InputTruncated = tooldiagnostics.Limit(string(input), 2*tooldiagnostics.BodyLimit)
+		if llm.IsToolNoProgress(toolErr) {
+			log.Output = llm.ToolNoProgressOutput()
+		}
+		log.Output, log.OutputTruncated = tooldiagnostics.Limit(log.Output, 2*tooldiagnostics.BodyLimit)
+	}
+	r.enqueueToolLog(pendingToolLog{log: log, collector: collector, errorsOnly: errorsOnly})
+}
+
 func (r *Registry) CloseToolLogs(ctx context.Context) error {
 	r.toolLogMu.Lock()
 	if !r.toolLogClosed {

@@ -1393,6 +1393,7 @@ func (rs *researcher) execToolsConcurrent(ctx context.Context, specs []toolCallS
 				}
 				return result, resultCitations, runErr
 			})
+			recordTrackedToolFailure(rs.o.tools, ctx, c.Name, c.Input, rs.tc, err)
 			results[i] = toolCallResult{Output: out, Citations: cites, Err: err}
 		}(i, c)
 	}

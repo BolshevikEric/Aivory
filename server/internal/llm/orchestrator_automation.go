@@ -934,6 +934,19 @@ type orchToolRunner struct {
 	onEvent func(SseEvent)
 }
 
+type toolFailureLogger interface {
+	LogToolFailure(context.Context, string, []byte, *ToolContext, error)
+}
+
+func recordTrackedToolFailure(registry ToolRegistry, ctx context.Context, name string, input []byte, tc *ToolContext, err error) {
+	if err == nil || !IsToolNoProgress(err) {
+		return
+	}
+	if logger, ok := registry.(toolFailureLogger); ok {
+		logger.LogToolFailure(ctx, name, input, tc, err)
+	}
+}
+
 // toolDefAllowlistRunner binds execution to the exact definitions sent in the
 // current provider request. It blocks unsolicited or stale calls even when a
 // broader persisted model policy would otherwise allow the tool.
@@ -1063,6 +1076,7 @@ func (r *orchToolRunner) Run(ctx context.Context, name string, input []byte) (st
 	out, cites, err := r.ctx.executeTrackedTool(ctx, name, input, func() (string, []Citation, error) {
 		return r.runUntracked(ctx, name, input)
 	})
+	recordTrackedToolFailure(r.orch.tools, ctx, name, input, r.ctx, err)
 	if err == nil && r.onEvent != nil {
 		for _, citation := range cites {
 			citationCopy := citation
