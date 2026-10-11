@@ -66,6 +66,7 @@ func TestIsUpstreamModerationError(t *testing.T) {
 		errors.New("openai 400: {\"error\":{\"code\":\"sensitive_words_detected\"}}"),
 		fmt.Errorf("anthropic 400: %s", `{"message":"SENSITIVE_WORDS_DETECTED"}`), // case-insensitive
 		errors.New("upstream: request blocked — sensitive_words_detected"),
+		errors.New("upstream: request rejected as inappropriate"),
 	}
 	for _, e := range moderation {
 		if !isUpstreamModerationError(e) {

@@ -149,7 +149,7 @@ func (o *Orchestrator) moderationCategories() []string {
 // request (common on relays / regional gateways) rather than a transient/infra
 // failure. Matched case-insensitively. We surface these as a content-moderation
 // refusal to the user instead of a generic "provider returned an error".
-var upstreamModerationMarkers = []string{"sensitive_words_detected"}
+var upstreamModerationMarkers = []string{"sensitive_words_detected", "inappropriate"}
 
 // isUpstreamModerationError reports whether an upstream failure was the
 // provider's content filter tripping. Returns false for a nil / cancel error
