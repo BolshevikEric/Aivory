@@ -44,10 +44,19 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
 import { userCan } from '@/lib/user-permissions'
 import { workspaceCapabilitiesForScope } from '@/lib/workspace-permissions'
+import { readSurfaceViewport, subscribeAppViewport } from '@/lib/app-viewport'
+import styles from './command-menu.module.css'
+
+function compactCommandViewport(): boolean {
+  if (typeof window === 'undefined') return false
+  const viewport = readSurfaceViewport()
+  return viewport.width < 640 || viewport.height <= 520
+}
 
 export function CommandMenu() {
   const open = useCommandMenu((s) => s.open)
   const setOpen = useCommandMenu((s) => s.setOpen)
+  const [compact, setCompact] = useState(compactCommandViewport)
   const navigate = useNavigate()
   const openSettings = useOpenSettings()
   const { t, i18n } = useTranslation(['chat', 'projects'])
@@ -106,6 +115,13 @@ export function CommandMenu() {
     workspaceCaps.knowledgeBases
   const canCreateProject = canUseKnowledgeBases &&
     (!activeWorkspaceIdValue || activeWorkspace?.can_create_projects === true)
+
+  useEffect(() => {
+    if (!open) return
+    const update = () => setCompact(compactCommandViewport())
+    update()
+    return subscribeAppViewport(update)
+  }, [open])
 
   // ── Content search ────────────────────────────────────────────────────────
   // The typed query, debounced, drives a backend search over message CONTENT
@@ -188,17 +204,15 @@ export function CommandMenu() {
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            'fixed z-[70] bg-[var(--color-surface-raised)] shadow-[var(--shadow-xl)] overflow-hidden focus:outline-none',
-            // Desktop: a centered floating palette.
-            'left-1/2 top-[18%] [translate:-50%_0] w-[min(92vw,560px)] rounded-popup',
+            'fixed z-[70] flex min-h-0 flex-col bg-[var(--color-surface-raised)] shadow-[var(--shadow-xl)] overflow-hidden focus:outline-none',
+            'rounded-popup',
             'data-[state=open]:animate-[pop-in_220ms_var(--ease-out)] data-[state=closed]:animate-[fade-out_140ms_var(--ease-in)]',
-            // Phone: a full-screen search surface (with safe-area insets).
-            'max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:w-full max-sm:[translate:none] max-sm:rounded-none max-sm:border-0',
-            'max-sm:pt-[var(--safe-top)] max-sm:pb-[var(--safe-bottom)] max-sm:data-[state=open]:animate-[fade-in_160ms_var(--ease-out)]',
+            styles.content,
+            compact && styles.compact,
           )}
         >
           <DialogPrimitive.Title className="sr-only">{t('chat:commandMenu.title')}</DialogPrimitive.Title>
-          <Command className="max-sm:h-full max-sm:rounded-none">
+          <Command className="min-h-0 flex-1 rounded-none">
             <CommandInput
               placeholder={t('chat:commandMenu.placeholder')}
               autoFocus

@@ -1,0 +1,35 @@
+.content {
+  --command-top-gap: max(1rem, calc(var(--surface-viewport-height, 100dvh) * 0.18));
+  left: calc(var(--surface-viewport-left, 0px) + var(--surface-viewport-width, 100vw) / 2);
+  top: calc(var(--surface-viewport-top, 0px) + var(--command-top-gap));
+  width: min(560px, max(0px, calc(var(--surface-viewport-width, 100vw) - 2rem)));
+  max-height: max(0px, calc(var(--surface-viewport-height, 100dvh) - var(--command-top-gap) - 1rem));
+  translate: -50% 0;
+}
+
+.compact {
+  left: var(--surface-viewport-left, 0px);
+  top: var(--surface-viewport-top, 0px);
+  width: var(--surface-viewport-width, 100vw);
+  height: var(--surface-viewport-height, 100dvh);
+  max-height: var(--surface-viewport-height, 100dvh);
+  translate: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.compact[data-state='open'] {
+  animation: fade-in 160ms var(--ease-out);
+}
+
+.compact [cmdk-list] {
+  max-height: none;
+}
+
+.compact [cmdk-input-wrapper] {
+  height: 3.5rem;
+}
+
+.compact [cmdk-input] {
+  font-size: var(--text-input-mobile);
+}
