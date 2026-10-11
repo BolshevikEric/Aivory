@@ -104,6 +104,12 @@ import {
   selectedUserSkillIdsForRequest,
 } from '@/lib/composer-commands'
 import { skillDisplayDescription } from '@/lib/skill-description'
+import { readVisualViewport, subscribeAppViewport } from '@/lib/app-viewport'
+import {
+  composerCommandPosition,
+  scrollCommandItemIntoView,
+  type ComposerCommandPosition,
+} from '@/lib/composer-command-position'
 import { encodeWavFromBlob } from '@/lib/audio'
 import { startVoiceStream, type VoiceStreamController } from '@/lib/audio-stream'
 import {
@@ -882,14 +888,7 @@ export function Composer({
   const [dismissedCommandKey, setDismissedCommandKey] = useState('')
   const commandMenuRef = useRef<HTMLDivElement>(null)
   const composerRootRef = useRef<HTMLDivElement>(null)
-  const [commandPosition, setCommandPosition] = useState<{
-    left: number
-    top?: number
-    bottom?: number
-    width: number
-    maxHeight: number
-    placement: 'up' | 'down'
-  } | null>(null)
+  const [commandPosition, setCommandPosition] = useState<ComposerCommandPosition | null>(null)
   // Drag-and-drop file upload. `dragOver` is driven by WINDOW-level listeners
   // (see the effect below) so a file can be dropped ANYWHERE on the page, not
   // only onto the composer surface. dragDepthRef balances nested
@@ -3107,50 +3106,36 @@ export function Composer({
       setCommandPosition(null)
       return
     }
-    const opensDownward = pathname === '/' || pathname === '/chat'
+    const preferredPlacement = pathname === '/' || pathname === '/chat' ? 'down' : 'up'
+    let frame = 0
     const update = () => {
       const root = composerRootRef.current
       if (!root) return
-      const rect = root.getBoundingClientRect()
-      const gutter = 12
-      const gap = 8
-      const viewportWidth = document.documentElement.clientWidth || window.innerWidth
-      const viewportHeight = document.documentElement.clientHeight || window.innerHeight
-      const width = Math.min(rect.width, Math.max(0, viewportWidth - gutter * 2))
-      const maxLeft = Math.max(gutter, viewportWidth - width - gutter)
-      const left = Math.min(Math.max(rect.left, gutter), maxLeft)
-      if (opensDownward) {
-        const top = rect.bottom + gap
-        setCommandPosition({
-          left,
-          top,
-          width,
-          maxHeight: Math.min(280, Math.max(0, viewportHeight - top - gutter)),
-          placement: 'down',
-        })
-        return
-      }
-      setCommandPosition({
-        left,
-        bottom: Math.max(gutter, viewportHeight - rect.top + gap),
-        width,
-        maxHeight: Math.min(280, Math.max(0, rect.top - gutter - gap)),
-        placement: 'up',
-      })
+      const anchor = root.getBoundingClientRect()
+      const viewport = readVisualViewport()
+      setCommandPosition((previous) => composerCommandPosition(anchor, viewport, preferredPlacement, previous))
+    }
+    const schedule = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(update)
     }
     update()
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, true)
+    const unsubscribe = subscribeAppViewport(schedule)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    if (composerRootRef.current) observer?.observe(composerRootRef.current)
+    if (composerRootRef.current?.parentElement) observer?.observe(composerRootRef.current.parentElement)
     return () => {
-      window.removeEventListener('resize', update)
-      window.removeEventListener('scroll', update, true)
+      cancelAnimationFrame(frame)
+      unsubscribe()
+      observer?.disconnect()
     }
   }, [commandOpen, pathname])
 
   useEffect(() => {
-    const active = commandMenuRef.current?.querySelector<HTMLElement>(`[data-command-index="${commandIndex}"]`)
-    active?.scrollIntoView({ block: 'nearest' })
-  }, [commandIndex])
+    const menu = commandMenuRef.current
+    const active = menu?.querySelector<HTMLElement>(`[data-command-index="${commandIndex}"]`)
+    if (menu && active) scrollCommandItemIntoView(menu, active)
+  }, [commandIndex, commandPosition])
 
   async function runCompactCommand() {
     const targetConversationId = conversationId
@@ -3514,7 +3499,7 @@ export function Composer({
               style={{
                 left: commandPosition.left,
                 top: commandPosition.top,
-                bottom: commandPosition.bottom,
+                translate: commandPosition.placement === 'up' ? '0 -100%' : undefined,
                 width: commandPosition.width,
                 maxHeight: commandPosition.maxHeight,
               }}

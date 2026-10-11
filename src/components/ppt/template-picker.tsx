@@ -5,7 +5,7 @@
  * image is loaded through our own resource proxy (`aipptApi.resourceUrl`) — the
  * browser never sees the token.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ImageOff, Loader2, Pencil, Trash2, Upload } from 'lucide-react'
 
@@ -57,6 +57,32 @@ export function TemplatePicker({ selectedId, onSelect, disabled = false, onDelet
   const [managing, setManaging] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const requestRef = useRef(0)
+  const pickerRef = useRef<HTMLDivElement | null>(null)
+  const controlsRef = useRef<HTMLDivElement | null>(null)
+  const errorRef = useRef<HTMLDivElement | null>(null)
+  const [scrollContent, setScrollContent] = useState(false)
+  const hasError = Boolean(error)
+
+  // The dialog footer and wrapped controls can leave no usable gallery height.
+  // Measure this surface itself, including long API errors, so both embedded
+  // and dialog pickers can scroll all their content when room is scarce.
+  useLayoutEffect(() => {
+    const picker = pickerRef.current
+    if (!picker) return
+    const updateScrollMode = () => {
+      const gap = parseFloat(getComputedStyle(picker).rowGap) || 0
+      const controlsHeight = controlsRef.current?.offsetHeight ?? 0
+      const errorHeight = errorRef.current?.offsetHeight ?? 0
+      const available = picker.clientHeight - controlsHeight - errorHeight - gap * (hasError ? 2 : 1)
+      setScrollContent(available < 96)
+    }
+    const observer = new ResizeObserver(updateScrollMode)
+    observer.observe(picker)
+    if (controlsRef.current) observer.observe(controlsRef.current)
+    if (errorRef.current) observer.observe(errorRef.current)
+    updateScrollMode()
+    return () => observer.disconnect()
+  }, [hasError])
 
   const load = useCallback(
     async (nextPage: number, append: boolean) => {
@@ -177,8 +203,13 @@ export function TemplatePicker({ selectedId, onSelect, disabled = false, onDelet
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
-      <div className="flex shrink-0 flex-wrap items-center gap-3 pb-3">
+    <div
+      ref={pickerRef}
+      data-template-picker=""
+      data-template-scroll={scrollContent ? 'content' : 'list'}
+      className={cn('flex h-full min-h-0 min-w-0 flex-1 flex-col gap-4', scrollContent && 'overflow-y-auto overscroll-contain')}
+    >
+      <div ref={controlsRef} data-template-controls="" className="flex shrink-0 flex-wrap items-center gap-3 pb-3">
         <fieldset disabled={disabled || uploading || managing} className="min-w-0">
           <SegmentedControl
             label={t('template.title')}
@@ -237,13 +268,16 @@ export function TemplatePicker({ selectedId, onSelect, disabled = false, onDelet
       </div>
 
       {error ? (
-        <div role="alert" className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[8px] bg-[var(--color-bg-muted)] px-3 py-2 text-sm text-[var(--color-fg-muted)]">
-          <p>{error}</p>
+        <div ref={errorRef} data-template-error="" role="alert" className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[8px] bg-[var(--color-bg-muted)] px-3 py-2 text-sm text-[var(--color-fg-muted)]">
+          <p className="min-w-0 break-words [overflow-wrap:anywhere]">{error}</p>
           <Button size="sm" variant="secondary" onClick={() => void load(page, page > 1)}>{t('common:actions.tryAgain')}</Button>
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div
+        data-template-list=""
+        className={cn('pr-1', scrollContent ? 'flex-none overflow-visible' : 'min-h-0 flex-1 overflow-y-auto')}
+      >
         {loading && templates.length === 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (

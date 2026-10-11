@@ -1233,15 +1233,15 @@ function StepResult(props: StepResultProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-5 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_230px]">
-        <section className="flex h-[52svh] min-h-[320px] flex-col overflow-hidden rounded-[12px] bg-[var(--color-surface)] lg:h-auto lg:min-h-0">
+      <div className="flex shrink-0 flex-col gap-5 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_230px] lg:grid-rows-[minmax(0,1fr)]">
+        <section className="flex h-[min(32rem,calc(var(--app-height,100dvh)*0.52))] min-h-0 flex-col overflow-hidden rounded-[12px] bg-[var(--color-surface)] lg:h-full">
           <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
             <h3 className="text-[13px] font-medium text-[var(--color-fg)]">{t('ppt:result.previewTitle')}</h3>
             <Button size="sm" variant="ghost" disabled={!deck.file_id} onClick={() => setPreviewOpen(true)}>
               {t('ppt:result.expandPreview')}
             </Button>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {deck.file_id ? (
               <DocumentPreview
                 name={`${deck.subject || 'AI PPT'}.pptx`}
@@ -1294,27 +1294,29 @@ function StepResult(props: StepResultProps) {
       </div>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent scrollMode="body" data-preview-dialog className="h-[min(48rem,calc(var(--app-height,100dvh)-2rem))] max-w-5xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>{deck.subject || t('ppt:result.untitled')}</DialogTitle>
             <DialogDescription>{t('ppt:result.previewScrollHint')}</DialogDescription>
           </DialogHeader>
-          <div className="h-[70vh] overflow-hidden rounded-[10px]">
-            <DocumentPreview
-              name={`${deck.subject || 'AI PPT'}.pptx`}
-              mimeType={PPTX_MIME}
-              backendKind="doc"
-              data={previewData ?? undefined}
-              loading={previewLoading}
-              error={previewError ?? undefined}
-              onRetry={() => setPreviewRevision((value) => value + 1)}
-            />
-          </div>
+          <DialogBody className="min-h-0 overflow-hidden">
+            <div className="h-full min-h-0 overflow-hidden rounded-[10px]">
+              <DocumentPreview
+                name={`${deck.subject || 'AI PPT'}.pptx`}
+                mimeType={PPTX_MIME}
+                backendKind="doc"
+                data={previewData ?? undefined}
+                loading={previewLoading}
+                error={previewError ?? undefined}
+                onRetry={() => setPreviewRevision((value) => value + 1)}
+              />
+            </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 
       <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent scrollMode="body" data-preview-dialog className="h-[min(40rem,calc(var(--app-height,100dvh)-2rem))] max-w-4xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>{t('ppt:result.changeTemplate')}</DialogTitle>
             <DialogDescription>
@@ -1323,16 +1325,18 @@ function StepResult(props: StepResultProps) {
                 : t('ppt:result.changeTemplateLead')}
             </DialogDescription>
           </DialogHeader>
-          <div className="h-[55vh] min-h-[280px]">
-            <TemplatePicker
-              selectedId={template?.id ?? deck.template_id}
-              onSelect={setTemplate}
-              onDeleted={(id) => {
-                if (template?.id === id) setTemplate(null)
-              }}
-              disabled={busy}
-            />
-          </div>
+          <DialogBody className="min-h-0 overflow-hidden">
+            <div className="h-full min-h-0">
+              <TemplatePicker
+                selectedId={template?.id ?? deck.template_id}
+                onSelect={setTemplate}
+                onDeleted={(id) => {
+                  if (template?.id === id) setTemplate(null)
+                }}
+                disabled={busy}
+              />
+            </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTemplateOpen(false)}>
               {t('common:actions.cancel')}

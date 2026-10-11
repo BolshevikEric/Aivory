@@ -18,7 +18,7 @@ import { GradientText } from '@/components/landing/fx/gradient-text'
 import { ShinyText } from '@/components/landing/fx/shiny-text'
 import { SplitText } from '@/components/landing/fx/split-text'
 import { StarBorder } from '@/components/landing/fx/star-border'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -288,6 +288,7 @@ export function WelcomeCard() {
     <Dialog open={open} onOpenChange={(o) => { if (!o) void handleSkip() }}>
       <DialogContent
         size="xl"
+        scrollMode="body"
         showClose={false}
         className="p-0 overflow-hidden data-[state=closed]:animate-[welcome-exit_340ms_var(--ease-in)]"
       >
@@ -295,7 +296,7 @@ export function WelcomeCard() {
         <DialogTitle className="sr-only">{t('welcome:config.title')}</DialogTitle>
         <DialogDescription className="sr-only">{t('welcome:config.subtitle')}</DialogDescription>
 
-        <div className="flex flex-col md:flex-row min-h-0 flex-1">
+        <div data-slot="dialog-form" className="flex flex-col md:flex-row min-h-0 flex-1">
           {/* Editorial intro with a live, accent-tinted aurora — the same WebGL
               curtain as the landing/auth heroes. It re-tints as the user picks
               an accent (the ramp re-resolves on data-accent changes) and falls
@@ -366,7 +367,7 @@ export function WelcomeCard() {
 
           {/* Step panel */}
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            <div className="flex-1 overflow-y-auto px-6 sm:px-8 pt-7 pb-2">
+            <DialogBody className="px-6 sm:px-8 pt-7 pb-2">
               {/* Progress */}
               <div className="flex items-center gap-1.5">
                 {steps.map((_, i) => (
@@ -398,14 +399,14 @@ export function WelcomeCard() {
                 </p>
                 <div className="mt-6">{renderControl(current)}</div>
               </div>
-            </div>
+            </DialogBody>
 
             {/* Footer nav */}
-            <DialogFooter className="justify-between px-6 sm:px-8">
+            <DialogFooter className="flex-wrap justify-between px-6 sm:px-8 max-sm:[&_button]:min-h-11">
               <Button variant="ghost" onClick={() => void handleSkip()} loading={saving}>
                 {t('welcome:actions.skip')}
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {step > 0 ? (
                   <Button variant="ghost" onClick={() => setStep((s) => s - 1)}>
                     {t('welcome:actions.back')}
@@ -427,11 +428,11 @@ export function WelcomeCard() {
 
     {/* Celebratory welcome shown right after the wizard completes. */}
     <Dialog open={welcomeOpen} onOpenChange={(o) => { if (!o) finishWelcome() }}>
-      <DialogContent size="sm" showClose={false} className="overflow-hidden text-center">
+      <DialogContent size="sm" scrollMode="body" showClose={false} className="text-center" data-welcome-ready>
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-[0.18] blur-2xl"
           style={{ background: 'radial-gradient(60% 80% at 50% 0%, var(--color-accent), transparent 70%)' }}
         />
-        <div className="relative flex flex-col items-center gap-4 px-6 pt-8 pb-6 sm:px-8">
+        <DialogBody className="relative flex flex-col items-center gap-4 px-6 pt-8 pb-4 sm:px-8">
           <TracedLogo size="lg" />
           <div>
             <DialogTitle>
@@ -447,13 +448,15 @@ export function WelcomeCard() {
               {t('welcome:ready.body')}
             </DialogDescription>
           </div>
+        </DialogBody>
+        <DialogFooter className="relative border-0 px-6 pb-6 pt-2 sm:px-8">
           {/* The "enter the studio" moment gets the orbiting glow. */}
-          <StarBorder as="span" className="mt-2 w-full rounded-[12px]" speed="7s" thickness={2}>
-            <Button className="w-full" onClick={finishWelcome}>
+          <StarBorder as="span" className="w-full rounded-[12px]" speed="7s" thickness={2}>
+            <Button className="w-full min-h-11 whitespace-normal break-words py-2 text-center" onClick={finishWelcome}>
               {t('welcome:ready.cta')}
             </Button>
           </StarBorder>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
     </>

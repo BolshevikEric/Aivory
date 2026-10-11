@@ -156,21 +156,21 @@ export function DocxNativePreview({ data, name, labels, onError }: DocxNativePre
   const failureLabel = status === 'too-large' ? labels.tooLarge : labels.error
 
   return (
-    <div className="relative h-full min-h-[28rem] overflow-hidden bg-[var(--color-bg-muted)]">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--color-bg-muted)]">
       {status === 'loading' && (
         <div
-          className="absolute inset-0 z-10 flex flex-col items-center gap-4 overflow-hidden bg-[var(--color-bg-muted)] px-4 py-8"
+          className="absolute inset-0 z-10 flex min-h-0 flex-col items-center gap-4 overflow-hidden bg-[var(--color-bg-muted)] px-4 py-4 sm:py-8"
           role="status"
           aria-live="polite"
         >
-          <span className="text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
+          <span className="shrink-0 text-[13px] text-[var(--color-fg-muted)]">{labels.loading}</span>
           <Skeleton className="h-[38rem] w-full max-w-[48rem] shrink-0 rounded-[4px]" />
         </div>
       )}
 
       {(status === 'error' || status === 'too-large') && (
-        <div className="flex h-full min-h-[28rem] items-center justify-center p-6" role="alert">
-          <div className="max-w-md text-center">
+        <div className="flex min-h-0 flex-1 overflow-auto overscroll-contain p-6" role="alert">
+          <div className="m-auto w-full max-w-md shrink-0 text-center">
             <FileWarning
               size={24}
               strokeWidth={1.6}
@@ -188,7 +188,7 @@ export function DocxNativePreview({ data, name, labels, onError }: DocxNativePre
         aria-label={name}
         aria-busy={status === 'loading'}
         className={[
-          'h-full min-h-[28rem] overflow-auto overscroll-contain',
+          'min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain',
           status === 'error' || status === 'too-large' ? 'hidden' : '',
           '[&_.aivory-docx-wrapper]:!min-h-full [&_.aivory-docx-wrapper]:!bg-transparent',
           '[&_.aivory-docx-wrapper]:!p-4 sm:[&_.aivory-docx-wrapper]:!p-7',

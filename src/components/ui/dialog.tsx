@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useQuietSurface } from '@/contexts/quiet-surface'
 import { useButtonDensity } from '@/contexts/button-density'
+import { useSurfaceViewport } from '@/hooks/use-app-viewport'
 
 export const Dialog = DialogPrimitive.Root
 export const DialogTrigger = DialogPrimitive.Trigger
@@ -30,7 +31,7 @@ export const DialogOverlay = forwardRef<
 })
 
 type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full'
-type DialogPresentation = 'modal' | 'drawer'
+type DialogPresentation = 'modal' | 'drawer' | 'fullscreen'
 
 const dialogPresentationContext = createContext<DialogPresentation>('modal')
 
@@ -39,6 +40,10 @@ export interface DialogContentProps
   size?: DialogSize
   /** Opens this content as a right-side editor drawer instead of a centered modal. */
   presentation?: DialogPresentation
+  /** Use the full safe visible area on narrow screens. */
+  mobileFullscreen?: boolean
+  /** Explicitly choose the scroll owner; omitted preserves existing layouts. */
+  scrollMode?: 'body' | 'content'
   showClose?: boolean
   closeDisabled?: boolean
   /** Exclude this dialog and its overlay from page-feedback screenshots. */
@@ -87,17 +92,27 @@ function animateDialogResize(
 export const DialogContent = forwardRef<
   ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(function DialogContent({ className, size = 'md', presentation = 'modal', showClose = true, closeDisabled = false, captureIgnore = false, children, ...rest }, ref) {
+>(function DialogContent({ className, size = 'md', presentation = 'modal', mobileFullscreen = false, scrollMode, showClose = true, closeDisabled = false, captureIgnore = false, children, ...rest }, ref) {
   const quiet = useQuietSurface()
   const { t } = useTranslation('common')
+  const viewport = useSurfaceViewport()
+  const effectivePresentation = mobileFullscreen && viewport.width < 640 ? 'fullscreen' : presentation
   const contentRef = useRef<ElementRef<typeof DialogPrimitive.Content>>(null)
   const previousDimensionsRef = useRef<DialogDimensions | null>(null)
   const reducedMotionRef = useRef<MediaQueryList | null>(null)
   const resizeAnimationRef = useRef<Animation | null>(null)
+  const viewportKey = `${viewport.left}:${viewport.top}:${viewport.width}:${viewport.height}`
+  const previousViewportRef = useRef(viewportKey)
 
   function transitionFromPreviousSize(node: HTMLElement, next: DialogDimensions) {
     let before = previousDimensionsRef.current
     previousDimensionsRef.current = next
+    if (effectivePresentation !== 'modal' || previousViewportRef.current !== viewportKey) {
+      previousViewportRef.current = viewportKey
+      resizeAnimationRef.current?.cancel()
+      resizeAnimationRef.current = null
+      return
+    }
     // ResizeObserver also runs after React's layout effects. Ignore its
     // duplicate same-size notification so it cannot cancel the tab animation
     // that was just started above.
@@ -132,7 +147,7 @@ export const DialogContent = forwardRef<
   // ResizeObserver alone only reports after the new geometry is already live.
   useLayoutEffect(() => {
     const node = contentRef.current
-    if (!node || presentation === 'drawer') return
+    if (!node) return
     reducedMotionRef.current ??= window.matchMedia('(prefers-reduced-motion: reduce)')
     transitionFromPreviousSize(node, readDialogDimensions(node))
   })
@@ -142,7 +157,7 @@ export const DialogContent = forwardRef<
   // second path for those changes, while the layout effect handles tab swaps.
   useLayoutEffect(() => {
     const node = contentRef.current
-    if (!node || presentation === 'drawer' || typeof ResizeObserver === 'undefined') return
+    if (!node || effectivePresentation !== 'modal' || typeof ResizeObserver === 'undefined') return
     reducedMotionRef.current ??= window.matchMedia('(prefers-reduced-motion: reduce)')
     const observer = new ResizeObserver(() => {
       transitionFromPreviousSize(node, readDialogDimensions(node))
@@ -153,7 +168,7 @@ export const DialogContent = forwardRef<
       resizeAnimationRef.current?.cancel()
       resizeAnimationRef.current = null
     }
-  }, [presentation])
+  }, [effectivePresentation, viewportKey])
 
   function setContentRef(node: ElementRef<typeof DialogPrimitive.Content> | null) {
     contentRef.current = node
@@ -167,20 +182,23 @@ export const DialogContent = forwardRef<
       <DialogPrimitive.Content
         ref={setContentRef}
         data-slot="dialog-content"
-        data-dialog-presentation={presentation}
+        data-dialog-presentation={effectivePresentation}
+        data-viewport-narrow={viewport.width < 640 ? 'true' : undefined}
+        data-scroll-mode={scrollMode}
+        data-compact-scroll={scrollMode === 'body' && viewport.height < 240 ? 'true' : undefined}
         data-feedback-capture-ignore={captureIgnore ? '' : undefined}
         className={cn(
           // Positioning uses the independent `translate` property. Entrance
           // and resize animations can then scale the surface without ever
           // replacing the transform responsible for keeping it centered.
-          'fixed left-1/2 top-1/2 z-[60] [translate:-50%_-50%] w-[min(96vw,calc(100vw-2rem))]',
+          'viewport-dialog fixed left-1/2 top-1/2 z-[60] [translate:-50%_-50%] w-[min(96vw,calc(var(--surface-viewport-width,100vw)-2rem))]',
           sizeMap[size],
           // Never exceed the viewport. Modal bodies scroll independently; a
           // drawer overrides this below so the complete editor flows as one
           // document and its actions are reached after the form content.
-          'flex min-w-0 flex-col max-h-[calc(100dvh-2rem)] overflow-x-hidden',
+          'flex min-h-0 min-w-0 flex-col max-h-[calc(var(--surface-viewport-height,100dvh)-2rem)] overflow-x-hidden',
           'bg-[var(--color-surface)]',
-          presentation === 'modal' && 'rounded-popup border border-[var(--color-border)]',
+          effectivePresentation === 'modal' && 'rounded-popup border border-[var(--color-border)]',
           quiet && 'border-0',
           'shadow-[var(--shadow-xl)]',
           'data-[state=open]:animate-[pop-in_220ms_var(--ease-out)]',
@@ -188,12 +206,13 @@ export const DialogContent = forwardRef<
           'focus-visible:outline-none',
           // Drawer overrides come last so the base modal dimensions and
           // centered transform cannot win in Tailwind's class merge.
-          presentation === 'drawer' && [
-            'right-0 left-auto top-0 h-dvh w-[min(100vw,40rem)] max-w-none max-h-none [translate:0_0] rounded-none border-0',
+          effectivePresentation === 'drawer' && [
+            'right-0 left-auto top-0 h-dvh w-[min(var(--surface-viewport-width,100vw),40rem)] max-w-none max-h-none [translate:0_0] rounded-none border-0',
             'overflow-y-auto overscroll-contain',
             'data-[state=open]:animate-[sheet-in-r_280ms_var(--ease-out)]',
             'data-[state=closed]:animate-[sheet-out-r_180ms_var(--ease-in)]',
           ],
+          effectivePresentation === 'fullscreen' && 'w-full max-w-none rounded-none border-0 [translate:0_0]',
           className,
         )}
         {...rest}
@@ -213,7 +232,7 @@ export const DialogContent = forwardRef<
             <X size={16} aria-hidden />
           </DialogPrimitive.Close>
         )}
-        <dialogPresentationContext.Provider value={presentation}>
+        <dialogPresentationContext.Provider value={effectivePresentation}>
           {children}
         </dialogPresentationContext.Provider>
       </DialogPrimitive.Content>

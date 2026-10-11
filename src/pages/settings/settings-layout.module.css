@@ -1,0 +1,91 @@
+.dialog {
+  display: flex;
+  flex-direction: column;
+  left: var(--surface-viewport-left);
+  top: var(--surface-viewport-top);
+  width: var(--surface-viewport-width);
+  max-width: var(--surface-viewport-width);
+  height: var(--surface-viewport-height);
+  max-height: var(--surface-viewport-height);
+  min-width: 0;
+  min-height: 0;
+}
+
+.rail,
+.nav {
+  min-height: 0;
+  min-width: 0;
+}
+
+.railHeader,
+.nav > button {
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .dialog {
+    flex-direction: row;
+    left: calc(var(--surface-viewport-left) + var(--surface-viewport-width) / 2);
+    top: calc(var(--surface-viewport-top) + var(--surface-viewport-height) / 2);
+    width: min(calc(var(--surface-viewport-width) * 0.92), 50rem);
+    height: min(36rem, max(0px, calc(var(--surface-viewport-height) - 3rem)));
+    max-height: max(0px, calc(var(--surface-viewport-height) - 3rem));
+    translate: -50% -50%;
+  }
+}
+
+/* A keyboard can leave less room than the title, tabs and sticky page header.
+   Scroll the whole panel in that case so every setting remains reachable. */
+.dialog[data-settings-compact='true'] {
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dialog[data-settings-compact='true'] .rail {
+  width: auto;
+  flex: none;
+}
+
+.dialog[data-settings-compact='true'] .nav {
+  flex: none;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dialog[data-settings-compact='true'] .nav > button {
+  width: auto;
+}
+
+.dialog[data-settings-compact='true'] .mobileClose {
+  display: inline-flex;
+}
+
+.dialog[data-settings-compact='true'] .desktopClose {
+  display: none;
+}
+
+.dialog[data-settings-compact='true'] .pane {
+  flex: none;
+  overflow: visible;
+  scroll-padding-top: 0;
+}
+
+.dialog[data-settings-compact='true'] .paneContent header {
+  position: static;
+}
+
+@media (max-width: 639px), (max-height: 520px), (pointer: coarse) {
+  .mobileClose,
+  .desktopClose,
+  .nav > button {
+    min-height: 2.75rem;
+  }
+
+  .mobileClose,
+  .desktopClose {
+    min-width: 2.75rem;
+  }
+}

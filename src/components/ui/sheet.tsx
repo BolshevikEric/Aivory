@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 import { useQuietSurface } from '@/contexts/quiet-surface'
+import { useAppViewport } from '@/hooks/use-app-viewport'
 
 /**
  * Sheet — left/right/bottom slide-over. Built on Radix Dialog primitives.
@@ -19,15 +20,7 @@ interface SheetContentProps extends ComponentPropsWithoutRef<typeof DialogPrimit
   size?: 'sm' | 'md' | 'lg' | 'nav'
   /** Required for accessibility — Radix will warn otherwise. Pass JSX or a string. */
   label?: string
-}
-
-// Sheets portal to document.body, outside ChatLayout's top/side inset. Bottom
-// padding is intentionally omitted so mobile surfaces run to the visual edge.
-const safeClass: Record<Side, string> = {
-  left: 'pt-[var(--safe-top)] pl-[var(--safe-left)]',
-  right: 'pt-[var(--safe-top)] pr-[var(--safe-right)]',
-  top: 'pt-[var(--safe-top)] px-[var(--safe-left)]',
-  bottom: 'px-[var(--safe-left)]',
+  scrollMode?: 'body' | 'content'
 }
 
 const sideClass: Record<Side, string> = {
@@ -56,8 +49,9 @@ const sizeForSide = (side: Side, size: 'sm' | 'md' | 'lg' | 'nav' = 'md') => {
 }
 
 export const SheetContent = forwardRef<ElementRef<typeof DialogPrimitive.Content>, SheetContentProps>(
-  function SheetContent({ side = 'right', size = 'md', label, className, children, ...rest }, ref) {
+  function SheetContent({ side = 'right', size = 'md', label, className, scrollMode, children, ...rest }, ref) {
     const quiet = useQuietSurface()
+    useAppViewport()
     return (
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
@@ -71,12 +65,12 @@ export const SheetContent = forwardRef<ElementRef<typeof DialogPrimitive.Content
           ref={ref}
           data-slot="sheet-content"
           data-side={side}
+          data-scroll-mode={scrollMode}
           aria-describedby={undefined}
           className={cn(
-            'fixed z-[50] bg-[var(--color-surface)] border-[var(--color-border)]',
+            'viewport-sheet fixed z-[50] min-h-0 min-w-0 bg-[var(--color-surface)] border-[var(--color-border)]',
             sideClass[side],
             sizeForSide(side, size),
-            safeClass[side],
             side === 'left' && 'border-r',
             side === 'right' && 'border-l',
             side === 'top' && 'rounded-b-popup border-b',
@@ -98,16 +92,16 @@ export const SheetContent = forwardRef<ElementRef<typeof DialogPrimitive.Content
 )
 
 export function SheetHeader({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('px-5 pt-5 pb-3', className)} {...rest} />
+  return <div className={cn('shrink-0 min-w-0 px-5 pt-5 pb-3', className)} {...rest} />
 }
 export function SheetBody({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex-1 overflow-y-auto px-5 py-2', className)} {...rest} />
+  return <div data-slot="sheet-body" className={cn('min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-5 py-2', className)} {...rest} />
 }
 export function SheetFooter({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   const quiet = useQuietSurface()
   return (
     <div
-      className={cn('px-5 py-4 border-t border-[var(--color-divider)] flex items-center justify-end gap-2', quiet && 'border-0', className)}
+      className={cn('shrink-0 min-w-0 px-5 py-4 border-t border-[var(--color-divider)] flex flex-wrap items-center justify-end gap-2', quiet && 'border-0', className)}
       {...rest}
     />
   )

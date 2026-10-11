@@ -67,7 +67,14 @@ export function FileFiltersPopover({
         </PopoverTrigger>
       </Tooltip>
 
-      <PopoverContent align="end" collisionPadding={12} className="w-[min(19rem,calc(100vw-1.5rem))] p-3">
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        className="min-w-0 w-[min(19rem,calc(var(--surface-viewport-width,100vw)-1.5rem))] overflow-y-auto overscroll-contain p-3 scrollbar-thin"
+        style={{
+          maxHeight: 'max(0px, min(var(--radix-popover-content-available-height), calc(var(--surface-viewport-height, 100dvh) - 1.5rem)))',
+        }}
+      >
         <div className="mb-2 flex min-h-7 items-center justify-between gap-3 px-0.5">
           <span className="text-xs font-medium text-[var(--color-fg)]">{title}</span>
           {activeCount > 0 ? (

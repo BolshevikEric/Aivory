@@ -24,6 +24,7 @@ import { useWorkspaces } from '@/store/workspaces'
 import { toast } from '@/hooks/use-toast'
 import { useCopy } from '@/hooks/use-clipboard'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useSurfaceViewport } from '@/hooks/use-app-viewport'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initials } from '@/components/ui/avatar.utils'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import styles from './workspace-menu.module.css'
 
 const WorkspaceProfileEditor = lazy(() => import('@/components/workspace/workspace-profile-editor'))
 
@@ -239,7 +241,7 @@ export function CreateWorkspaceDialog({ open, onOpenChange }: { open: boolean; o
         onOpenChange(next)
       }}
     >
-      <DialogContent size="sm" closeDisabled={busy}>
+      <DialogContent size="sm" scrollMode="body" closeDisabled={busy}>
         <DialogHeader>
           <DialogTitle>{t('workspace.create', { defaultValue: 'Create workspace' })}</DialogTitle>
           <DialogDescription>
@@ -316,12 +318,19 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
   // §workspace RBAC phases 3/4: managers switch between members, invites and
   // the capability policy; management is restricted to workspace admins.
   const [tab, setTab] = useState<'profile' | 'members' | 'invites' | 'policy' | 'announcement' | 'audit' | 'statistics'>('members')
-  const desktopNavigation = useMediaQuery('(min-width: 640px)')
+  const viewport = useSurfaceViewport()
+  const compact = viewport.height < 360
+  const wideNavigation = useMediaQuery('(min-width: 640px)')
+  const desktopNavigation = wideNavigation && !compact
+  const dialogRef = useRef<HTMLDivElement>(null)
   const paneRef = useRef<HTMLDivElement>(null)
   const [transferOpen, setTransferOpen] = useState(false)
 
   useEffect(() => {
     paneRef.current?.scrollTo({ top: 0 })
+    if (dialogRef.current?.dataset.workspaceCompact === 'true') {
+      dialogRef.current.scrollTo({ top: 0 })
+    }
   }, [tab, activeId, open, canManage])
 
   function roleLabel(role: ApiWorkspaceRole | undefined): string {
@@ -582,11 +591,16 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
       }}
     >
       <DialogContent
+        ref={dialogRef}
         size="full"
+        mobileFullscreen
+        scrollMode={compact ? 'content' : 'body'}
+        data-workspace-management-dialog
+        data-workspace-compact={compact ? 'true' : undefined}
         closeDisabled={actioning || savingPermissions || busyUid !== null}
-        className="h-[min(44rem,calc(100dvh-3rem))] max-w-[68rem] overflow-hidden sm:w-[min(94vw,68rem)] sm:flex-row max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:rounded-none max-sm:border-0"
+        className={`${styles.management} h-[min(44rem,calc(100dvh-3rem))] max-w-[68rem] sm:w-[min(94vw,68rem)] sm:flex-row`}
       >
-        <div className="flex min-h-0 shrink-0 flex-col bg-[var(--color-bg-muted)]/50 sm:w-48">
+        <div className={`${styles.rail} flex min-h-0 shrink-0 flex-col bg-[var(--color-bg-muted)]/50 sm:w-48`}>
         <DialogHeader className="px-4 pb-3 pt-5 max-sm:pr-12">
           <DialogTitle className="flex min-w-0 items-center gap-2">
             <WorkspaceIcon icon={ws.icon_url} size={15} />
@@ -606,7 +620,7 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
               role="tablist"
               aria-orientation={desktopNavigation ? 'vertical' : 'horizontal'}
               aria-label={t('workspace.manageTabs', { defaultValue: 'Workspace management' })}
-              className="flex min-h-0 min-w-0 gap-1 overflow-x-auto overscroll-contain px-2 pb-3 scrollbar-none sm:flex-1 sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto"
+              className={`${styles.nav} flex min-h-0 min-w-0 gap-1 overflow-x-auto overscroll-contain px-2 pb-3 scrollbar-none sm:flex-1 sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto`}
             >
             {WORKSPACE_MANAGEMENT_TABS.map(({ key, icon: Icon, label }) => (
               <button
@@ -650,13 +664,13 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
           ) : null}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className={`${styles.main} flex min-h-0 min-w-0 flex-1 flex-col`}>
           <div className="shrink-0 px-5 py-4 sm:px-6 sm:pr-14 sm:pt-5">
             <h2 className="text-lg font-medium text-[var(--color-fg)]">
               {t(WORKSPACE_MANAGEMENT_TABS.find((item) => item.key === (canManage ? tab : 'members'))!.label)}
             </h2>
           </div>
-          <div ref={paneRef} data-workspace-management-scroll className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-5 scrollbar-thin sm:px-6">
+          <div ref={paneRef} data-workspace-management-scroll className={`${styles.pane} min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-5 scrollbar-thin sm:px-6`}>
 
         {tab === 'profile' ? (
           <div
@@ -946,7 +960,7 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
           if (!next && !savingPermissions) closePermissionEditor()
         }}
       >
-        <DialogContent size="md" closeDisabled={savingPermissions}>
+        <DialogContent size="md" scrollMode="body" closeDisabled={savingPermissions}>
           <DialogHeader>
             <DialogTitle>{t('workspace.memberPermissions', { defaultValue: 'Member permissions' })}</DialogTitle>
             <DialogDescription>
@@ -956,7 +970,7 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
               })}
             </DialogDescription>
           </DialogHeader>
-          <DialogBody className="min-h-0 max-h-[min(70dvh,38rem)] overflow-y-auto py-0">
+          <DialogBody className={`${styles.permissionsBody} min-h-0 max-h-[min(70dvh,38rem)] overflow-y-auto py-0`}>
             <p className="py-3 text-[12.5px] leading-5 text-[var(--color-fg-muted)]">
               {t('workspace.groupPermissionCeiling')}
             </p>
@@ -1821,7 +1835,7 @@ function WorkspaceTransferDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onOpenChange(next) }}>
-      <DialogContent size="sm" closeDisabled={busy}>
+      <DialogContent size="sm" scrollMode="body" closeDisabled={busy}>
         <DialogHeader>
           <DialogTitle>{t('workspace.transfer', { defaultValue: 'Transfer ownership' })}</DialogTitle>
           <DialogDescription>

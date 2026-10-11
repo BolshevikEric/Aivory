@@ -56,8 +56,8 @@ export class EditorErrorBoundary extends Component<EditorErrorBoundaryProps, Edi
     }
 
     return (
-      <div className="flex h-full min-h-[20rem] items-center justify-center p-6" role="alert">
-        <div className="max-w-sm text-center">
+      <div className="flex h-full min-h-0 min-w-0 overflow-auto overscroll-contain p-6" role="alert">
+        <div className="m-auto w-full max-w-sm shrink-0 break-words text-center">
           <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-[var(--color-danger-soft)] text-[var(--color-danger)]">
             <FileWarning size={21} aria-hidden />
           </span>

@@ -33,8 +33,8 @@ function PreviewNotice({
   const { t } = useTranslation(['files', 'common'])
   const Icon = kind === 'error' ? AlertTriangle : FileQuestion
   return (
-    <div className="flex h-full min-h-[20rem] items-center justify-center p-6" role={kind === 'error' ? 'alert' : undefined}>
-      <div className="max-w-sm text-center">
+    <div className="flex h-full min-h-0 min-w-0 overflow-auto overscroll-contain p-6" role={kind === 'error' ? 'alert' : undefined}>
+      <div className="m-auto w-full max-w-sm shrink-0 break-words text-center">
         <span
           className={
             kind === 'error'
@@ -63,16 +63,17 @@ function PreviewNotice({
 
 function PreviewLoading({ label }: { label: string }) {
   return (
-    <div className="flex h-full min-h-[20rem] flex-col items-center gap-4 overflow-hidden p-4 sm:p-6" role="status">
-      <span className="text-[0.8125rem] text-[var(--color-fg-muted)]">{label}</span>
-      <Skeleton className="h-full min-h-[24rem] w-full max-w-[52rem] rounded-[4px]" />
+    <div className="flex h-full min-h-0 min-w-0 flex-col items-center gap-4 overflow-hidden p-4 sm:p-6" role="status">
+      <span className="shrink-0 text-[0.8125rem] text-[var(--color-fg-muted)]">{label}</span>
+      <Skeleton className="min-h-0 w-full max-w-[52rem] flex-1 rounded-[4px]" />
     </div>
   )
 }
 
 /**
  * Shared, chrome-free preview surface used by Files, chat attachments, and the
- * admin inventory. Office/PDF renderers are internally lazy-loaded, so merely
+ * admin inventory. Hosts provide a bounded height; each preview owns scrolling
+ * within that height. Office/PDF renderers are internally lazy-loaded, so merely
  * importing this component does not pull their parsers into the route chunk.
  */
 export function DocumentPreview({
@@ -102,7 +103,7 @@ export function DocumentPreview({
 
   if (kind === 'image' && objectUrl) {
     return (
-      <div className="flex h-full min-h-[20rem] items-center justify-center overflow-auto bg-[var(--color-preview-canvas)] p-4 sm:p-6">
+      <div className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-auto overscroll-contain bg-[var(--color-preview-canvas)] p-4 sm:p-6">
         <img
           src={objectUrl}
           alt={name}
@@ -199,7 +200,7 @@ export function DocumentPreview({
       return <PreviewNotice kind="unsupported" title={t('preview.tooLarge')} />
     }
     return (
-      <pre className="h-full min-h-[20rem] overflow-auto whitespace-pre-wrap break-words bg-[var(--color-surface)] p-4 font-mono text-[0.78125rem] leading-relaxed text-[var(--color-fg)] sm:p-6">
+      <pre className="h-full min-h-0 min-w-0 overflow-auto overscroll-contain whitespace-pre-wrap break-words bg-[var(--color-surface)] p-4 font-mono text-[0.78125rem] leading-relaxed text-[var(--color-fg)] sm:p-6">
         {text}
       </pre>
     )

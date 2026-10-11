@@ -12,6 +12,8 @@ import { lazyWithPreload, type PreloadableLazy } from '@/lib/lazy-preload'
 import { cn } from '@/lib/utils'
 import { QuietSurfaceContext } from '@/contexts/quiet-surface'
 import { ButtonDensityContext } from '@/contexts/button-density'
+import { useSurfaceViewport } from '@/hooks/use-app-viewport'
+import styles from './settings-layout.module.css'
 
 const tabDefs = [
   { key: 'account', icon: User },
@@ -67,6 +69,9 @@ export default function SettingsDialog() {
   const setTab = useSettingsModal((s) => s.setTab)
   const close = useSettingsModal((s) => s.close)
   const { t } = useTranslation(['settings', 'common'])
+  const viewport = useSurfaceViewport()
+  const compact = viewport.height < 240
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // Auth latch. Signing out INSIDE the dialog (change password / delete
   // account → navigate('/login')) makes AuthGate remount this whole subtree —
@@ -121,7 +126,8 @@ export default function SettingsDialog() {
   visitedTabsRef.current.add(tab)
   useEffect(() => {
     paneRef.current?.scrollTo({ top: 0 })
-  }, [tab])
+    if (compact) dialogRef.current?.scrollTo({ top: 0 })
+  }, [tab, compact])
 
   return (
     <ButtonDensityContext.Provider value="compact">
@@ -135,14 +141,14 @@ export default function SettingsDialog() {
           <DialogPrimitive.Portal>
             <DialogOverlay />
             <DialogPrimitive.Content
+              ref={dialogRef}
               aria-describedby={undefined}
+              data-settings-dialog=""
+              data-settings-compact={compact ? 'true' : undefined}
               className={cn(
+                styles.dialog,
                 'fixed z-[60] bg-[var(--color-surface)] text-[var(--color-fg)] overflow-hidden',
                 'focus-visible:outline-none',
-                // Mobile: full-screen sheet. Desktop: centered panel.
-                'inset-0 flex flex-col',
-                'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:[translate:-50%_-50%]',
-                'sm:h-[min(36rem,calc(100dvh-3rem))] sm:w-[min(92vw,50rem)] sm:max-h-[calc(100dvh-3rem)] sm:flex-row',
                 'sm:rounded-popup sm:shadow-[var(--shadow-xl)]',
                 'data-[state=open]:animate-[pop-in_220ms_var(--ease-out)]',
                 'data-[state=closed]:animate-[fade-out_140ms_var(--ease-in)]',
@@ -151,15 +157,17 @@ export default function SettingsDialog() {
               {/* ===== Left rail ===== */}
               <div
                 className={cn(
+                  styles.rail,
                   'shrink-0 flex flex-col bg-[var(--color-bg-muted)]/50',
                   'sm:w-48',
                 )}
               >
-                <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4 sm:pb-3">
+                <div className={cn(styles.railHeader, 'flex items-center justify-between gap-2 px-4 pb-2 pt-4 sm:pb-3')}>
                   <DialogTitle>{t('settings:title')}</DialogTitle>
                   <DialogPrimitive.Close
                     aria-label={t('common:aria.close', { defaultValue: 'Close' })}
                     className={cn(
+                      styles.mobileClose,
                       'sm:hidden inline-flex items-center justify-center size-8 rounded-[8px]',
                       'text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]',
                       'transition-colors duration-150',
@@ -171,7 +179,9 @@ export default function SettingsDialog() {
                 </div>
                 <nav
                   ref={navRef}
+                  data-settings-nav=""
                   className={cn(
+                    styles.nav,
                     'relative flex gap-1 px-2 pb-2 sm:pb-3',
                     'flex-row overflow-x-auto scrollbar-none',
                     'sm:flex-col sm:overflow-y-auto sm:flex-1',
@@ -210,6 +220,7 @@ export default function SettingsDialog() {
               <DialogPrimitive.Close
                 aria-label={t('common:aria.close', { defaultValue: 'Close' })}
                 className={cn(
+                  styles.desktopClose,
                   'max-sm:hidden absolute right-3 top-3 z-20 inline-flex items-center justify-center size-8 rounded-[8px]',
                   'text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]',
                   'transition-colors duration-150',
@@ -222,10 +233,12 @@ export default function SettingsDialog() {
                   auto-scrolls land visible instead of underneath it. */}
               <div
                 ref={paneRef}
-                className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin [scroll-padding-top:6rem]"
+                data-settings-pane=""
+                className={cn(styles.pane, 'relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin [scroll-padding-top:6rem]')}
               >
                 <div
                   className={cn(
+                    styles.paneContent,
                     // No top padding here — the pinned header carries it instead.
                     // With wrapper padding above it, the header would first travel
                     // that distance before sticking; owning the padding makes it

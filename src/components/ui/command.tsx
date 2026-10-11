@@ -23,18 +23,17 @@ export const Command = forwardRef<
 export const CommandInput = forwardRef<
   ElementRef<typeof CommandPrimitive.Input>,
   ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
-    /** When set, a touch-only close button is shown (the menu goes full-screen
-     *  on phones, so the scrim tap that closes it on desktop isn't reachable). */
+    /** A visible close button keeps full-screen search dismissible on touch. */
     onClose?: () => void
   }
 >(function CommandInput({ className, onClose, ...rest }, ref) {
   return (
-    <div className="flex items-center gap-2.5 px-4 h-12 max-sm:h-14 bg-[var(--color-bg-muted)]/60" cmdk-input-wrapper="">
+    <div className="flex shrink-0 items-center gap-2.5 px-4 h-12 max-sm:h-14 bg-[var(--color-bg-muted)]/60" cmdk-input-wrapper="">
       <Search size={16} className="text-[var(--color-fg-subtle)] shrink-0" aria-hidden />
       <CommandPrimitive.Input
         ref={ref}
         className={cn(
-          'flex-1 bg-transparent outline-none border-none',
+          'min-w-0 flex-1 bg-transparent outline-none border-none',
           // ≥16px on phones so iOS Safari doesn't zoom on focus.
           'text-[0.9375rem] max-sm:text-[length:var(--text-input-mobile)] text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)]',
           'disabled:cursor-not-allowed disabled:opacity-50',
@@ -47,7 +46,7 @@ export const CommandInput = forwardRef<
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="sm:hidden -mr-1.5 inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+          className="-mr-1.5 inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] [@media(pointer:coarse)]:size-11"
         >
           <X size={18} aria-hidden />
         </button>
@@ -63,7 +62,7 @@ export const CommandList = forwardRef<
   return (
     <CommandPrimitive.List
       ref={ref}
-      className={cn('max-h-[400px] max-sm:max-h-none max-sm:flex-1 overflow-y-auto overscroll-contain p-2', className)}
+      className={cn('min-h-0 flex-1 max-h-[400px] max-sm:max-h-none overflow-y-auto overscroll-contain p-2', className)}
       {...rest}
     />
   )
