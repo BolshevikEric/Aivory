@@ -1855,7 +1855,10 @@ body {
   max-width: 100%;
 }
 
-@media (max-width: 639px), (max-height: 520px) {
+/* Touch WebViews can expose a desktop-sized CSS viewport even when the
+   physical screen is a phone. Keep this dialog full-screen for those inputs
+   as well as for narrow and short viewports. */
+@media (max-width: 767px), (pointer: coarse), (max-height: 520px) {
   .formula-editor-dialog {
     top: var(--safe-top);
     right: var(--safe-right);
@@ -1866,6 +1869,7 @@ body {
     max-width: none;
     height: auto;
     max-height: none;
+    box-sizing: border-box;
     translate: none;
     transform: none;
     border-radius: 0;
@@ -1904,6 +1908,10 @@ body {
   .formula-editor-dialog[data-keyboard-open='true'] .formula-editor-footer {
     padding-top: 0.3125rem;
     padding-bottom: 0.3125rem;
+  }
+
+  .formula-editor-dialog .formula-editor-footer {
+    padding-bottom: max(0.625rem, var(--safe-bottom));
   }
 }
 
