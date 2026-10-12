@@ -1,4 +1,5 @@
 node_modules
+core
 dist
 dist-desktop
 dist-ssr
