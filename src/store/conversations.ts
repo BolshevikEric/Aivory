@@ -54,7 +54,7 @@ import { normalizeSelectedUserSkillIds } from '@/lib/composer-commands'
 import { resolveNewConversationFastMode } from '@/lib/chat-defaults'
 import { initialConversationTitle } from '@/lib/chat-message-input'
 import { ragInjectionFromEvent } from '@/lib/rag-injection'
-import { sanitizeToolErrorOutput, sanitizeUserVisibleError } from '@/lib/user-visible-error'
+import { isToolFailureOutput, sanitizeToolErrorOutput, sanitizeUserVisibleError } from '@/lib/user-visible-error'
 
 // resolveArmedTurnFlags snapshots the CURRENT composer feature toggles for turns
 // started OUTSIDE the composer's own submit — regenerate, edit-and-resend, and
@@ -2321,12 +2321,13 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
           case 'tool_result': {
             if (!ev.id) break
             const tid = ev.id
+            const failed = ev.status === 'error' || isToolFailureOutput(ev.summary)
             updateAssistant(set, input.conversationId, serverAssistantId, (m) => ({
               ...m,
               reasoning: patchReasoningTool(m.reasoning ?? [], tid, {
                 output:
-                  ev.status === 'error' ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
-                status: ev.status === 'error' ? 'error' : 'complete',
+                  failed ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
+                status: failed ? 'error' : 'complete',
                 endedAt: Date.now(),
               }),
             }))
@@ -2693,12 +2694,13 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
           case 'tool_result': {
             if (!ev.id) break
             const tid = ev.id
+            const failed = ev.status === 'error' || isToolFailureOutput(ev.summary)
             updateAssistant(set, conversationId, serverAssistantId, (m) => ({
               ...m,
               reasoning: patchReasoningTool(m.reasoning ?? [], tid, {
                 output:
-                  ev.status === 'error' ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
-                status: ev.status === 'error' ? 'error' : 'complete',
+                  failed ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
+                status: failed ? 'error' : 'complete',
                 endedAt: Date.now(),
               }),
             }))
@@ -3278,17 +3280,19 @@ function applyReplayEvent(
       }))
       break
     }
-    case 'tool_result':
+    case 'tool_result': {
       if (!ev.id) break
+      const failed = ev.status === 'error' || isToolFailureOutput(ev.summary)
       updateAssistant(set, conversationId, assistantId, (m) => ({
         ...m,
         reasoning: patchReasoningTool(m.reasoning ?? [], ev.id!, {
-          output: ev.status === 'error' ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
-          status: ev.status === 'error' ? 'error' : 'complete',
+          output: failed ? sanitizeToolErrorOutput(ev.summary) : ev.summary,
+          status: failed ? 'error' : 'complete',
           endedAt: Date.now(),
         }),
       }))
       break
+    }
     case 'citation': {
       const c = ev.citation
       state.lastCitations = [
@@ -3588,9 +3592,8 @@ export function toLocalMessage(m: ApiMessage): Message {
         pendingText = ''
       }
       const id = b.tool_id ?? `${m.id}-r${idx}`
-      // Older rows predate the canonical tool_output status block and only
-      // marked a failed result by prefixing the tool_call summary with Error:.
-      const toolFailed = failedToolIDs.has(id) || /^error\s*:/i.test(b.summary?.trim() ?? '')
+      // Older rows may carry only a failure summary without a tool_output status.
+      const toolFailed = failedToolIDs.has(id) || isToolFailureOutput(b.summary)
       reasoning.push({
         kind: 'tool',
         id,

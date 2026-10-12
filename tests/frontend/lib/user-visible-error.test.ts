@@ -3,11 +3,20 @@ import {
   OPERATION_CANCELED_MESSAGE,
   TOOL_FAILURE_MESSAGE,
   TOOL_TIMEOUT_MESSAGE,
+  isToolFailureOutput,
   sanitizeToolErrorOutput,
   sanitizeUserVisibleError,
 } from '@/lib/user-visible-error'
 
 describe('user-visible error sanitization', () => {
+  it('recognizes canonical tool failures without classifying ordinary tool output as an error', () => {
+    for (const message of [TOOL_FAILURE_MESSAGE, TOOL_TIMEOUT_MESSAGE, OPERATION_CANCELED_MESSAGE, 'Error: unknown tool']) {
+      expect(isToolFailureOutput(`  ${message}  `)).toBe(true)
+    }
+    for (const message of [undefined, '', 'Completed', `Documentation quotes: ${TOOL_FAILURE_MESSAGE}`, 'Search results about errors']) {
+      expect(isToolFailureOutput(message)).toBe(false)
+    }
+  })
   it('removes an upstream image endpoint from cancellation errors', () => {
     const raw = 'Error: Post "https://images.internal.example.test/v1/images/edits": context canceled'
 

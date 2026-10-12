@@ -1336,6 +1336,14 @@ describe('stopped turn optimistic-id reconciliation', () => {
     expect(JSON.stringify(local)).not.toContain('/v1/images/edits')
   })
 
+  it.each(['Tool execution failed. Please try again.', 'The tool timed out. Please try again.', 'The operation was canceled.'])('restores a legacy failure summary as an error: %s', (summary) => {
+    const assistant = apiMessage('msg_legacy_tool_failure', 'assistant', 'msg_user', 'complete', '')
+    assistant.blocks = [{ kind: 'tool_call', tool_id: 'ui_attempt', tool_name: 'aivory_ui', summary }]
+    expect(toLocalMessage(assistant).reasoning?.[0]).toMatchObject({
+      kind: 'tool', tool: { status: 'error', output: summary },
+    })
+  })
+
   it('blocks edit-resend when its explicit parent is still client-only', async () => {
     const messages: Message[] = [
       {

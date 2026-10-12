@@ -19,6 +19,14 @@ export const OPERATION_CANCELED_MESSAGE = 'The operation was canceled.'
 export const TOOL_TIMEOUT_MESSAGE = 'The tool timed out. Please try again.'
 export const GENERAL_FAILURE_MESSAGE = 'Something went wrong. Please try again.'
 
+export function isToolFailureOutput(value: string | null | undefined): boolean {
+  const message = value?.trim() ?? ''
+  return /^error\s*:/i.test(message)
+    || message === TOOL_FAILURE_MESSAGE
+    || message === TOOL_TIMEOUT_MESSAGE
+    || message === OPERATION_CANCELED_MESSAGE
+}
+
 export function sanitizeUserVisibleError(
   value: string | null | undefined,
   fallback = GENERAL_FAILURE_MESSAGE,
