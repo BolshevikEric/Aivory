@@ -9,22 +9,21 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"aivory/server/internal/llm"
 	"aivory/server/internal/tooldiagnostics"
 )
 
 // Searcher is the pluggable web-search backend abstraction (§4.4). Swap Serper
-// for Brave/Tavily/Bing/SearXNG by providing another implementation — the tool
+// for Brave/Tavily/AnySearch/SearXNG by providing another implementation — the tool
 // code is backend-agnostic.
 type Searcher interface {
 	Search(ctx context.Context, query string, topK int) (text string, citations []llm.Citation, err error)
 }
 
 // newSearcher builds the configured searcher. Serper/Brave/Tavily require a
-// key and SearXNG a base URL; DuckDuckGo is the free keyless channel and needs
-// no configuration at all.
+// key and SearXNG a base URL. DuckDuckGo needs no configuration; AnySearch
+// supports anonymous requests through its fixed official endpoint.
 func newSearcher(provider, apiKey, baseURL string, selectedEngines ...[]string) Searcher {
 	switch strings.ToLower(provider) {
 	case "serper":
@@ -42,6 +41,8 @@ func newSearcher(provider, apiKey, baseURL string, selectedEngines ...[]string) 
 			return nil
 		}
 		return &tavilySearcher{apiKey: apiKey}
+	case "anysearch":
+		return &anySearchSearcher{apiKey: strings.TrimSpace(apiKey)}
 	case "searxng":
 		if baseURL == "" {
 			return nil
@@ -70,66 +71,76 @@ func newSearcher(provider, apiKey, baseURL string, selectedEngines ...[]string) 
 type serperSearcher struct{ apiKey string }
 
 func (s *serperSearcher) Search(ctx context.Context, query string, topK int) (string, []llm.Citation, error) {
+	results, err := s.search(ctx, query, topK, webSearchOptions{})
+	text, citations := results.output()
+	return text, citations, err
+}
+
+func (s *serperSearcher) search(ctx context.Context, query string, topK int, _ webSearchOptions) (webSearchResults, error) {
 	body, _ := json.Marshal(map[string]any{"q": query, "num": topK})
 	req, _ := http.NewRequestWithContext(ctx, "POST", "https://google.serper.dev/search", strings.NewReader(string(body)))
 	req.Header.Set("x-api-key", s.apiKey)
 	req.Header.Set("content-type", "application/json")
 	resp, err := tooldiagnostics.Do(toolHTTPClient, req)
 	if err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(resp.Body)
-		return "", nil, fmt.Errorf("serper: %s", string(b))
+		return webSearchResults{}, fmt.Errorf("serper: %s", string(b))
 	}
 	var parsed map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
 	organic, _ := parsed["organic"].([]any)
-	citations := []llm.Citation{}
-	out := strings.Builder{}
-	for i, r := range organic {
+	results := webSearchResults{items: make([]webSearchResultItem, 0, len(organic))}
+	for _, r := range organic {
 		rm, _ := r.(map[string]any)
 		title, _ := rm["title"].(string)
 		link, _ := rm["link"].(string)
 		snippetRaw, _ := rm["snippet"].(string)
 		snippet := cleanSnippet(snippetRaw)
+		content, _ := rm["raw_content"].(string)
+		if content == "" {
+			content, _ = rm["content"].(string)
+		}
 		date, _ := rm["date"].(string)
 		imageURL, _ := rm["imageUrl"].(string)
 		thumbnailURL, _ := rm["thumbnailUrl"].(string)
 		imageURL, thumbnailURL = searchImageURL(imageURL), searchImageURL(thumbnailURL)
-		citations = append(citations, llm.Citation{
-			ID: fmt.Sprintf("w_%d", i+1), Index: i + 1, Title: title, URL: link, Snippet: snippet, Source: "web",
-			ImageURL: imageURL, ThumbnailURL: thumbnailURL,
+		results.items = append(results.items, webSearchResultItem{
+			citation: llm.Citation{Title: title, URL: link, Snippet: snippet, Source: "web", ImageURL: imageURL, ThumbnailURL: thumbnailURL},
+			content:  content,
+			date:     date,
 		})
-		fmt.Fprintf(&out, "[%d] %s\n%s\n%s\n", i+1, title, link, snippet)
-		writeSearchImageURLs(&out, imageURL, thumbnailURL)
-		if date != "" {
-			fmt.Fprintf(&out, "(date: %s)\n", date)
-		}
-		out.WriteString("\n")
 	}
-	return out.String(), citations, nil
+	return results, nil
 }
 
 // braveSearcher hits https://api.search.brave.com/res/v1/web/search.
 type braveSearcher struct{ apiKey string }
 
 func (b *braveSearcher) Search(ctx context.Context, query string, topK int) (string, []llm.Citation, error) {
+	results, err := b.search(ctx, query, topK, webSearchOptions{})
+	text, citations := results.output()
+	return text, citations, err
+}
+
+func (b *braveSearcher) search(ctx context.Context, query string, topK int, _ webSearchOptions) (webSearchResults, error) {
 	u := fmt.Sprintf("https://api.search.brave.com/res/v1/web/search?q=%s&count=%d", url.QueryEscape(query), topK)
 	req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
 	req.Header.Set("X-Subscription-Token", b.apiKey)
 	req.Header.Set("Accept", "application/json")
 	resp, err := tooldiagnostics.Do(toolHTTPClient, req)
 	if err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		bd, _ := io.ReadAll(resp.Body)
-		return "", nil, fmt.Errorf("brave: %s", string(bd))
+		return webSearchResults{}, fmt.Errorf("brave: %s", string(bd))
 	}
 	var parsed struct {
 		Web struct {
@@ -137,6 +148,8 @@ func (b *braveSearcher) Search(ctx context.Context, query string, topK int) (str
 				Title       string `json:"title"`
 				URL         string `json:"url"`
 				Description string `json:"description"`
+				Content     string `json:"content"`
+				RawContent  string `json:"raw_content"`
 				PageAge     string `json:"page_age"`
 				Thumbnail   struct {
 					Src      string `json:"src"`
@@ -146,38 +159,42 @@ func (b *braveSearcher) Search(ctx context.Context, query string, topK int) (str
 		} `json:"web"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
-	citations := []llm.Citation{}
-	out := strings.Builder{}
-	for i, r := range parsed.Web.Results {
+	results := webSearchResults{items: make([]webSearchResultItem, 0, len(parsed.Web.Results))}
+	for _, r := range parsed.Web.Results {
 		snippet := cleanSnippet(r.Description)
-		imageURL, thumbnailURL := searchImageURL(r.Thumbnail.Original), searchImageURL(r.Thumbnail.Src)
-		citations = append(citations, llm.Citation{
-			ID: fmt.Sprintf("w_%d", i+1), Index: i + 1,
-			Title: r.Title, URL: r.URL, Snippet: snippet, Source: "web",
-			ImageURL: imageURL, ThumbnailURL: thumbnailURL,
-		})
-		fmt.Fprintf(&out, "[%d] %s\n%s\n%s\n", i+1, r.Title, r.URL, snippet)
-		writeSearchImageURLs(&out, imageURL, thumbnailURL)
-		if r.PageAge != "" {
-			fmt.Fprintf(&out, "(date: %s)\n", r.PageAge)
+		content := r.RawContent
+		if content == "" {
+			content = r.Content
 		}
-		out.WriteString("\n")
+		imageURL, thumbnailURL := searchImageURL(r.Thumbnail.Original), searchImageURL(r.Thumbnail.Src)
+		results.items = append(results.items, webSearchResultItem{
+			citation: llm.Citation{Title: r.Title, URL: r.URL, Snippet: snippet, Source: "web", ImageURL: imageURL, ThumbnailURL: thumbnailURL},
+			content:  content,
+			date:     r.PageAge,
+		})
 	}
-	return out.String(), citations, nil
+	return results, nil
 }
 
 // tavilySearcher hits https://api.tavily.com/search.
 type tavilySearcher struct{ apiKey string }
 
 func (t *tavilySearcher) Search(ctx context.Context, query string, topK int) (string, []llm.Citation, error) {
+	results, err := t.search(ctx, query, topK, webSearchOptions{})
+	text, citations := results.output()
+	return text, citations, err
+}
+
+func (t *tavilySearcher) search(ctx context.Context, query string, topK int, _ webSearchOptions) (webSearchResults, error) {
 	body, _ := json.Marshal(map[string]any{
-		"query":          query,
-		"max_results":    topK,
-		"search_depth":   "basic",
-		"include_answer": false,
-		"topic":          "general",
+		"query":               query,
+		"max_results":         topK,
+		"search_depth":        "basic",
+		"include_answer":      false,
+		"include_raw_content": "markdown",
+		"topic":               "general",
 	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.tavily.com/search", strings.NewReader(string(body)))
 	req.Header.Set("Authorization", "Bearer "+t.apiKey)
@@ -185,43 +202,39 @@ func (t *tavilySearcher) Search(ctx context.Context, query string, topK int) (st
 	req.Header.Set("Accept", "application/json")
 	resp, err := tooldiagnostics.Do(toolHTTPClient, req)
 	if err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		bd, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", nil, fmt.Errorf("tavily: HTTP %d: %s", resp.StatusCode, string(bd))
+		return webSearchResults{}, fmt.Errorf("tavily: HTTP %d: %s", resp.StatusCode, string(bd))
 	}
 	var parsed struct {
 		Results []struct {
 			Title         string  `json:"title"`
 			URL           string  `json:"url"`
 			Content       string  `json:"content"`
+			RawContent    string  `json:"raw_content"`
 			Score         float64 `json:"score"`
 			PublishedDate string  `json:"published_date"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", nil, err
+		return webSearchResults{}, err
 	}
 	if len(parsed.Results) == 0 {
-		return "No web results found for this query.", nil, nil
+		return webSearchResults{notice: "No web results found for this query."}, nil
 	}
-	citations := []llm.Citation{}
-	out := strings.Builder{}
-	for i, r := range parsed.Results {
+	results := webSearchResults{items: make([]webSearchResultItem, 0, len(parsed.Results))}
+	for _, r := range parsed.Results {
 		snippet := cleanSnippet(r.Content)
-		citations = append(citations, llm.Citation{
-			ID: fmt.Sprintf("w_%d", i+1), Index: i + 1,
-			Title: r.Title, URL: r.URL, Snippet: snippet, Source: "web",
+		results.items = append(results.items, webSearchResultItem{
+			citation: llm.Citation{Title: r.Title, URL: r.URL, Snippet: snippet, Source: "web"},
+			content:  r.RawContent,
+			date:     r.PublishedDate,
 		})
-		fmt.Fprintf(&out, "[%d] %s\n%s\n%s\n", i+1, r.Title, r.URL, snippet)
-		if r.PublishedDate != "" {
-			fmt.Fprintf(&out, "(date: %s)\n", r.PublishedDate)
-		}
-		out.WriteString("\n")
 	}
-	return out.String(), citations, nil
+	return results, nil
 }
 
 // searxngSearcher queries a self-hosted SearXNG instance over JSON.
@@ -259,9 +272,7 @@ func firstEngineSelection(selections [][]string) []string {
 // "bing" or "ddg"), so Aivory deliberately does not maintain a fixed engine
 // catalog. An empty value leaves SearXNG's own enabled-engine set untouched.
 func parseSearchEngines(value string) []string {
-	parts := strings.FieldsFunc(value, func(r rune) bool {
-		return r == ',' || unicode.IsSpace(r)
-	})
+	parts := strings.Split(value, ",")
 	seen := make(map[string]struct{}, len(parts))
 	engines := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -576,6 +587,9 @@ func (d *duckduckgoSearcher) lite() string {
 }
 
 func (d *duckduckgoSearcher) Search(ctx context.Context, query string, topK int) (string, []llm.Citation, error) {
+	if topK <= 0 {
+		topK = defaultWebSearchResults
+	}
 	if topK > ddgMaxResults {
 		topK = ddgMaxResults
 	}
@@ -783,18 +797,9 @@ func formatDDGResults(results []ddgResult) (string, []llm.Citation, error) {
 	return out.String(), citations, nil
 }
 
-// cleanSnippet normalises a search result's snippet: it collapses every run of
-// whitespace (incl. the newlines that turn a JS-heavy page's nav/boilerplate
-// into a wall of text) to single spaces and caps the length. Noisy multi-line
-// snippets are what make weaker models echo the raw result instead of
-// synthesising; a tight one-line snippet is easier to reason over and cheaper.
+// cleanSnippet normalizes whitespace without discarding any excerpt text.
 func cleanSnippet(s string) string {
-	s = normalizeSnippet(s)
-	const maxRunes = 320
-	if r := []rune(s); len(r) > maxRunes {
-		s = strings.TrimSpace(string(r[:maxRunes])) + "…"
-	}
-	return s
+	return normalizeSnippet(s)
 }
 
 func normalizeSnippet(s string) string {

@@ -16,12 +16,17 @@ type searcherWithOptions interface {
 }
 
 type webSearchOptions struct {
-	Categories []string `json:"categories,omitempty"`
-	TimeRange  string   `json:"time_range,omitempty"`
-	Language   string   `json:"language,omitempty"`
-	PageNo     *int     `json:"pageno,omitempty"`
-	Engines    []string `json:"engines,omitempty"`
-	SafeSearch *int     `json:"safesearch,omitempty"`
+	Categories []string       `json:"categories,omitempty"`
+	TimeRange  string         `json:"time_range,omitempty"`
+	Language   string         `json:"language,omitempty"`
+	PageNo     *int           `json:"pageno,omitempty"`
+	Engines    []string       `json:"engines,omitempty"`
+	SafeSearch *int           `json:"safesearch,omitempty"`
+	MaxResults *int           `json:"max_results,omitempty"`
+	Tag        string         `json:"tag,omitempty"`
+	Zone       string         `json:"zone,omitempty"`
+	Params     map[string]any `json:"params,omitempty"`
+	Format     string         `json:"format,omitempty"`
 }
 
 var searchCategories = []string{

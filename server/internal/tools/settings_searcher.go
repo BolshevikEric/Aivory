@@ -21,7 +21,7 @@ import (
 //
 // DuckDuckGo is the free channel and needs nothing. SearXNG (self-hosted)
 // needs only `search_base_url`; `search_api_key` is optional. Serper / Brave
-// both require an API key. The shared `newSearcher` helper enforces those
+// both require an API key. AnySearch also supports anonymous calls. `newSearcher` enforces those
 // provider-specific requirements so we don't duplicate the rules here.
 type settingsSearcher struct {
 	db          *sql.DB

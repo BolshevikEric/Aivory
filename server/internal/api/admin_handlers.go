@@ -1580,12 +1580,12 @@ var settingsKeys = []string{
 	// credits via credits_per_usd (0 = free; see audio_billing.go).
 	"audio_transcribe_price_per_second",
 	// §4.4 web search backend — admin-configurable, live-reloaded each call.
-	// Provider ∈ {"", "serper", "brave", "tavily", "searxng", "duckduckgo"
+	// Provider ∈ {"", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo"
 	// (alias "ddg"), "auto"}. SearXNG is the self-hosted option and only needs
 	// base_url (no api_key); DuckDuckGo is the free option and needs no config at
 	// all. Empty provider falls back to the env values and finally to the no-op
 	// placeholder.
-	// search_engines is a comma/space-separated list of SearXNG engine names or
+	// search_engines is a comma-separated list of SearXNG engine names or
 	// shortcuts. Empty means that SearXNG chooses its enabled defaults.
 	"search_provider", "search_base_url", "search_api_key", "search_engines", "search_result_count",
 	// §4.6 upload safety — extension allowlist. Stored as a single
@@ -1653,9 +1653,7 @@ var sensitiveKeywords = []string{"password", "secret", "api_key", "token", "key_
 func normalizeSearchEnginesSetting(value string) (string, error) {
 	const maxEngines = 64
 	const maxEngineNameBytes = 80
-	parts := strings.FieldsFunc(value, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\t' || r == '\r' || r == '\n'
-	})
+	parts := strings.Split(value, ",")
 	seen := make(map[string]struct{}, len(parts))
 	engines := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -1667,7 +1665,7 @@ func normalizeSearchEnginesSetting(value string) (string, error) {
 			return "", errInvalidInput
 		}
 		for _, r := range part {
-			if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
+			if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' || r == ' ') {
 				return "", errInvalidInput
 			}
 		}

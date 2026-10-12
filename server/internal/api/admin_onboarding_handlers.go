@@ -330,7 +330,8 @@ func onboardingSettingString(db *sql.DB, key string) (string, error) {
 
 // onboardingSearchReady mirrors the provider requirements in settingsSearcher:
 // Serper, Brave, and Tavily need a key; SearXNG needs an endpoint; DuckDuckGo
-// is the free keyless channel; auto can use either key or endpoint.
+// is the free keyless channel; AnySearch supports anonymous calls at its default
+// endpoint; auto can use either key or endpoint.
 // A present admin setting deliberately overrides its environment fallback,
 // including an empty value, just as the live tool resolver does.
 func onboardingSearchReady(d Deps) (bool, error) {
@@ -351,7 +352,7 @@ func onboardingSearchReady(d Deps) (bool, error) {
 		return apiKey != "", nil
 	case "searxng":
 		return baseURL != "", nil
-	case "duckduckgo", "ddg":
+	case "duckduckgo", "ddg", "anysearch":
 		return true, nil
 	case "", "auto":
 		return apiKey != "" || baseURL != "", nil

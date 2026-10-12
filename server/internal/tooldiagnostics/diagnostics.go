@@ -337,6 +337,15 @@ type observedBody struct {
 	truncated bool
 }
 
+// Call before reading credential-bearing responses to retain only HTTP metadata.
+func OmitResponseBody(resp *http.Response) {
+	if body, ok := resp.Body.(*observedBody); ok {
+		body.capture = false
+		body.buf.Reset()
+		body.truncated = false
+	}
+}
+
 func (b *observedBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
 	if b.capture {

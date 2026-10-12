@@ -244,7 +244,7 @@
 
 | 环境变量 | 类型 | 默认值 | 位置 | 说明 |
 | --- | --- | --- | --- | --- |
-| `AIVORY_TOOLS_IN_TOP_K` | `int` | `5` | `tools/builtins.go:37` | Default result count for the `aivory_web_search` tool when the model's call omits top_k. |
+| `AIVORY_TOOLS_IN_TOP_K` | `int` | `10` | `tools/builtins.go:37` | Default result count when the model's call omits top_k. SearXNG keeps its legacy fallback of 5 and prioritizes the administrator's configured count; AnySearch defaults to 10 independently. |
 | `AIVORY_TOOLS_WEB_FETCH_RESPONSE_BODY_READ_CAP` | `int64` | `256*1024` | `tools/builtins.go:38` | Byte cap on the HTTP response body web_fetch reads before stripping HTML. |
 | `AIVORY_TOOLS_WEB_FETCH_EXTRACTED_TEXT_CHAR_CAP` | `int` | `32000` | `tools/builtins.go:39` | Character cap on web_fetch's HTML-stripped text before it is truncated with an ellipsis marker. |
 | `AIVORY_TOOLS_WEB_FETCH_DIRECT_TIMEOUT` | `duration` | `12s` | `tools/builtins.go` | Single-attempt timeout for web fetch connecting directly to the target site. |

@@ -52,7 +52,8 @@ import (
 // Env-overridable defaults (see docs/config-reference.md). Each falls back to
 // its documented default when the corresponding AIVORY_* variable is unset.
 var (
-	inTopK                       = envcfg.Int("AIVORY_TOOLS_IN_TOP_K", 5)
+	inTopK                       = envcfg.Int("AIVORY_TOOLS_IN_TOP_K", defaultWebSearchResults)
+	searxngDefaultTopK           = envcfg.Int("AIVORY_TOOLS_IN_TOP_K", 5)
 	webFetchResponseBodyReadCap  = envcfg.Int64("AIVORY_TOOLS_WEB_FETCH_RESPONSE_BODY_READ_CAP", 256*1024)
 	webFetchExtractedTextCharCap = envcfg.Int("AIVORY_TOOLS_WEB_FETCH_EXTRACTED_TEXT_CHAR_CAP", 32000)
 	// § web_fetch Jina fallback: when the origin is directly unreachable from
@@ -109,14 +110,14 @@ type webSearchTool struct {
 
 func (t *webSearchTool) Name() string { return toolnames.AivoryWebSearch }
 func (t *webSearchTool) Description() string {
-	return "Search the public web for information or existing photos. Use query for one search or queries to batch searches sharing the same filters. Returns titled snippets with source URLs, not full page bodies, preserving image_url/thumbnail_url when supplied by the backend. When categories is available, use images for photos, portraits, places, products, or visual references; image-category results are displayed automatically in chat. Ordinary search keeps thumbnail metadata without automatically displaying a gallery; set show_images=true when visuals help the user's task. Adapt filters to the topic, freshness, and source-language needs; today's news benefits from news category and day time range. Leave unnecessary filters unset. For insufficient results refine keywords, optional filters, or page within the call budget; preserve explicit constraints and verify dates."
+	return "Search the public web for information or existing photos. Use query for one search or queries to batch searches sharing the same filters. Returns source URLs with snippets and, when supplied by the backend, cleaned page content and image_url/thumbnail_url. When categories is available, use images for photos, portraits, places, products, or visual references; image-category results are displayed automatically in chat. Ordinary search keeps thumbnail metadata without automatically displaying a gallery; set show_images=true when visuals help the user's task. Adapt available filters to the topic, freshness, and source-language needs; today's news benefits from news category and day time range when supported. Leave unnecessary filters unset. For insufficient results refine keywords, optional filters, or page within the call budget; preserve explicit constraints and verify dates."
 }
 func (t *webSearchTool) InputSchema() json.RawMessage {
 	searcher := t.resolvedSearcher()
 	properties := map[string]any{
 		"query":       map[string]any{"type": "string", "description": "One search query. Use either query or queries. Use precise keywords and, where supported by the engine, site:, quoted phrases, exclusions, or filetype: to match the user's requested sources."},
 		"queries":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 5, "description": "Up to 5 independent search queries sharing the same optional filters. Use separate calls when source languages, categories, or date requirements differ."},
-		"top_k":       map[string]any{"type": "integer", "minimum": 1, "maximum": 10, "description": "Maximum results per query, default 5."},
+		"top_k":       map[string]any{"type": "integer", "minimum": 1, "maximum": 10, "description": "Maximum results per query, default 10."},
 		"show_images": map[string]any{"type": "boolean", "description": "Display returned images/thumbnails as a chat gallery when useful. Defaults to true for categories containing images, false for ordinary searches. Image metadata is retained regardless; this does not fetch extra pages or create an image search on unsupported backends."},
 	}
 	if configurable, ok := searcher.(searcherWithOptions); ok {
@@ -124,9 +125,16 @@ func (t *webSearchTool) InputSchema() json.RawMessage {
 			properties[name] = property
 		}
 	}
-	if searxng, ok := searcher.(*searxngSearcher); ok && searxng.resultCount > 0 {
-		// The administrator owns this value. Accept old callers' top_k at
-		// execution time, but do not invite the model to override the setting.
+	if searxng, ok := searcher.(*searxngSearcher); ok {
+		if searxng.resultCount > 0 {
+			// The administrator owns this value. Accept old callers' top_k at
+			// execution time, but do not invite the model to override the setting.
+			delete(properties, "top_k")
+		} else {
+			properties["top_k"].(map[string]any)["description"] = "Maximum results per query, default 5."
+		}
+	}
+	if _, ok := searcher.(*anySearchSearcher); ok {
 		delete(properties, "top_k")
 	}
 	schema, _ := json.Marshal(map[string]any{"type": "object", "properties": properties})
@@ -171,6 +179,12 @@ func (t *webSearchTool) Execute(ctx context.Context, input []byte, _ *llm.ToolCo
 	} else {
 		if in.TopK <= 0 {
 			in.TopK = inTopK
+			if _, ok := t.searcher.(*searxngSearcher); ok {
+				in.TopK = searxngDefaultTopK
+			}
+			if _, ok := t.searcher.(*anySearchSearcher); ok {
+				in.TopK = defaultWebSearchResults
+			}
 		}
 		if in.TopK > 10 {
 			return "", nil, &llm.ToolUserError{Message: "top_k must not exceed 10"}
@@ -228,9 +242,8 @@ type webSearchBatchResult struct {
 
 func (t *webSearchTool) searchBatch(ctx context.Context, queries []string, topK int, options webSearchOptions) (string, []llm.Citation, error) {
 	type searchResult struct {
-		text      string
-		citations []llm.Citation
-		err       error
+		data webSearchResults
+		err  error
 	}
 	results := make([]searchResult, len(queries))
 	runBoundedBatch(ctx, len(queries), func(index int) {
@@ -239,8 +252,8 @@ func (t *webSearchTool) searchBatch(ctx context.Context, queries []string, topK 
 				results[index].err = fmt.Errorf("batch search panicked: %v", recovered)
 			}
 		}()
-		text, citations, err := t.searchOne(ctx, queries[index], topK, options)
-		results[index] = searchResult{text: text, citations: citations, err: err}
+		data, err := searchWithResults(ctx, t.searcher, queries[index], topK, options)
+		results[index] = searchResult{data: data, err: err}
 	})
 
 	items := make([]webSearchBatchItem, len(queries))
@@ -263,7 +276,8 @@ func (t *webSearchTool) searchBatch(ctx context.Context, queries []string, topK 
 		successes++
 		item.Status = "success"
 		var content strings.Builder
-		for _, citation := range result.citations {
+		for _, entry := range result.data.items {
+			citation := entry.citation
 			key := canonicalBatchURL(citation.URL)
 			if imageURL := citation.ImageURL; imageURL != "" {
 				key += "|image:" + canonicalBatchURL(imageURL)
@@ -279,15 +293,12 @@ func (t *webSearchTool) searchBatch(ctx context.Context, queries []string, topK 
 				citationIndexes[key] = citationIndex
 			}
 			item.CitationIndexes = append(item.CitationIndexes, citationIndex)
-			fmt.Fprintf(&content, "[%d] %s\n%s\n%s\n", citationIndex, citation.Title, citation.URL, citation.Snippet)
-			writeSearchImageURLs(&content, citation.ImageURL, citation.ThumbnailURL)
-			content.WriteString("\n")
+			writeWebSearchResult(&content, citationIndex, entry)
 		}
-		if content.Len() > 0 {
-			item.Content = strings.TrimSpace(content.String())
-		} else {
-			item.Content = strings.TrimSpace(result.text)
+		if result.data.notice != "" {
+			content.WriteString(result.data.notice)
 		}
+		item.Content = strings.TrimSpace(content.String())
 		items[index] = item
 	}
 	if successes == 0 {

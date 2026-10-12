@@ -178,14 +178,14 @@ func TestSearchEngineSettingNormalizesAndRejectsUnsafeNames(t *testing.T) {
 		return rec
 	}
 
-	if rec := patch(`{"search_engines":" Bing, ddg bing wikipedia "}`); rec.Code != http.StatusOK {
+	if rec := patch(`{"search_engines":" Bing, ddg, google cse, google news, bing, wikipedia "}`); rec.Code != http.StatusOK {
 		t.Fatalf("valid engine selection status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var stored string
 	if err := db.QueryRow(`SELECT value FROM settings WHERE key=?`, "search_engines").Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored != `"bing,ddg,wikipedia"` {
+	if stored != `"bing,ddg,google cse,google news,wikipedia"` {
 		t.Fatalf("normalized search_engines = %q", stored)
 	}
 
@@ -195,7 +195,7 @@ func TestSearchEngineSettingNormalizesAndRejectsUnsafeNames(t *testing.T) {
 	if err := db.QueryRow(`SELECT value FROM settings WHERE key=?`, "search_engines").Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored != `"bing,ddg,wikipedia"` {
+	if stored != `"bing,ddg,google cse,google news,wikipedia"` {
 		t.Fatalf("invalid patch changed search_engines to %q", stored)
 	}
 }

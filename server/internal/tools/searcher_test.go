@@ -14,8 +14,7 @@ import (
 )
 
 func TestCleanSnippet(t *testing.T) {
-	// A JS-heavy page's nav boilerplate arrives as a multi-line wall — collapse
-	// the whitespace and cap the length so the model gets a tight one-liner.
+	// Collapse whitespace without losing any of the search provider's text.
 	navDump := "News\nToday's news US Politics World\n\nWeather   Climate change\tScience"
 	got := cleanSnippet(navDump)
 	if strings.Contains(got, "\n") || strings.Contains(got, "  ") {
@@ -25,12 +24,8 @@ func TestCleanSnippet(t *testing.T) {
 		t.Fatalf("unexpected collapse: %q", got)
 	}
 	long := strings.Repeat("字", 500)
-	capped := cleanSnippet(long)
-	if r := []rune(capped); len(r) > 321 { // 320 + the ellipsis
-		t.Fatalf("snippet not capped: %d runes", len(r))
-	}
-	if !strings.HasSuffix(capped, "…") {
-		t.Fatalf("capped snippet should end with an ellipsis: %q", capped[len(capped)-6:])
+	if got := cleanSnippet(long); got != long {
+		t.Fatalf("snippet was truncated: %d runes", len([]rune(got)))
 	}
 }
 
@@ -45,8 +40,8 @@ func TestFormatUnresponsiveEngines(t *testing.T) {
 }
 
 func TestParseSearchEngines(t *testing.T) {
-	got := parseSearchEngines(" Bing, ddg bing\twikipedia ")
-	want := []string{"bing", "ddg", "wikipedia"}
+	got := parseSearchEngines(" Bing, ddg, google cse, google news, bing, wikipedia ")
+	want := []string{"bing", "ddg", "google cse", "google news", "wikipedia"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("parseSearchEngines = %#v, want %#v", got, want)
 	}
@@ -64,12 +59,12 @@ func TestSearxngSearchUsesSelectedEngines(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := &searxngSearcher{baseURL: srv.URL, engines: []string{"bing", "wikipedia"}}
+	s := &searxngSearcher{baseURL: srv.URL, engines: parseSearchEngines("bing, google cse, wikipedia")}
 	if _, _, err := s.Search(context.Background(), "anything", 5); err != nil {
 		t.Fatalf("Search returned error: %v", err)
 	}
-	if received != "bing,wikipedia" {
-		t.Fatalf("engines query = %q, want %q", received, "bing,wikipedia")
+	if received != "bing,google cse,wikipedia" {
+		t.Fatalf("engines query = %q, want %q", received, "bing,google cse,wikipedia")
 	}
 }
 
@@ -262,6 +257,9 @@ func TestTavilySearchParsesResults(t *testing.T) {
 	}
 	if payload["max_results"] != float64(5) {
 		t.Fatalf("max_results = %v, want 5", payload["max_results"])
+	}
+	if payload["include_raw_content"] != "markdown" {
+		t.Fatalf("Tavily raw content was not requested: %v", payload["include_raw_content"])
 	}
 	if len(citations) != 2 {
 		t.Fatalf("citations = %d, want 2", len(citations))
