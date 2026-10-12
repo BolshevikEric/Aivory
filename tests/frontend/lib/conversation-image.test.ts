@@ -1,22 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { conversationImageSlices } from '@/lib/conversation-image'
+import { conversationImageDimensions } from '@/lib/conversation-image'
 
-describe('conversation image pagination', () => {
-  it('keeps normal messages together and covers the complete transcript in order', () => {
-    const pages = conversationImageSlices([{ top: 0, height: 70 }, { top: 80, height: 70 }, { top: 160, height: 40 }], 200, 100)
-    expect(pages).toEqual([{ top: 0, height: 80 }, { top: 80, height: 80 }, { top: 160, height: 40 }])
-    expect(pages.reduce((height, page) => height + page.height, 0)).toBe(200)
+describe('single conversation image dimensions', () => {
+  it('exports short conversations at double resolution', () => {
+    expect(conversationImageDimensions(500.5)).toEqual({ width: 760, height: 501, pixelRatio: 2 })
   })
-  it('splits a very long reply without dropping content or producing an oversized canvas', () => {
-    const pages = conversationImageSlices([{ top: 0, height: 230 }], 230, 100)
-    expect(pages).toEqual([{ top: 0, height: 100 }, { top: 100, height: 100 }, { top: 200, height: 30 }])
+  it('keeps the full height of long conversations while bounding canvas memory', () => {
+    for (const height of [6000, 10000, 16384]) {
+      const dimensions = conversationImageDimensions(height)
+      expect(dimensions.height).toBe(height)
+      expect(dimensions.pixelRatio).toBeGreaterThanOrEqual(1)
+      expect(dimensions.height * dimensions.pixelRatio).toBeLessThanOrEqual(16384)
+      expect(dimensions.width * dimensions.height * dimensions.pixelRatio ** 2).toBeLessThanOrEqual(16_000_001)
+    }
   })
-  it('handles an exact page boundary, small rounding offsets and empty transcripts', () => {
-    expect(conversationImageSlices([{ top: 0, height: 100 }, { top: 100, height: 100 }], 200, 100)).toEqual([{ top: 0, height: 100 }, { top: 100, height: 100 }])
-    expect(conversationImageSlices([{ top: 0, height: 10.5 }], 11, 100)).toEqual([{ top: 0, height: 11 }])
-    expect(conversationImageSlices([], 0)).toEqual([])
+  it('rejects excessive height instead of silently cropping or making multiple images', () => {
+    expect(() => conversationImageDimensions(16384.1)).toThrow('image selection too large')
   })
-  it('rejects invalid dimensions instead of looping indefinitely', () => {
-    for (const [total, limit] of [[100, 0], [100, -1], [Infinity, 100], [NaN, 100], [-1, 100]]) expect(() => conversationImageSlices([], total, limit)).toThrow(RangeError)
+  it('rejects invalid dimensions', () => {
+    for (const height of [0, -1, Infinity, NaN]) expect(() => conversationImageDimensions(height)).toThrow(RangeError)
   })
 })

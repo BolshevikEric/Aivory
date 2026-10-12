@@ -1336,17 +1336,13 @@
     "generate": "生成图片",
     "generating": "正在生成图片…",
     "previewTitle": "分享为图片",
-    "previewHint": "预览带有 Aivory 标识的图片，确认后保存。",
+    "previewHint": "预览选中消息生成的一张完整图片，长对话将显示为长图。",
     "previewAlt": "带有 Aivory 标识的选中对话消息",
     "reselect": "重新选择",
     "save": "保存图片",
-    "savePage": "保存当前图片",
-    "previous": "上一张图片",
-    "next": "下一张图片",
-    "page": "{{page}} / {{total}}",
     "interactive": "请在原对话中查看此交互内容。",
     "failed": "图片生成失败，已保留选择，请重试。",
     "loadFailed": "未能加载全部消息，请重试。",
-    "tooLarge": "选中的内容较长，请分批生成图片。"
+    "tooLarge": "选中的内容超出单张长图的尺寸上限，请减少选择的消息。"
   }
 }

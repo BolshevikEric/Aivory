@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Download, Image, X } from 'lucide-react'
+import { Download, Image, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -25,9 +25,8 @@ export function ImageShareToolbar({ count, busy, error, onSelectAll, onClear, on
 
 export function ConversationImagePreviewDialog({ pages, onClose, onBack }: { pages: ConversationImagePreview[]; onClose: () => void; onBack: () => void }) {
   const { t } = useTranslation('chat')
-  const [page, setPage] = useState(0)
   const [saving, setSaving] = useState(false)
-  const current = pages[Math.min(page, pages.length - 1)]
+  const current = pages[0]
   async function save() {
     if (!current || saving) return
     setSaving(true)
@@ -43,13 +42,8 @@ export function ConversationImagePreviewDialog({ pages, onClose, onBack }: { pag
         {current && <img src={current.url} alt={t('shareImage.previewAlt')} className="mx-auto block h-auto w-full max-w-[760px] rounded-lg" />}
       </DialogBody>
       <DialogFooter className="flex-wrap border-0">
-        {pages.length > 1 && <div className="mr-auto flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" disabled={page === 0} aria-label={t('shareImage.previous')} onClick={() => setPage(current => current - 1)}><ChevronLeft size={16} /></Button>
-          <span className="text-xs tabular-nums text-[var(--color-fg-muted)]">{t('shareImage.page', { page: page + 1, total: pages.length })}</span>
-          <Button variant="ghost" size="icon-sm" disabled={page >= pages.length - 1} aria-label={t('shareImage.next')} onClick={() => setPage(current => current + 1)}><ChevronRight size={16} /></Button>
-        </div>}
         <Button variant="ghost" size="sm" onClick={onBack}>{t('shareImage.reselect')}</Button>
-        <Button size="sm" loading={saving} leadingIcon={<Download size={14} />} onClick={() => void save()}>{t(pages.length > 1 ? 'shareImage.savePage' : 'shareImage.save')}</Button>
+        <Button size="sm" loading={saving} leadingIcon={<Download size={14} />} onClick={() => void save()}>{t('shareImage.save')}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

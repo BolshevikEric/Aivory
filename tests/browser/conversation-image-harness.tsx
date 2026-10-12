@@ -34,7 +34,7 @@ Reflect.set(window, '__IMAGE_SHARE__', {
   setLanguage: (language: string) => i18n.changeLanguage(language),
   setTheme: (theme: string) => { document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', theme === 'dark') },
   changeAccount: () => { useAuth.setState({ user: { id: 'other-user', role: 'admin' } as never }); useConversations.setState({ accountId: 'other-user', conversations: [] }) },
-  addLongMessage: () => useConversations.setState({ conversations: [{ ...fixture, messages: [...fixture.messages, message('long-answer', 'assistant', Array.from({ length: 180 }, (_, index) => `${index + 1}. A long paragraph for checking complete multi-page export without an oversized canvas.`).join('\n\n'))] }] }),
+  addLongMessage: () => useConversations.setState({ conversations: [{ ...fixture, messages: [...fixture.messages, message('long-answer', 'assistant', Array.from({ length: 180 }, (_, index) => `${index + 1}. A long paragraph for checking a complete single-image export without losing the end of the reply.${index === 179 ? ' FINAL PARAGRAPH' : ''}`).join('\n\n'))] }] }),
   failNextCapture: () => {
     const original = HTMLCanvasElement.prototype.toBlob
     HTMLCanvasElement.prototype.toBlob = function (callback) { HTMLCanvasElement.prototype.toBlob = original; callback(null) }

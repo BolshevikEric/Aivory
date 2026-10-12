@@ -131,7 +131,7 @@ export function useConversationImageShare(conversation: Conversation | undefined
       const images = await createConversationImages({
         title: conversation.title || t('share.untitled'), messages: sources, assertActive,
         signal: controller.signal,
-        interactiveLabel: t('shareImage.interactive'), pageLabel: (page, total) => t('shareImage.page', { page, total }),
+        interactiveLabel: t('shareImage.interactive'),
       })
       assertActive()
       previews.current.forEach(page => URL.revokeObjectURL(page.url))

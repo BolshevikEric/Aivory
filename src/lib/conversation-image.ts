@@ -3,27 +3,22 @@ import wordmarkSource from '@/assets/brand/aivory-wordmark.svg?raw'
 import '@/styles/conversation-image.css'
 
 const IMAGE_WIDTH = 760
-const PAGE_BODY_HEIGHT = 5000
-const MAX_PAGES = 40
+const MAX_IMAGE_EDGE = 16384
+const MAX_IMAGE_PIXELS = 16_000_000
 
 export interface ConversationImageSource { id: string; node: HTMLElement }
 export interface ConversationImagePage { blob: Blob; filename: string }
 
-/** Keep ordinary messages together; only split a message when it exceeds a page. */
-export function conversationImageSlices(rows: { top: number; height: number }[], total: number, limit = PAGE_BODY_HEIGHT): { top: number; height: number }[] {
-  if (!Number.isFinite(total) || total < 0 || !Number.isFinite(limit) || limit <= 0) throw new RangeError('invalid image size')
-  const pages: { top: number; height: number }[] = []
-  let top = 0
-  while (top < total) {
-    let end = Math.min(top + limit, total)
-    if (end < total) {
-      const crossing = rows.find(row => row.top < end && row.top + row.height > end)
-      if (crossing && crossing.top > top && crossing.height <= limit) end = crossing.top
-    }
-    pages.push({ top, height: end - top })
-    top = end
+/** Keep a single complete image readable while bounding canvas memory on mobile. */
+export function conversationImageDimensions(height: number): { width: number; height: number; pixelRatio: number } {
+  if (!Number.isFinite(height) || height <= 0) throw new RangeError('invalid image size')
+  const roundedHeight = Math.ceil(height)
+  if (roundedHeight > MAX_IMAGE_EDGE) throw new Error('image selection too large')
+  return {
+    width: IMAGE_WIDTH,
+    height: roundedHeight,
+    pixelRatio: Math.min(2, MAX_IMAGE_EDGE / roundedHeight, Math.sqrt(MAX_IMAGE_PIXELS / (IMAGE_WIDTH * roundedHeight))),
   }
-  return pages
 }
 
 function element(tag: string, className: string, text?: string): HTMLElement {
@@ -107,7 +102,6 @@ export async function createConversationImages(input: {
   title: string
   messages: ConversationImageSource[]
   interactiveLabel: string
-  pageLabel: (page: number, total: number) => string
   assertActive: () => void
   signal?: AbortSignal
 }): Promise<ConversationImagePage[]> {
@@ -141,28 +135,19 @@ export async function createConversationImages(input: {
   try {
     await withAbort(Promise.all(Array.from(root.querySelectorAll('img')).map(image => image.decode().catch(() => {}))), input.signal)
     input.assertActive()
-    const rows = Array.from(body.children).map(node => ({ top: (node as HTMLElement).offsetTop, height: (node as HTMLElement).offsetHeight }))
-    const slices = conversationImageSlices(rows, Math.ceil(body.getBoundingClientRect().height))
-    if (!slices.length || slices.length > MAX_PAGES) throw new Error('image selection too large')
+    const dimensions = conversationImageDimensions(root.getBoundingClientRect().height)
     const fetchRequestInit: RequestInit = { credentials: 'same-origin', referrerPolicy: 'no-referrer', signal: input.signal }
     const fontEmbedCSS = await withAbort(getFontEmbedCSS(root, { preferredFontFormat: 'woff2', fetchRequestInit }), input.signal)
-    const result: ConversationImagePage[] = []
-    for (const [index, slice] of slices.entries()) {
-      input.assertActive()
-      viewport.style.height = `${slice.height}px`
-      body.style.transform = `translateY(-${slice.top}px)`
-      footer.textContent = slices.length > 1 ? `Aivory · ${input.pageLabel(index + 1, slices.length)}` : 'Aivory'
-      const blob = await withAbort(toBlob(root, {
-        width: IMAGE_WIDTH, height: Math.ceil(root.getBoundingClientRect().height), pixelRatio: 2,
-        fontEmbedCSS, fetchRequestInit,
-        style: { position: 'relative', inset: 'auto', zIndex: 'auto' },
-      }), input.signal)
-      input.assertActive()
-      if (!blob || !blob.size) throw new Error('could not encode image')
-      const title = Array.from(input.title.replace(/[<>:"/\\|?*]/g, '').trim()).filter(char => char.codePointAt(0)! >= 32).slice(0, 80).join('') || 'Aivory'
-      result.push({ blob, filename: `${title}${slices.length > 1 ? `-${index + 1}` : ''}.png` })
-    }
-    return result
+    input.assertActive()
+    const blob = await withAbort(toBlob(root, {
+      ...dimensions, skipAutoScale: true,
+      fontEmbedCSS, fetchRequestInit,
+      style: { position: 'relative', inset: 'auto', zIndex: 'auto' },
+    }), input.signal)
+    input.assertActive()
+    if (!blob || !blob.size) throw new Error('could not encode image')
+    const title = Array.from(input.title.replace(/[<>:"/\\|?*]/g, '').trim()).filter(char => char.codePointAt(0)! >= 32).slice(0, 80).join('') || 'Aivory'
+    return [{ blob, filename: `${title}.png` }]
   } finally {
     input.signal?.removeEventListener('abort', onAbort)
     root.remove()

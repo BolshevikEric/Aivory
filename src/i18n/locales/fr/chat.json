@@ -1334,19 +1334,15 @@
     "clear": "Effacer",
     "selectMessage": "Sélectionner le message de {{role}}",
     "generate": "Créer l’image",
-    "generating": "Création des images…",
+    "generating": "Création de l’image…",
     "previewTitle": "Partager en image",
-    "previewHint": "Vérifiez votre image avec le logo Aivory, puis enregistrez-la.",
+    "previewHint": "Prévisualisez une seule image complète de vos messages sélectionnés. Les longues conversations produisent une image verticale.",
     "previewAlt": "Messages sélectionnés avec le logo Aivory",
     "reselect": "Modifier la sélection",
     "save": "Enregistrer l’image",
-    "savePage": "Enregistrer cette image",
-    "previous": "Image précédente",
-    "next": "Image suivante",
-    "page": "{{page}} / {{total}}",
     "interactive": "Consultez ce contenu interactif dans la conversation d’origine.",
     "failed": "Impossible de créer l’image. Votre sélection est conservée ; veuillez réessayer.",
     "loadFailed": "Impossible de charger tous les messages. Veuillez réessayer.",
-    "tooLarge": "Le contenu sélectionné est très long. Créez les images en plusieurs fois."
+    "tooLarge": "Le contenu sélectionné dépasse la taille maximale d’une image. Sélectionnez moins de messages."
   }
 }

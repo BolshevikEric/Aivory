@@ -137,14 +137,27 @@ try {
   await page.click('[data-image-share-row="long-answer"] > input')
   await (await item('Generate image', '[data-image-share-toolbar] button')).click()
   await page.waitForSelector('[data-image-share-preview] img')
-  await page.waitForFunction(() => /1 \/ [2-9]/.test(document.querySelector('[data-image-share-preview]')?.textContent || ''))
-  await page.click('[data-image-share-preview] button[aria-label="Next image"]')
-  await page.waitForFunction(() => /2 \/ [2-9]/.test(document.querySelector('[data-image-share-preview]')?.textContent || ''))
-  assert(await page.$eval('[data-image-share-preview] img', image => image.naturalWidth === 1520 && image.naturalHeight <= 11000), 'long reply pages must stay within canvas limits')
+  await page.waitForFunction(() => document.querySelector('[data-image-share-preview] img')?.naturalHeight > 11000)
+  assert.equal(await page.$$eval('[data-image-share-preview] img', nodes => nodes.length), 1, 'long replies must produce only one image')
+  assert.equal(await page.$$eval('[data-image-share-preview] button[aria-label="Next image"]', nodes => nodes.length), 0)
+  assert(await page.$eval('[data-image-share-preview] img', image => image.naturalWidth >= 760 && image.naturalHeight <= 16384), 'long image must stay readable within canvas limits')
+  assert.match(await page.evaluate(() => window.__IMAGE_EXPORT_TEXT__), /FINAL PARAGRAPH/, 'the final paragraph must be included')
+  const bottomContent = await page.$eval('[data-image-share-preview] img', image => {
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth; canvas.height = 500
+    const context = canvas.getContext('2d')
+    context.drawImage(image, 0, image.naturalHeight - 500, image.naturalWidth, 500, 0, 0, canvas.width, 500)
+    const pixels = context.getImageData(0, 0, canvas.width, 500).data
+    let content = 0
+    for (let i = 0; i < pixels.length; i += 4) if (Math.abs(pixels[i] - pixels[0]) + Math.abs(pixels[i + 1] - pixels[1]) + Math.abs(pixels[i + 2] - pixels[2]) > 45) content++
+    return content
+  })
+  assert(bottomContent > 1000, 'the bottom of the long PNG must contain rendered content')
+  await page.screenshot({ path: '/tmp/aivory-conversation-image/preview-long.png' })
   await page.evaluate(() => window.__IMAGE_SHARE__.changeAccount())
   await page.waitForFunction(() => !document.querySelector('[data-image-share-preview]') && !document.querySelector('[data-image-share-toolbar]'))
   assert.deepEqual(errors, [])
-  console.log('PASS: nested link/image menus, message selection/order/exclusion, failed encoding/retry, real PNG/logo/download, composer draft retention, charts/forms, multi-page long replies, mobile and 10 theme/language combinations, account isolation')
+  console.log('PASS: nested link/image menus, message selection/order/exclusion, failed encoding/retry, real PNG/logo/download, composer draft retention, charts/forms, complete single long image, mobile and 10 theme/language combinations, account isolation')
 } finally {
   await browser?.close()
   server.httpServer?.closeAllConnections()

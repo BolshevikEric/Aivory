@@ -1336,17 +1336,13 @@
     "generate": "產生圖片",
     "generating": "正在產生圖片…",
     "previewTitle": "分享為圖片",
-    "previewHint": "預覽帶有 Aivory 標誌的圖片，確認後儲存。",
+    "previewHint": "預覽已選訊息產生的一張完整圖片，長對話會顯示為長圖。",
     "previewAlt": "帶有 Aivory 標誌的已選對話訊息",
     "reselect": "重新選擇",
     "save": "儲存圖片",
-    "savePage": "儲存目前圖片",
-    "previous": "上一張圖片",
-    "next": "下一張圖片",
-    "page": "{{page}} / {{total}}",
     "interactive": "請在原對話中查看此互動內容。",
     "failed": "圖片產生失敗，已保留選擇，請重試。",
     "loadFailed": "無法載入全部訊息，請重試。",
-    "tooLarge": "選擇的內容較長，請分批產生圖片。"
+    "tooLarge": "所選內容超出單張長圖的尺寸上限，請減少選擇的訊息。"
   }
 }
