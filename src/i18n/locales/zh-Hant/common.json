@@ -1,5 +1,12 @@
 {
   "appName": "Aivory",
+  "startup": {
+    "loading": "載入中",
+    "slow": "載入時間較長",
+    "failed": "頁面載入失敗",
+    "reload": "重新載入",
+    "noScript": "請在瀏覽器中啟用 JavaScript 後繼續。"
+  },
   "desktopApp": "App 版",
   "downloadApp": "下載 App",
   "tagline": "一位剋制而細膩的 AI 夥伴",

@@ -1,5 +1,12 @@
 {
   "appName": "Aivory",
+  "startup": {
+    "loading": "Loading",
+    "slow": "Loading is taking longer than usual",
+    "failed": "Page failed to load",
+    "reload": "Reload",
+    "noScript": "Please enable JavaScript in your browser to continue."
+  },
   "desktopApp": "Desktop app",
   "downloadApp": "Download App",
   "tagline": "A thoughtful AI companion",

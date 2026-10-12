@@ -1,5 +1,12 @@
 {
   "appName": "Aivory",
+  "startup": {
+    "loading": "Chargement",
+    "slow": "Le chargement prend plus de temps que prévu",
+    "failed": "Le chargement de la page a échoué",
+    "reload": "Recharger",
+    "noScript": "Veuillez activer JavaScript dans votre navigateur pour continuer."
+  },
   "desktopApp": "Application",
   "downloadApp": "Télécharger l’app",
   "tagline": "Un compagnon IA réfléchi",

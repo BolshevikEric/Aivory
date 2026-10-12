@@ -1,8 +1,10 @@
-import { defineConfig } from 'vite'
+import { defineConfig, transformWithEsbuild } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import postcss, { type Container } from 'postcss'
+import { SUPPORTED_LANGUAGES } from './src/i18n/language'
 
 const require = createRequire(import.meta.url)
 const tailwindBrowserRuntime = readFileSync(require.resolve('@tailwindcss/browser'), 'utf8')
@@ -17,6 +19,41 @@ const appVersion = process.env.APP_VERSION || process.env.GIT_SHA || process.env
 // About must show a package version even when CI uses a commit SHA as its ID.
 const releaseVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
 
+async function startupAssets() {
+  // Inline only the tokens the startup screen needs, retaining their original
+  // selectors and media queries so the app and preboot cannot drift apart.
+  const properties = new Set([
+    '--accent-hue', '--color-bg', '--color-fg', '--color-fg-muted',
+    '--color-accent', '--color-accent-hover', '--color-accent-fg',
+    '--color-ring', '--font-sans', '--z-overlay', '--z-max',
+  ])
+  const tokens = postcss.parse(readFileSync(new URL('./src/styles/tokens.css', import.meta.url), 'utf8'))
+  function prune(container: Container) {
+    container.each((node) => {
+      if (node.type === 'decl') {
+        if (!properties.has(node.prop)) node.remove()
+      } else if ((node.type === 'rule' || node.type === 'atrule') && node.nodes) {
+        prune(node)
+        if (!node.nodes.length) node.remove()
+      } else node.remove()
+    })
+  }
+  prune(tokens)
+  const wordmark = readFileSync(new URL('./src/assets/brand/aivory-wordmark.svg', import.meta.url)).toString('base64')
+  const styles = tokens.toString() + `\n:root{--aivory-startup-wordmark:url("data:image/svg+xml;base64,${wordmark}")}\n` +
+    readFileSync(new URL('./src/styles/startup.css', import.meta.url), 'utf8')
+  const messages = Object.fromEntries(SUPPORTED_LANGUAGES.map(({ code }) => [code,
+    JSON.parse(readFileSync(new URL(`./src/i18n/locales/${code}/common.json`, import.meta.url), 'utf8')).startup,
+  ]))
+  const languages = await transformWithEsbuild(
+    readFileSync(new URL('./src/i18n/language.ts', import.meta.url), 'utf8'), 'language.ts',
+    { format: 'iife', globalName: 'aivoryLanguages', minify: true },
+  )
+  const script = `(function(){var startupMessages=${JSON.stringify(messages)};${languages.code}\n` +
+    readFileSync(new URL('./src/lib/startup-preboot.js', import.meta.url), 'utf8') + '\n})()'
+  return { styles, script: script.replace(/<\/script/gi, '<\\/script'), messages }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
@@ -25,6 +62,20 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    {
+      name: 'aivory-inline-startup',
+      transformIndexHtml: {
+        order: 'pre',
+        async handler(html, context) {
+          if (context.filename !== path.resolve(__dirname, 'index.html')) return html
+          const { styles, script, messages } = await startupAssets()
+          return html
+            .replace('/* aivory:startup-styles */', styles)
+            .replace('/* aivory:startup-script */', script)
+            .replace('<!-- aivory:noscript -->', `<p lang="zh">${messages.zh.noScript}</p><p lang="en">${messages.en.noScript}</p>`)
+        },
+      },
+    },
     {
       name: 'aivory-emit-version-json',
       apply: 'build',

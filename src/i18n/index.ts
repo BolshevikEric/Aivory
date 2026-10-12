@@ -87,32 +87,8 @@ import frWelcome from './locales/fr/welcome.json'
 import frLibrary from './locales/fr/library.json'
 import frPpt from './locales/fr/ppt.json'
 
-export const SUPPORTED_LANGUAGES = [
-  { code: 'en', label: 'English', short: 'EN' },
-  { code: 'zh', label: '简体中文', short: '简' },
-  { code: 'zh-Hant', label: '繁體中文', short: '繁' },
-  { code: 'ja', label: '日本語', short: '日' },
-  { code: 'fr', label: 'Français', short: 'FR' },
-] as const
-
-export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code']
-
-/**
- * Map any browser/persisted tag (zh-CN, zh_Hant_TW, en-US…) onto a supported
- * code, or null when unsupported. Shared with the language store so the
- * detector and the UI agree on the exact same normalization.
- */
-export function normalizeLanguage(code: unknown): LanguageCode | null {
-  if (typeof code !== 'string' || !code) return null
-  const codes = SUPPORTED_LANGUAGES.map((l) => l.code) as readonly string[]
-  if (codes.includes(code)) return code as LanguageCode
-  const lower = code.toLowerCase().replace('_', '-')
-  if (lower === 'zh-tw' || lower === 'zh-hk' || lower === 'zh-mo' || lower === 'zh-hant') return 'zh-Hant'
-  if (lower === 'zh-cn' || lower === 'zh-sg' || lower === 'zh-hans') return 'zh'
-  const base = lower.split('-')[0]
-  const found = codes.find((c) => c.toLowerCase().split('-')[0] === base)
-  return (found as LanguageCode) ?? null
-}
+import { SUPPORTED_LANGUAGES, normalizeLanguage } from './language'
+export { SUPPORTED_LANGUAGES, normalizeLanguage, type LanguageCode } from './language'
 
 export const DEFAULT_NS = 'common'
 export const NAMESPACES = ['common', 'nav', 'landing', 'chat', 'auth', 'settings', 'errors', 'projects', 'admin', 'kb', 'files', 'memory', 'subscription', 'welcome', 'library', 'ppt'] as const
