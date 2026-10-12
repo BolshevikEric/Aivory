@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compileFunctionExpression } from '@/lib/function-expression'
-import { functionBounds, functionPath, sampleFunction } from '@/lib/function-plot'
+import { functionBounds, functionNeedsSeparateScales, functionPath, sampleFunction } from '@/lib/function-plot'
 
 const sample = (expression: string, min: number, max: number, samples = 240) => sampleFunction(compileFunctionExpression(expression)!, 'x', min, max, samples, {})
 const pathFor = (expression: string, min: number, max: number, samples?: number) => {
@@ -9,6 +9,17 @@ const pathFor = (expression: string, min: number, max: number, samples?: number)
 }
 
 describe('function plot sampling', () => {
+  it('uses separate true scales when a polynomial would flatten a sine wave', () => {
+    const cubic = sample('x^3-3*x', -128, 128)
+    const sine = sample('sin(x)', -128, 128)
+    expect(functionNeedsSeparateScales([cubic, sine])).toBe(true)
+    expect(functionNeedsSeparateScales([sample('sin(x)', -5, 5), sample('cos(x)', -5, 5)])).toBe(false)
+    expect(functionNeedsSeparateScales([cubic, []])).toBe(false)
+    const bounds = functionBounds([sine])
+    expect(bounds.max - bounds.min).toBeLessThan(3)
+    expect(sine.some(point => point.y !== null && point.y > .9)).toBe(true)
+    expect(sine.some(point => point.y !== null && point.y < -.9)).toBe(true)
+  })
   it('plots a constant and a domain-limited function without invalid coordinates', () => {
     const constant = sample('3', -5, 5)
     const bounds = functionBounds([constant])

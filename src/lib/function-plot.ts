@@ -21,6 +21,14 @@ export function functionBounds(series: FunctionSample[][]): { min: number; max: 
   return { min: min - padding, max: max + padding }
 }
 
+export function functionNeedsSeparateScales(series: FunctionSample[][]): boolean {
+  const spans = series.filter(points => points.some(point => point.y !== null)).map(points => {
+    const bounds = functionBounds([points])
+    return bounds.max - bounds.min
+  })
+  return spans.length > 1 && Math.max(...spans) / Math.min(...spans) > 100
+}
+
 export function functionPath(samples: FunctionSample[], bounds: { min: number; max: number }, xScale: (x: number) => number, yScale: (y: number) => number): string {
   let connected = false
   let previous: FunctionSample | null = null

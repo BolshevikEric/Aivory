@@ -2,7 +2,7 @@ import { useDeferredValue, useId, useMemo, useRef, useState } from 'react'
 import { Eye, EyeOff, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { compileFunctionExpression, evaluateFunction } from '@/lib/function-expression'
-import { functionBounds, functionPath, sampleFunction } from '@/lib/function-plot'
+import { functionBounds, functionNeedsSeparateScales, functionPath, sampleFunction } from '@/lib/function-plot'
 import type { UIBlock } from '@/lib/generative-ui'
 import { NumericControl } from './generative-interactions'
 import { formatValue, usePlotWidth, visualizationPalette as palette, visualButton, visualFocus, visualInput } from './generative-shared'
@@ -19,6 +19,7 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
   const [domain, setDomain] = useState<{ min: string | number; max: string | number }>({ min: block.min, max: block.max })
   const [parameters, setParameters] = useState<Record<string, string | number>>(() => Object.fromEntries(block.controls.map(control => [control.id, control.value])))
   const [cursor, setCursor] = useState((block.min + block.max) / 2)
+  const [separateScales, setSeparateScales] = useState<boolean | null>(null)
   const { ref, width } = usePlotWidth()
   const plot = { left: width < 320 ? 44 : 54, right: width - 14, top: 18, bottom: 234 }
   const min = Number(domain.min), max = Number(domain.max)
@@ -28,11 +29,10 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
   const numericParameters = useMemo(() => Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, Number(value)])), [parameters])
   const compiled = useMemo(() => deferredFunctions.map(fn => ({ ...fn, compiled: compileFunctionExpression(fn.expression, block.variable, block.controls.map(control => control.id)) })), [block.controls, block.variable, deferredFunctions])
   const sampled = useMemo(() => compiled.map(fn => ({ ...fn, points: fn.visible && fn.compiled && validDomain && validParameters ? sampleFunction(fn.compiled, block.variable, min, max, block.samples, numericParameters) : [] })), [block.samples, block.variable, compiled, min, max, numericParameters, validDomain, validParameters])
-  const bounds = useMemo(() => functionBounds(sampled.map(fn => fn.points)), [sampled])
+  const separate = separateScales ?? functionNeedsSeparateScales(sampled.map(fn => fn.points))
+  const groups = separate ? sampled.filter(fn => fn.visible).map(fn => [fn]) : [sampled]
   const xScale = (x: number) => plot.left + (x - min) / (max - min) * (plot.right - plot.left)
-  const yScale = (y: number) => plot.bottom - (y - bounds.min) / (bounds.max - bounds.min) * (plot.bottom - plot.top)
   const cursorX = validDomain ? Math.max(min, Math.min(max, cursor)) : 0
-  const hasPoints = sampled.some(fn => fn.points.some(point => point.y !== null))
   const format = (value: number) => formatValue(value, i18n.language)
   const label = (fn: EditableFunction, index: number) => fn.label || `f${index + 1}`
 
@@ -42,6 +42,7 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
     setDomain({ min: block.min, max: block.max })
     setParameters(Object.fromEntries(block.controls.map(control => [control.id, control.value])))
     setCursor((block.min + block.max) / 2)
+    setSeparateScales(null)
   }
   const zoom = (factor: number) => {
     if (!validDomain) return
@@ -77,7 +78,18 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
       {block.controls.map(control => <NumericControl key={control.id} control={control} value={parameters[control.id]} onChange={value => setParameters(current => ({ ...current, [control.id]: value }))} />)}
     </div>
     {(!validDomain || !validParameters) && <p role="status" className="m-0 text-xs text-[var(--color-danger)]">{t('generative.rangeInvalid')}</p>}
+    {functions.filter(fn => fn.visible).length > 1 && <div role="group" aria-label={t('generative.functionScale')} className="flex flex-wrap items-center gap-1">
+      <button type="button" aria-pressed={!separate} className={`${visualButton} ${!separate ? 'bg-[var(--color-bg-muted)]' : ''}`} onClick={() => setSeparateScales(false)}>{t('generative.sharedScale')}</button>
+      <button type="button" aria-pressed={separate} className={`${visualButton} ${separate ? 'bg-[var(--color-bg-muted)]' : ''}`} onClick={() => setSeparateScales(true)}>{t('generative.separateScales')}</button>
+    </div>}
     <div ref={ref} className="gui-function-plot">
+      {groups.map((group, groupIndex) => {
+        const bounds = functionBounds(group.map(fn => fn.points))
+        const hasPoints = group.some(fn => fn.points.some(point => point.y !== null))
+        const yScale = (y: number) => plot.bottom - (y - bounds.min) / (bounds.max - bounds.min) * (plot.bottom - plot.top)
+        const clipID = `${id}-clip-${groupIndex}`
+        return <div key={separate ? group[0].id : 'shared'} data-function-scale={separate ? 'separate' : 'shared'}>
+        {separate && <p className="mb-1 mt-3 break-words text-xs font-medium" style={{ color: palette[sampled.indexOf(group[0]) % palette.length] }}>{label(group[0], sampled.indexOf(group[0]))}({block.variable}) = {group[0].expression}</p>}
       <div role="group" aria-label={block.title || t('generative.functionPlot')} aria-describedby={`${id}-help ${id}-values`} tabIndex={0} className={`rounded-lg ${visualFocus}`} onKeyDown={event => {
         if (!validDomain || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
         event.preventDefault()
@@ -89,7 +101,7 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
           const pointX = (event.clientX - rect.left) * width / rect.width
           setCursor(min + Math.max(0, Math.min(1, (pointX - plot.left) / (plot.right - plot.left))) * (max - min))
         }}>
-          <defs><clipPath id={`${id}-clip`}><rect x={plot.left} y={plot.top} width={plot.right - plot.left} height={plot.bottom - plot.top} /></clipPath></defs>
+          <defs><clipPath id={clipID}><rect x={plot.left} y={plot.top} width={plot.right - plot.left} height={plot.bottom - plot.top} /></clipPath></defs>
           {[0, .25, .5, .75, 1].map(step => <g key={step}>
             <line x1={plot.left} x2={plot.right} y1={plot.top + step * (plot.bottom - plot.top)} y2={plot.top + step * (plot.bottom - plot.top)} stroke="var(--color-divider)" strokeDasharray="3 6" />
             {[0, .5, 1].includes(step) && <text x={plot.left - 6} y={plot.top + 4 + step * (plot.bottom - plot.top)} textAnchor="end" fill="var(--color-fg-muted)" fontSize="11">{new Intl.NumberFormat(i18n.language, { notation: 'compact', maximumFractionDigits: 2 }).format(bounds.max - step * (bounds.max - bounds.min))}</text>}
@@ -97,8 +109,11 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
           {validDomain && <>
             {min <= 0 && max >= 0 && <line x1={xScale(0)} x2={xScale(0)} y1={plot.top} y2={plot.bottom} stroke="var(--color-fg-muted)" opacity=".5" />}
             {bounds.min <= 0 && bounds.max >= 0 && <line x1={plot.left} x2={plot.right} y1={yScale(0)} y2={yScale(0)} stroke="var(--color-fg-muted)" opacity=".5" />}
-            <g clipPath={`url(#${id}-clip)`}>
-              {sampled.map((fn, index) => <path key={fn.id} data-function-path d={functionPath(fn.points, bounds, xScale, yScale)} fill="none" stroke={palette[index % palette.length]} strokeWidth="2.5" strokeLinejoin="round" strokeDasharray={index ? `${6 + index * 2} 3` : undefined} />)}
+            <g clipPath={`url(#${clipID})`}>
+              {group.map(fn => {
+                const index = sampled.indexOf(fn)
+                return <path key={fn.id} data-function-path d={functionPath(fn.points, bounds, xScale, yScale)} fill="none" stroke={palette[index % palette.length]} strokeWidth="2.5" strokeLinejoin="round" strokeDasharray={!separate && index ? `${6 + index * 2} 3` : undefined} />
+              })}
               {hasPoints && <line x1={xScale(cursorX)} x2={xScale(cursorX)} y1={plot.top} y2={plot.bottom} stroke="var(--color-fg-subtle)" strokeDasharray="2 5" />}
             </g>
             {[0, .5, 1].map(step => <text key={step} x={plot.left + step * (plot.right - plot.left)} y="254" textAnchor={step === 0 ? 'start' : step === 1 ? 'end' : 'middle'} fill="var(--color-fg-muted)" fontSize="11">{format(min + step * (max - min))}</text>)}
@@ -106,6 +121,8 @@ export function FunctionPlot({ block }: { block: FunctionBlock }) {
           {!hasPoints && <text x={width / 2} y="130" textAnchor="middle" fill="var(--color-fg-muted)" fontSize="12">{t('generative.noFunctionValues')}</text>}
         </svg>
       </div>
+      </div>
+      })}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-1"><button type="button" disabled={!validDomain} aria-label={t('generative.zoomIn')} className={visualButton} onClick={() => zoom(.5)}><ZoomIn aria-hidden size={15} /></button><button type="button" disabled={!validDomain} aria-label={t('generative.zoomOut')} className={visualButton} onClick={() => zoom(2)}><ZoomOut aria-hidden size={15} /></button></div>
