@@ -100,18 +100,17 @@ export default function AdminSystemStorage() {
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-6 flex max-w-3xl flex-col gap-8">
+        <section className="admin-form-layout mt-6 flex w-full min-w-0 flex-col gap-8">
           <SettingsSection
             title={t('admin:settings.fields.storageSection')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="flex flex-col gap-5">
+              <div className="admin-form-grid">
                 <Field
                   label={t('admin:settings.fields.storageProvider')}
                   htmlFor="storage-provider"
-                  className="sm:max-w-sm"
                 >
                   <Select
                     value={storageProvider || 'none'}
@@ -163,7 +162,7 @@ export default function AdminSystemStorage() {
                 )}
 
                 {storageProvider === 's3' && (
-                  <div className="flex min-w-0 flex-col gap-6">
+                  <div className="admin-form-grid admin-form-wide">
                     <Field label={t('admin:settings.fields.s3Bucket')} htmlFor="s3-bucket">
                       <Input
                         id="s3-bucket"
@@ -171,29 +170,27 @@ export default function AdminSystemStorage() {
                         onChange={(e) => setDraft({ ...draft, storage_s3_bucket: e.target.value })}
                       />
                     </Field>
-                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-                      <Field label={t('admin:settings.fields.s3Region')} htmlFor="s3-region">
-                        <Input
-                          id="s3-region"
-                          placeholder="us-east-1"
-                          value={readString('storage_s3_region')}
-                          onChange={(e) => setDraft({ ...draft, storage_s3_region: e.target.value })}
-                        />
-                      </Field>
-                      <Field
-                        label={t('admin:settings.fields.s3Endpoint')}
-                        htmlFor="s3-endpoint"
-                        hint={t('admin:settings.fields.s3EndpointHint')}
-                      >
-                        <Input
-                          id="s3-endpoint"
-                          placeholder="https://s3.amazonaws.com"
-                          value={readString('storage_s3_endpoint')}
-                          onChange={(e) => setDraft({ ...draft, storage_s3_endpoint: e.target.value })}
-                        />
-                      </Field>
-                    </div>
-                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                    <Field label={t('admin:settings.fields.s3Region')} htmlFor="s3-region">
+                      <Input
+                        id="s3-region"
+                        placeholder="us-east-1"
+                        value={readString('storage_s3_region')}
+                        onChange={(e) => setDraft({ ...draft, storage_s3_region: e.target.value })}
+                      />
+                    </Field>
+                    <Field
+                      label={t('admin:settings.fields.s3Endpoint')}
+                      htmlFor="s3-endpoint"
+                      hint={t('admin:settings.fields.s3EndpointHint')}
+                    >
+                      <Input
+                        id="s3-endpoint"
+                        placeholder="https://s3.amazonaws.com"
+                        value={readString('storage_s3_endpoint')}
+                        onChange={(e) => setDraft({ ...draft, storage_s3_endpoint: e.target.value })}
+                      />
+                    </Field>
+                    <div className="admin-form-grid admin-form-grid--pair admin-form-wide">
                       <Field label={t('admin:settings.fields.s3AccessKey')} htmlFor="s3-ak">
                         <Input
                           id="s3-ak"
@@ -217,7 +214,7 @@ export default function AdminSystemStorage() {
                 )}
 
                 {storageProvider === 'aliyun_oss' && (
-                  <div className="flex min-w-0 flex-col gap-6">
+                  <div className="admin-form-grid admin-form-grid--pair admin-form-wide">
                     <Field label={t('admin:settings.fields.ossBucket')} htmlFor="oss-bucket">
                       <Input
                         id="oss-bucket"
@@ -236,7 +233,7 @@ export default function AdminSystemStorage() {
                         onChange={(e) => setDraft({ ...draft, storage_aliyun_endpoint: e.target.value })}
                       />
                     </Field>
-                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                    <div className="admin-form-grid admin-form-grid--pair admin-form-wide">
                       <Field label={t('admin:settings.fields.ossAccessKeyId')} htmlFor="oss-akid">
                         <Input
                           id="oss-akid"
@@ -268,12 +265,11 @@ export default function AdminSystemStorage() {
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
+              <div className="admin-form-grid">
                 <Field
                   label={t('admin:settings.fields.uploadAllowedExt')}
                   htmlFor="upload-ext"
                   hint={t('admin:settings.fields.uploadAllowedExtHint')}
-                  className="sm:col-span-2"
                 >
                   <Input
                     id="upload-ext"

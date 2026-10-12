@@ -1,6 +1,7 @@
 @import './tokens.css';
 @import './startup.css';
 @import './admin-table.css';
+@import './admin-forms.css';
 @import './product-surfaces.css';
 @import './viewport-surfaces.css';
 @import 'tailwindcss';

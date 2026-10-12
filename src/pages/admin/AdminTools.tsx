@@ -251,7 +251,7 @@ export default function AdminTools() {
           </Button>
         </div>
       ) : (
-        <section className="mt-6 flex max-w-3xl flex-col gap-8" aria-busy={saving || Boolean(togglingMCPID)}>
+        <section className="admin-form-layout mt-6 flex w-full min-w-0 flex-col gap-8" aria-busy={saving || Boolean(togglingMCPID)}>
           <SettingsSection
             title={t('admin:tools.availabilityTitle', { defaultValue: 'Global tool availability' })}
             className="mb-0"
@@ -368,11 +368,10 @@ export default function AdminTools() {
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="flex flex-col gap-6">
+              <div className={`admin-form-grid${searchProvider === 'searxng' ? '' : ' admin-form-grid--pair'}`}>
                 <Field
                   label={t('admin:settings.fields.searchProvider')}
                   htmlFor="search-provider"
-                  className="sm:max-w-sm"
                 >
                   <Select
                     value={searchProvider || 'none'}
@@ -397,11 +396,10 @@ export default function AdminTools() {
                 </Field>
 
                 {searchProvider === 'searxng' && (
-                  <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                  <>
                     <Field
                       label={t('admin:settings.fields.searchBaseUrl')}
                       htmlFor="search-url"
-                      className="sm:col-span-2"
                     >
                       <Input
                         id="search-url"
@@ -445,7 +443,7 @@ export default function AdminTools() {
                         })}
                       />
                     </Field>
-                  </div>
+                  </>
                 )}
 
                 {['serper', 'brave', 'tavily', 'anysearch'].includes(searchProvider) && (
@@ -485,7 +483,7 @@ export default function AdminTools() {
                   <span>{t('admin:settings.fields.sandboxMissing')}</span>
                 </p>
               ) : null}
-              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
+              <div className="admin-form-grid admin-form-grid--pair">
                 <Field
                   label={t('admin:settings.fields.sandboxUrl')}
                   htmlFor="sandbox-url"

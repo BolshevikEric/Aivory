@@ -1,0 +1,36 @@
+.admin-form-layout {
+  container: admin-form / inline-size;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  min-width: 0;
+}
+
+.admin-form-grid > * {
+  min-width: 0;
+}
+
+.admin-form-wide {
+  grid-column: 1 / -1;
+}
+
+/* Use the available content width, including the space taken by the sidebar. */
+@container admin-form (min-width: 40rem) {
+  .admin-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container admin-form (min-width: 64rem) {
+  .admin-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-form-grid--pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

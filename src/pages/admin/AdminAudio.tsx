@@ -100,7 +100,7 @@ export default function AdminAudio() {
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-6 flex max-w-3xl flex-col gap-8">
+        <section className="admin-form-layout mt-6 flex w-full min-w-0 flex-col gap-8">
           {/* Provider selector -------------------------------------------- */}
           <SettingsSection
             className="mb-0"
@@ -131,7 +131,7 @@ export default function AdminAudio() {
               className="mb-0"
               bodyClassName="divide-y-0"
             >
-              <SettingsBlock className="flex flex-col gap-5">
+              <SettingsBlock className="admin-form-grid">
                 <Field label={t('admin:audio.fields.model')} htmlFor="a-model">
                   <Input
                     id="a-model"
@@ -168,7 +168,7 @@ export default function AdminAudio() {
               className="mb-0"
               bodyClassName="divide-y-0"
             >
-              <SettingsBlock className="flex flex-col gap-5">
+              <SettingsBlock className="admin-form-grid">
                 <Field label={t('admin:audio.volcano.appId')} htmlFor="v-app" hint={t('admin:audio.volcano.appIdHint')}>
                   <Input
                     id="v-app"
@@ -221,7 +221,7 @@ export default function AdminAudio() {
                   />
                 </Field>
 
-                <div className="mt-1 flex flex-col gap-3 pt-4">
+                <div className="admin-form-wide mt-1 flex flex-col gap-3 pt-4">
                   {(
                     [
                       ['volcano_asr_enable_punc', 'punc'],

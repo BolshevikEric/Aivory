@@ -167,7 +167,7 @@ export default function AdminDocuments() {
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-6 flex max-w-3xl flex-col gap-8">
+        <section className="admin-form-layout mt-6 flex w-full min-w-0 flex-col gap-8">
           {/* Embedding model ------------------------------------------------- */}
           <SettingsSection
             title={t('admin:documents.embeddingSection')}
@@ -230,7 +230,7 @@ export default function AdminDocuments() {
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
+              <div className="admin-form-grid">
                 <Field
                   label={t('admin:documents.ragFullTextThreshold', { defaultValue: 'Full-inject threshold (tokens)' })}
                   htmlFor="rag-threshold"
@@ -279,7 +279,7 @@ export default function AdminDocuments() {
                     onChange={(e) => setDraft({ ...draft, rag_top_k: Math.max(1, Number(e.target.value) || 1) })}
                   />
                 </Field>
-                <div className="flex items-center justify-between gap-4 sm:col-span-2">
+                <div className="admin-form-wide flex items-center justify-between gap-4">
                   <div>
                     <div className="text-sm text-[var(--color-fg)]">
                       {t('admin:documents.ragDynamicTopk', { defaultValue: 'Dynamic Top-K (by similarity)' })}
@@ -314,7 +314,7 @@ export default function AdminDocuments() {
                     />
                   </Field>
                 )}
-                <div className="sm:col-span-2">
+                <div className="admin-form-wide">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-sm text-[var(--color-fg)]">
@@ -328,12 +328,11 @@ export default function AdminDocuments() {
                     />
                   </div>
                   {readBool('rag_rerank_enabled', false) && (
-                    <div className="mt-6 grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
+                    <div className="admin-form-grid mt-6">
                       <Field
                         label={t('admin:documents.ragRerankBaseUrl')}
                         htmlFor="rag-rerank-url"
                         hint={t('admin:documents.ragRerankBaseUrlHint')}
-                        className="sm:col-span-2"
                       >
                         <Input
                           id="rag-rerank-url"
@@ -395,7 +394,7 @@ export default function AdminDocuments() {
                   </Link>
                 </div>
               )}
-              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
+              <div className="admin-form-grid admin-form-grid--pair">
                 <Field
                   label={t('admin:settings.fields.mineruBaseUrl')}
                   htmlFor="mineru-url"
