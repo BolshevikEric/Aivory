@@ -43,7 +43,8 @@ export function AdminTable<T>({ items, columns, rowKey, label, className, emptyM
   const { t } = useTranslation('admin')
   const tableRef = useRef<HTMLTableElement>(null)
   const [actionsWidth, setActionsWidth] = useState<number | null>(null)
-  const hasActions = columns.some((column) => column.id === 'actions')
+  const isControlColumn = (column: AdminTableColumn<T>) => column.id === 'actions' || column.id === 'order' || column.id === 'select'
+  const hasControls = columns.some(isControlColumn)
 
   useLayoutEffect(() => {
     const cells = [...(tableRef.current?.querySelectorAll<HTMLElement>('[data-column="actions"] > .admin-table-cell') ?? [])]
@@ -65,15 +66,15 @@ export function AdminTable<T>({ items, columns, rowKey, label, className, emptyM
   }, [items, columns, hideHeader])
 
   const columnWidth = (column: AdminTableColumn<T>) => column.id === 'actions' ? actionsWidth ?? column.width ?? 240 : column.width ?? 240
-  const fixedWidth = columns.reduce((total, column) => total + (column.id === 'actions' || column.id === 'order' ? columnWidth(column) : 0), 0)
-  const flexibleWidth = columns.reduce((total, column) => total + (column.id !== 'actions' && column.id !== 'order' ? columnWidth(column) : 0), 0)
+  const fixedWidth = columns.reduce((total, column) => total + (isControlColumn(column) ? columnWidth(column) : 0), 0)
+  const flexibleWidth = columns.reduce((total, column) => total + (!isControlColumn(column) ? columnWidth(column) : 0), 0)
   const table = (
     <table ref={tableRef} className="admin-data-table" aria-label={label} style={{ minWidth: columns.reduce((total, column) => total + columnWidth(column), 0) }}>
       <colgroup>{columns.map((column) => {
         // Keep controls compact; distribute surplus space among the data columns.
-        const flexible = hasActions && column.id !== 'actions' && column.id !== 'order'
+        const flexible = hasControls && !isControlColumn(column)
         const share = flexibleWidth > 0 ? columnWidth(column) / flexibleWidth : 0
-        const width = !hasActions ? column.width : flexible ? `calc(${share * 100}% - ${share * fixedWidth}px)` : columnWidth(column)
+        const width = !hasControls ? column.width : flexible ? `calc(${share * 100}% - ${share * fixedWidth}px)` : columnWidth(column)
         return <col key={column.id} style={{ width }} />
       })}</colgroup>
       {!hideHeader ? (
