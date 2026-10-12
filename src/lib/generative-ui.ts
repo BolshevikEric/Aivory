@@ -1,4 +1,5 @@
 /** Versioned, deliberately small protocol. Model output is untrusted input. */
+import { jsonrepair } from 'jsonrepair'
 import { compileExpression, compileFunctionExpression, validExpressionVariable } from './function-expression'
 
 type PrimitiveCell = string | number | boolean | null
@@ -225,10 +226,47 @@ function formField(v: unknown): UIFormField {
   }
   return { ...base, type, maxLength, value, placeholder: optional(f.placeholder) }
 }
+// Consecutive quoted phrases can be ambiguous to the general JSON repair parser.
+function escapeEmbeddedQuotes(source: string): string {
+  let quoted = false
+  let repaired = ''
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i]
+    if (quoted && char === '\\') {
+      repaired += char + (source[++i] ?? '')
+      continue
+    }
+    if (char === '"') {
+      if (!quoted) quoted = true
+      else {
+        let next = i + 1
+        while (/\s/.test(source[next] ?? '') && next < source.length) next++
+        if (next < source.length && !':,}]'.includes(source[next])) {
+          repaired += '\\"'
+          continue
+        }
+        quoted = false
+      }
+    }
+    repaired += char
+  }
+  return repaired
+}
+
 export function parseUIDocument(source: string): UIDocument | null {
   if (source.length > MAX_GENERATIVE_SOURCE) return null
   try {
-    const root = record(JSON.parse(source))
+    let value: unknown
+    try {
+      value = JSON.parse(source)
+    } catch {
+      try {
+        value = JSON.parse(jsonrepair(source))
+      } catch {
+        value = JSON.parse(jsonrepair(escapeEmbeddedQuotes(source)))
+      }
+    }
+    const root = record(value)
     if (root.version !== 1) return null
     let count = 0
     function blocks(v: unknown, depth = 0): UIBlock[] {

@@ -16,6 +16,7 @@ These are examples, not limits. Choose the simplest useful presentation for the 
 ## Preset components
 
 Output valid JSON in a fenced `aivory-ui` block. Root fields: `version: 1`, `blocks: [...]`, optional `title` and `description`.
+Escape double quotes inside string values as `\"` and line breaks as `\n`. For example: `{"type":"text","text":"A section titled \"School food safety\"."}`. Never leave literal double quotes unescaped inside text.
 
 Supported block shapes:
 

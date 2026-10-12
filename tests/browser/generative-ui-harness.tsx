@@ -13,6 +13,7 @@ import { GenerativeReplyProvider } from '@/components/chat/generative-reply'
 import PrivateChat from '@/pages/chat/PrivateChat'
 
 const fence = (lang: string, code: string) => `\`\`\`${lang}\n${code}\n\`\`\``
+const quotedNews = `{"version":1,"title":"News","blocks":[{"type":"tabs","items":[{"title":"Domestic","blocks":[{"type":"text","text":"新增"学校食品安全""网络食品经营"专节。"}]},{"title":"International","blocks":[{"type":"text","text":"美国表示"强烈谴责"。"}]}]}]}`
 const preview = new URLSearchParams(globalThis.location.search).has('preview')
 const tableImageURL = (file: string) => preview
   ? new URL(file === 'missing.png' ? '/missing-table-image.png' : '/icon-512.png', globalThis.location.href).href
@@ -115,6 +116,7 @@ function Harness() {
     <section data-case="form-answered"><GenerativeReplyProvider messageId="form-answered" status="answered" onReply={async () => { throw new Error('historical form must not submit') }}><Markdown allowGenerativeUI content={fence('aivory-ui', singleFieldForm)} /></GenerativeReplyProvider></section>
     <section data-case="form-readonly"><Markdown allowGenerativeUI content={fence('aivory-ui', singleFieldForm)} /></section>
     <section data-case="presets"><Markdown allowGenerativeUI content={fence('aivory-ui', document)} /></section>
+    <section data-case="quoted-news"><Markdown allowGenerativeUI content={fence('aivory-ui', quotedNews)} /></section>
     <section data-case="inline"><Markdown allowGenerativeUI live={live} content={fence('aivory-html', html)} /></section>
     <section data-case="private"><PrivateMarkdown allowGenerativeUI text={fence('aivory-ui', document)} /></section>
     <section data-case="private-table"><PrivateMarkdown allowGenerativeUI text={fence('aivory-ui', richTable)} /></section>

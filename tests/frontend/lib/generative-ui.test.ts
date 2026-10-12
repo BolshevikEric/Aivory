@@ -5,6 +5,15 @@ import { generativeLanguage, MAX_GENERATIVE_SOURCE, parseUIDocument } from '@/li
 
 const parse = (blocks: unknown[]) => parseUIDocument(JSON.stringify({ version: 1, blocks }))
 describe('generative UI protocol', () => {
+  it('repairs unescaped quotes in nested news text without losing the content', () => {
+    const source = `{"version":1,"title":"News","blocks":[{"type":"tabs","items":[{"title":"Domestic","blocks":[{"type":"text","text":"新增"学校食品安全""网络食品经营"专节，并回应"安保三文件"问题。"}]}]}]}`
+    const result = parseUIDocument(source)
+    const tabs = result?.blocks[0]
+    expect(tabs?.type).toBe('tabs')
+    if (tabs?.type !== 'tabs') throw new Error('missing tabs')
+    expect(tabs.items[0].blocks[0]).toEqual({ type: 'text', text: '新增"学校食品安全""网络食品经营"专节，并回应"安保三文件"问题。' })
+    expect(parseUIDocument(`{"version":1,"blocks":[{"type":"card","title":"A "quote"","link":{"url":"javascript:alert(1)"}}]}`)).toBeNull()
+  })
   it('supports themed components and nested interactive sections', () => {
     expect(parse([{ type: 'tabs', items: [{ title: 'Usage', blocks: [{ type: 'chart', kind: 'line', labels: ['A', 'B'], series: [{ name: 'Tokens', values: [12, -2] }] }] }] }])?.blocks[0].type).toBe('tabs')
     expect(parse([{ type: 'table', columns: ['Name', 'Value'], rows: [['A', 1], [null, true]] }])?.blocks).toHaveLength(1)
