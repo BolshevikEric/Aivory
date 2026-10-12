@@ -89,3 +89,41 @@ describe('SearXNG administrator result count', () => {
     expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('search_result_count')
   })
 })
+
+describe('AnySearch administrator configuration', () => {
+  it('allows anonymous calls using the official endpoint with empty configuration', async () => {
+    settings.mockResolvedValue({ search_provider: 'anysearch', search_api_key: '', search_base_url: '' })
+    await mount()
+    expect(container.querySelector('#search-url')).toBeNull()
+    expect(container.querySelector<HTMLInputElement>('#search-key')?.type).toBe('password')
+    expect(container.querySelector('#search-result-count')).toBeNull()
+    expect(container.querySelector('label[for="search-key"]')?.textContent).toBe('admin:settings.fields.searchApiKeyOptional')
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ search_provider: 'anysearch', search_api_key: '' }))
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('search_base_url')
+    expect(errorToast).not.toHaveBeenCalled()
+  })
+
+  it('keeps a legacy base URL out of the AnySearch form and save patch', async () => {
+    settings.mockResolvedValue({ search_provider: 'anysearch', search_api_key: 'test-key', search_base_url: 'https://search.example.test/v1/search' })
+    await mount()
+    expect(container.querySelector('#search-url')).toBeNull()
+    expect(container.querySelector<HTMLInputElement>('#search-key')?.value).toBe('test-key')
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ search_api_key: 'test-key' }))
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('search_base_url')
+  })
+
+  it('saves an optional API key without sending a base URL', async () => {
+    settings.mockResolvedValue({ search_provider: 'anysearch', search_api_key: '', search_base_url: '' })
+    await mount()
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>('#search-key')!
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'test-key')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ search_api_key: 'test-key' }))
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('search_base_url')
+  })
+})

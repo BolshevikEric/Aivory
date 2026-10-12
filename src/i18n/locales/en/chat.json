@@ -405,7 +405,7 @@
   },
   "toolDescriptions": {
     "web_search": "Search the latest information on the web",
-    "aivory_web_search": "Search the web through Aivory's configured backend",
+    "aivory_web_search": "Search the web.",
     "code_interpreter": "Run code and analyze files",
     "image_generation": "Generate or edit images",
     "web_fetch": "Read the main content of a web page",

@@ -162,17 +162,15 @@ export default function AdminDocuments() {
     <div>
       <AdminPageHeader
         title={t('admin:documents.title')}
-        description={t('admin:documents.lead')}
       />
 
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-8 flex flex-col gap-5">
+        <section className="mt-6 flex max-w-3xl flex-col gap-8">
           {/* Embedding model ------------------------------------------------- */}
           <SettingsSection
             title={t('admin:documents.embeddingSection')}
-            description={t('admin:documents.embeddingLead')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
@@ -188,7 +186,8 @@ export default function AdminDocuments() {
                           defaultValue:
                             'The previously selected embedding model was deleted. Pick a replacement and save to restore knowledge-base features; existing knowledge bases must be re-indexed.',
                         })
-                      : t('admin:documents.embeddingModelHint')}
+                      : undefined}
+                  className="sm:max-w-md"
                 >
                   <Select
                     value={readString('embedding_model_id') || 'none'}
@@ -227,27 +226,20 @@ export default function AdminDocuments() {
           {/* RAG retrieval & injection -------------------------------------- */}
           <SettingsSection
             title={t('admin:documents.ragSection', { defaultValue: 'Retrieval & injection' })}
-            description={t('admin:documents.ragLead', {
-              defaultValue:
-                'Control when an uploaded document is injected whole vs. retrieved by relevance, and how much is injected.',
-            })}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="flex flex-col gap-5">
+              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <Field
                   label={t('admin:documents.ragFullTextThreshold', { defaultValue: 'Full-inject threshold (tokens)' })}
                   htmlFor="rag-threshold"
-                  hint={t('admin:documents.ragFullTextThresholdHint', {
-                    defaultValue:
-                      'A prose document (PDF / Office / Markdown / logs) at/below this estimated size is injected in full every turn; above it, the document is vectorized and only relevant chunks are retrieved.',
-                  })}
                 >
                   <Input
                     id="rag-threshold"
                     type="number"
                     min={0}
+                    wrapperClassName="w-40"
                     placeholder="8000"
                     value={String(readNumber('rag_full_text_threshold', 8000))}
                     onChange={(e) =>
@@ -258,15 +250,12 @@ export default function AdminDocuments() {
                 <Field
                   label={t('admin:documents.ragCodeMaxLines', { defaultValue: 'Code / text full-inject cap (lines)' })}
                   htmlFor="rag-code-lines"
-                  hint={t('admin:documents.ragCodeMaxLinesHint', {
-                    defaultValue:
-                      'Source code, config, .txt and unrecognized text formats at/below this many lines are injected in full (very long single-line files are size-scaled and may still be retrieved); above it they are vectorized and retrieved like other documents.',
-                  })}
                 >
                   <Input
                     id="rag-code-lines"
                     type="number"
                     min={1}
+                    wrapperClassName="w-40"
                     placeholder="2000"
                     value={String(readNumber('rag_code_full_text_max_lines', 2000))}
                     onChange={(e) =>
@@ -279,32 +268,25 @@ export default function AdminDocuments() {
                 <Field
                   label={t('admin:documents.ragTopK', { defaultValue: 'Retrieved chunks (Top-K)' })}
                   htmlFor="rag-topk"
-                  hint={t('admin:documents.ragTopKHint', {
-                    defaultValue: 'How many chunks to retrieve for a vectorized document (when dynamic Top-K is off).',
-                  })}
                 >
                   <Input
                     id="rag-topk"
                     type="number"
                     min={1}
+                    wrapperClassName="w-40"
                     placeholder="8"
                     value={String(readNumber('rag_top_k', 8))}
                     onChange={(e) => setDraft({ ...draft, rag_top_k: Math.max(1, Number(e.target.value) || 1) })}
                   />
                 </Field>
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-4 sm:col-span-2">
                   <div>
                     <div className="text-sm text-[var(--color-fg)]">
                       {t('admin:documents.ragDynamicTopk', { defaultValue: 'Dynamic Top-K (by similarity)' })}
                     </div>
-                    <div className="mt-0.5 text-xs text-[var(--color-fg-subtle)]">
-                      {t('admin:documents.ragDynamicTopkHint', {
-                        defaultValue:
-                          'Instead of a fixed K, inject every retrieved chunk whose similarity clears the threshold.',
-                      })}
-                    </div>
                   </div>
                   <Switch
+                    aria-label={t('admin:documents.ragDynamicTopk')}
                     checked={readBool('rag_dynamic_topk', false)}
                     onCheckedChange={(v) => setDraft({ ...draft, rag_dynamic_topk: v })}
                   />
@@ -313,9 +295,6 @@ export default function AdminDocuments() {
                   <Field
                     label={t('admin:documents.ragSimThreshold', { defaultValue: 'Similarity threshold (0–1)' })}
                     htmlFor="rag-sim"
-                    hint={t('admin:documents.ragSimThresholdHint', {
-                      defaultValue: 'Cosine-similarity cutoff. Chunks scoring at/above this are injected.',
-                    })}
                   >
                     <Input
                       id="rag-sim"
@@ -323,6 +302,7 @@ export default function AdminDocuments() {
                       min={0}
                       max={1}
                       step={0.05}
+                      wrapperClassName="w-40"
                       placeholder="0.5"
                       value={String(readNumber('rag_similarity_threshold', 0.5))}
                       onChange={(e) =>
@@ -334,14 +314,11 @@ export default function AdminDocuments() {
                     />
                   </Field>
                 )}
-                <div className="pt-5">
+                <div className="sm:col-span-2">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-sm text-[var(--color-fg)]">
                         {t('admin:documents.ragRerankEnabled')}
-                      </div>
-                      <div className="mt-0.5 max-w-3xl text-xs text-[var(--color-fg-subtle)]">
-                        {t('admin:documents.ragRerankEnabledHint')}
                       </div>
                     </div>
                     <Switch
@@ -351,11 +328,12 @@ export default function AdminDocuments() {
                     />
                   </div>
                   {readBool('rag_rerank_enabled', false) && (
-                    <div className="mt-5 flex flex-col gap-5">
+                    <div className="mt-6 grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                       <Field
                         label={t('admin:documents.ragRerankBaseUrl')}
                         htmlFor="rag-rerank-url"
                         hint={t('admin:documents.ragRerankBaseUrlHint')}
+                        className="sm:col-span-2"
                       >
                         <Input
                           id="rag-rerank-url"
@@ -382,7 +360,6 @@ export default function AdminDocuments() {
                       <Field
                         label={t('admin:documents.ragRerankModel')}
                         htmlFor="rag-rerank-model"
-                        hint={t('admin:documents.ragRerankModelHint')}
                       >
                         <Input
                           id="rag-rerank-model"
@@ -401,7 +378,6 @@ export default function AdminDocuments() {
           {/* MinerU ---------------------------------------------------------- */}
           <SettingsSection
             title={t('admin:settings.fields.mineruSection')}
-            description={t('admin:settings.fields.mineruLead')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
@@ -419,11 +395,10 @@ export default function AdminDocuments() {
                   </Link>
                 </div>
               )}
-              <div className="mt-4 flex flex-col gap-5">
+              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <Field
                   label={t('admin:settings.fields.mineruBaseUrl')}
                   htmlFor="mineru-url"
-                  hint={t('admin:settings.fields.mineruBaseUrlHint')}
                 >
                   <Input
                     id="mineru-url"
@@ -436,7 +411,6 @@ export default function AdminDocuments() {
                 <Field
                   label={t('admin:settings.fields.mineruToken')}
                   htmlFor="mineru-token"
-                  hint={t('admin:settings.fields.mineruTokenHint')}
                 >
                   <Input
                     id="mineru-token"

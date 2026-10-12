@@ -58,7 +58,6 @@ export default function AdminSystemEmail() {
     <div>
       <AdminPageHeader
         title={t('admin:menu.emailService', { defaultValue: 'Email service' })}
-        description={t('admin:settings.fields.smtpLead')}
       />
 
       {loading ? (
@@ -75,7 +74,6 @@ export default function AdminSystemEmail() {
                   label={t('admin:settings.fields.smtpHost')}
                   htmlFor="smtp-host"
                   className="md:col-span-2"
-                  hint={t('admin:settings.fields.smtpHostHint')}
                 >
                   <Input
                     id="smtp-host"
@@ -112,7 +110,6 @@ export default function AdminSystemEmail() {
                 <Field
                   label={t('admin:settings.fields.smtpPassword')}
                   htmlFor="smtp-password"
-                  hint={t('admin:settings.fields.smtpPasswordHint')}
                 >
                   <Input
                     id="smtp-password"

@@ -304,7 +304,6 @@ export default function AdminSkills() {
               <Field
                 label={t('admin:skills.fields.when')}
                 htmlFor="s-desc"
-                hint={t('admin:skills.fields.whenHint')}
               >
                 <Input
                   id="s-desc"
@@ -323,9 +322,6 @@ export default function AdminSkills() {
               </Field>
               <Field
                 label={t('admin:skills.fields.assets', { defaultValue: 'Assets (templates / scripts)' })}
-                hint={t('admin:skills.fields.assetsHint', {
-                  defaultValue: 'Files staged into the sandbox at /workspace/skills/<name>/ when use_skill loads this skill.',
-                })}
               >
                 <div className="grid gap-2">
                   {(editor.draft.assets ?? []).length > 0 ? (

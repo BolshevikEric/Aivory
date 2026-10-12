@@ -95,13 +95,12 @@ export default function AdminAudio() {
     <div>
       <AdminPageHeader
         title={t('admin:audio.title')}
-        description={t('admin:audio.lead')}
       />
 
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-8 flex flex-col gap-5">
+        <section className="mt-6 flex max-w-3xl flex-col gap-8">
           {/* Provider selector -------------------------------------------- */}
           <SettingsSection
             className="mb-0"
@@ -111,7 +110,7 @@ export default function AdminAudio() {
               <Field
                 label={t('admin:audio.provider.label')}
                 htmlFor="a-provider"
-                hint={t('admin:audio.provider.hint')}
+                className="sm:max-w-sm"
               >
                 <Select value={provider} onValueChange={(v) => set('audio_transcribe_provider', v)}>
                   <SelectTrigger id="a-provider">
@@ -133,7 +132,7 @@ export default function AdminAudio() {
               bodyClassName="divide-y-0"
             >
               <SettingsBlock className="flex flex-col gap-5">
-                <Field label={t('admin:audio.fields.model')} htmlFor="a-model" hint={t('admin:audio.fields.modelHint')}>
+                <Field label={t('admin:audio.fields.model')} htmlFor="a-model">
                   <Input
                     id="a-model"
                     value={read('audio_transcribe_model')}
@@ -141,7 +140,7 @@ export default function AdminAudio() {
                     placeholder="whisper-1"
                   />
                 </Field>
-                <Field label={t('admin:audio.fields.baseUrl')} htmlFor="a-base" hint={t('admin:audio.fields.baseUrlHint')}>
+                <Field label={t('admin:audio.fields.baseUrl')} htmlFor="a-base">
                   <Input
                     id="a-base"
                     value={read('audio_transcribe_base_url')}
@@ -170,7 +169,6 @@ export default function AdminAudio() {
               bodyClassName="divide-y-0"
             >
               <SettingsBlock className="flex flex-col gap-5">
-                <p className="text-xs text-[var(--color-fg-subtle)]">{t('admin:audio.volcano.sectionHint')}</p>
                 <Field label={t('admin:audio.volcano.appId')} htmlFor="v-app" hint={t('admin:audio.volcano.appIdHint')}>
                   <Input
                     id="v-app"
@@ -205,7 +203,7 @@ export default function AdminAudio() {
                     placeholder="volc.bigasr.sauc.duration"
                   />
                 </Field>
-                <Field label={t('admin:audio.volcano.wsUrl')} htmlFor="v-url" hint={t('admin:audio.volcano.wsUrlHint')}>
+                <Field label={t('admin:audio.volcano.wsUrl')} htmlFor="v-url">
                   <Input
                     id="v-url"
                     type="url"
@@ -214,7 +212,7 @@ export default function AdminAudio() {
                     placeholder="wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
                   />
                 </Field>
-                <Field label={t('admin:audio.volcano.model')} htmlFor="v-model" hint={t('admin:audio.volcano.modelHint')}>
+                <Field label={t('admin:audio.volcano.model')} htmlFor="v-model">
                   <Input
                     id="v-model"
                     value={read('volcano_asr_model_name')}
@@ -233,7 +231,7 @@ export default function AdminAudio() {
                   ).map(([key, label]) => (
                     <label
                       key={key}
-                      className="flex items-center justify-between gap-4 rounded-[12px] bg-[var(--color-surface)] px-4 py-3"
+                      className="flex items-center justify-between gap-4 py-3"
                     >
                       <span>
                         <span className="block text-sm font-medium text-[var(--color-fg)]">
@@ -268,6 +266,7 @@ export default function AdminAudio() {
                   value={priceInput}
                   onChange={(e) => set(PRICE_KEY, e.target.value)}
                   placeholder="0"
+                  wrapperClassName="w-40"
                 />
               </Field>
               {pricePerSecond > 0 && creditsPerUSD > 0 ? (

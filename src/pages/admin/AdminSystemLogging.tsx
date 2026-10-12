@@ -58,7 +58,6 @@ export default function AdminSystemLogging() {
     <div>
       <AdminPageHeader
         title={t('admin:menu.loggingPrivacy', { defaultValue: 'Logging and privacy' })}
-        description={t('admin:settings.fields.logFullRequestsLead')}
       />
 
       {loading ? (
@@ -68,7 +67,6 @@ export default function AdminSystemLogging() {
           <SettingsSection>
             <SettingsRow
               label={t('admin:settings.fields.logFullRequests')}
-              description={scope === 'all' ? t('admin:settings.fields.logErrorsOnlyHint') : undefined}
               htmlFor="request-log-scope"
             >
               <Select value={scope} onValueChange={(value) => setScope(value as LogScope)}>
@@ -94,7 +92,6 @@ export default function AdminSystemLogging() {
             </SettingsRow>
             <SettingsRow
               label={t('admin:toolLogs.errorsOnly')}
-              description={t('admin:toolLogs.errorsOnlyHint')}
               htmlFor="tool-error-logging"
             >
               <Switch id="tool-error-logging" checked={toolErrorsOnly} onCheckedChange={setToolErrorsOnly} />

@@ -400,7 +400,7 @@
   },
   "toolDescriptions": {
     "web_search": "ウェブから最新情報を検索します",
-    "aivory_web_search": "Aivory で設定されたバックエンドを使用してウェブを検索します",
+    "aivory_web_search": "ウェブ上の情報を検索。",
     "code_interpreter": "コードを実行してファイルを分析します",
     "image_generation": "画像を生成または編集します",
     "web_fetch": "指定したウェブページの主要コンテンツを読み取ります",

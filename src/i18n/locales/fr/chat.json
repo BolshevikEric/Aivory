@@ -400,7 +400,7 @@
   },
   "toolDescriptions": {
     "web_search": "Rechercher les informations les plus récentes sur le web",
-    "aivory_web_search": "Rechercher sur le web via le moteur configuré dans Aivory",
+    "aivory_web_search": "Rechercher sur le Web.",
     "code_interpreter": "Exécuter du code et analyser des fichiers",
     "image_generation": "Générer ou modifier des images",
     "web_fetch": "Lire le contenu principal d’une page web",

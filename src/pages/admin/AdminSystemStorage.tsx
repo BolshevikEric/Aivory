@@ -100,10 +100,9 @@ export default function AdminSystemStorage() {
       {loading ? (
         <PanelFallback />
       ) : (
-        <section className="mt-6 flex flex-col gap-4 sm:mt-8 sm:gap-5">
+        <section className="mt-6 flex max-w-3xl flex-col gap-8">
           <SettingsSection
             title={t('admin:settings.fields.storageSection')}
-            description={t('admin:settings.fields.storageLead')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
@@ -112,7 +111,7 @@ export default function AdminSystemStorage() {
                 <Field
                   label={t('admin:settings.fields.storageProvider')}
                   htmlFor="storage-provider"
-                  hint={t('admin:settings.fields.storageProviderHint')}
+                  className="sm:max-w-sm"
                 >
                   <Select
                     value={storageProvider || 'none'}
@@ -135,7 +134,6 @@ export default function AdminSystemStorage() {
                 <Field
                   label={t('admin:settings.fields.storagePrefix')}
                   htmlFor="storage-prefix"
-                  hint={t('admin:settings.fields.storagePrefixHint')}
                 >
                   <Input
                     id="storage-prefix"
@@ -157,20 +155,15 @@ export default function AdminSystemStorage() {
                       min={0}
                       step={1}
                       placeholder="0"
+                      wrapperClassName="w-40"
                       value={readNumericString('storage_archive_ttl_days')}
                       onChange={(e) => setDraft({ ...draft, storage_archive_ttl_days: e.target.value })}
                     />
                   </Field>
                 )}
 
-                {storageProvider === 'local' && (
-                  <p className="rounded-[8px] bg-[var(--color-bg-muted)] p-3 text-xs leading-relaxed text-[var(--color-fg-muted)] sm:p-4">
-                    {t('admin:settings.fields.storageLocalNote')}
-                  </p>
-                )}
-
                 {storageProvider === 's3' && (
-                  <div className="quiet-field-group flex flex-col gap-4 rounded-[8px] bg-[var(--color-bg-muted)] p-3 sm:gap-5 sm:p-4">
+                  <div className="flex min-w-0 flex-col gap-6">
                     <Field label={t('admin:settings.fields.s3Bucket')} htmlFor="s3-bucket">
                       <Input
                         id="s3-bucket"
@@ -178,7 +171,7 @@ export default function AdminSystemStorage() {
                         onChange={(e) => setDraft({ ...draft, storage_s3_bucket: e.target.value })}
                       />
                     </Field>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
                       <Field label={t('admin:settings.fields.s3Region')} htmlFor="s3-region">
                         <Input
                           id="s3-region"
@@ -200,7 +193,7 @@ export default function AdminSystemStorage() {
                         />
                       </Field>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
                       <Field label={t('admin:settings.fields.s3AccessKey')} htmlFor="s3-ak">
                         <Input
                           id="s3-ak"
@@ -224,7 +217,7 @@ export default function AdminSystemStorage() {
                 )}
 
                 {storageProvider === 'aliyun_oss' && (
-                  <div className="quiet-field-group flex flex-col gap-4 rounded-[8px] bg-[var(--color-bg-muted)] p-3 sm:gap-5 sm:p-4">
+                  <div className="flex min-w-0 flex-col gap-6">
                     <Field label={t('admin:settings.fields.ossBucket')} htmlFor="oss-bucket">
                       <Input
                         id="oss-bucket"
@@ -235,7 +228,6 @@ export default function AdminSystemStorage() {
                     <Field
                       label={t('admin:settings.fields.ossEndpoint')}
                       htmlFor="oss-endpoint"
-                      hint={t('admin:settings.fields.ossEndpointHint')}
                     >
                       <Input
                         id="oss-endpoint"
@@ -244,7 +236,7 @@ export default function AdminSystemStorage() {
                         onChange={(e) => setDraft({ ...draft, storage_aliyun_endpoint: e.target.value })}
                       />
                     </Field>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
                       <Field label={t('admin:settings.fields.ossAccessKeyId')} htmlFor="oss-akid">
                         <Input
                           id="oss-akid"
@@ -272,16 +264,16 @@ export default function AdminSystemStorage() {
 
           <SettingsSection
             title={t('admin:settings.fields.uploadsSection')}
-            description={t('admin:settings.fields.uploadsLead')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="flex flex-col gap-5">
+              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <Field
                   label={t('admin:settings.fields.uploadAllowedExt')}
                   htmlFor="upload-ext"
                   hint={t('admin:settings.fields.uploadAllowedExtHint')}
+                  className="sm:col-span-2"
                 >
                   <Input
                     id="upload-ext"
@@ -293,16 +285,14 @@ export default function AdminSystemStorage() {
                 <Field
                   label={t('admin:settings.fields.maxImageUploadMb', { defaultValue: 'Max image size (MB)' })}
                   htmlFor="max-image-mb"
-                  hint={t('admin:settings.fields.maxImageUploadMbHint', {
-                    defaultValue:
-                      'Images larger than this are rejected at upload. 0 = default (5 MB). Cannot exceed the server upload ceiling.',
-                  })}
+                  hint={t('admin:settings.fields.maxImageUploadMbHint')}
                 >
                   <Input
                     id="max-image-mb"
                     type="number"
                     min={0}
                     placeholder="5"
+                    wrapperClassName="w-40"
                     value={String(readNumber('max_image_upload_mb', 5))}
                     onChange={(e) =>
                       setDraft({ ...draft, max_image_upload_mb: Math.max(0, Number(e.target.value) || 0) })
@@ -312,16 +302,14 @@ export default function AdminSystemStorage() {
                 <Field
                   label={t('admin:settings.fields.maxFileUploadMb', { defaultValue: 'Max file size (MB, non-image)' })}
                   htmlFor="max-file-mb"
-                  hint={t('admin:settings.fields.maxFileUploadMbHint', {
-                    defaultValue:
-                      'Non-image files (PDF, DOCX, CSV, …) larger than this are rejected. 0 = default (server upload ceiling).',
-                  })}
+                  hint={t('admin:settings.fields.maxFileUploadMbHint')}
                 >
                   <Input
                     id="max-file-mb"
                     type="number"
                     min={0}
                     placeholder="0"
+                    wrapperClassName="w-40"
                     value={String(readNumber('max_file_upload_mb', 0))}
                     onChange={(e) =>
                       setDraft({ ...draft, max_file_upload_mb: Math.max(0, Number(e.target.value) || 0) })

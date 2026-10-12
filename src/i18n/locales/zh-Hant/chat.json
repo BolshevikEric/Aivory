@@ -400,7 +400,7 @@
   },
   "toolDescriptions": {
     "web_search": "即時搜尋網路上的最新資訊",
-    "aivory_web_search": "透過 Aivory 設定的搜尋後端檢索網頁",
+    "aivory_web_search": "搜尋網頁中的資訊。",
     "code_interpreter": "執行程式碼並分析檔案",
     "image_generation": "生成或編輯圖片",
     "web_fetch": "讀取指定網頁的主要內容",

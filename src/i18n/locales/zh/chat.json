@@ -400,7 +400,7 @@
   },
   "toolDescriptions": {
     "web_search": "实时检索全网最新资讯",
-    "aivory_web_search": "通过 Aivory 配置的搜索后端检索网页",
+    "aivory_web_search": "搜索网页中的信息。",
     "code_interpreter": "运行代码并分析文件",
     "image_generation": "生成或编辑图片",
     "web_fetch": "读取指定网页的主要内容",

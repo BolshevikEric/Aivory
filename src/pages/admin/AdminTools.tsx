@@ -1,6 +1,6 @@
 /**
  * AdminTools — outbound services the assistant invokes during a conversation:
- * web search (DuckDuckGo / SearXNG / Serper / Brave / Tavily) and the code
+ * web search (DuckDuckGo / SearXNG / Serper / Brave / Tavily / AnySearch) and the code
  * sandbox sidecar.
  *
  * Shares the global `/admin/settings` endpoint with other admin pages; PATCH
@@ -157,6 +157,7 @@ export default function AdminTools() {
       const patch: Settings = {}
       for (const k of OWNED_KEYS) {
         if (k === 'search_result_count') continue
+        if (k === 'search_base_url' && readString('search_provider') === 'anysearch') continue
         if (k in draft) patch[k] = draft[k]
       }
       if (readString('search_provider') === 'searxng') patch.search_result_count = searchResultCount
@@ -231,7 +232,6 @@ export default function AdminTools() {
     <div>
       <AdminPageHeader
         title={t('admin:tools.title')}
-        description={t('admin:tools.lead')}
       />
 
       {loading ? (
@@ -251,12 +251,9 @@ export default function AdminTools() {
           </Button>
         </div>
       ) : (
-        <section className="mt-8 flex flex-col gap-5" aria-busy={saving || Boolean(togglingMCPID)}>
+        <section className="mt-6 flex max-w-3xl flex-col gap-8" aria-busy={saving || Boolean(togglingMCPID)}>
           <SettingsSection
             title={t('admin:tools.availabilityTitle', { defaultValue: 'Global tool availability' })}
-            description={t('admin:tools.availabilityLead', {
-              defaultValue: 'A disabled tool is removed from every model, including models that explicitly allow it.',
-            })}
             className="mb-0"
           >
             {builtinToolsLoadFailed ? (
@@ -312,7 +309,6 @@ export default function AdminTools() {
 
           <SettingsSection
             title={t('admin:tools.mcpAvailabilityTitle')}
-            description={t('admin:tools.mcpAvailabilityLead')}
             className="mb-0"
             actions={(
               <Button
@@ -368,16 +364,15 @@ export default function AdminTools() {
           {/* Web search ------------------------------------------------------ */}
           <SettingsSection
             title={t('admin:settings.fields.searchSection')}
-            description={t('admin:settings.fields.searchLead')}
             className="mb-0"
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-6">
                 <Field
                   label={t('admin:settings.fields.searchProvider')}
                   htmlFor="search-provider"
-                  hint={t('admin:settings.fields.searchProviderHint')}
+                  className="sm:max-w-sm"
                 >
                   <Select
                     value={searchProvider || 'none'}
@@ -396,24 +391,17 @@ export default function AdminTools() {
                       <SelectItem value="serper">{t('admin:settings.fields.searchSerper')}</SelectItem>
                       <SelectItem value="brave">{t('admin:settings.fields.searchBrave')}</SelectItem>
                       <SelectItem value="tavily">{t('admin:settings.fields.searchTavily')}</SelectItem>
+                      <SelectItem value="anysearch">{t('admin:settings.fields.searchAnysearch')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
 
-                {searchProvider === 'duckduckgo' && (
-                  <div className="rounded-[8px] bg-[var(--color-bg-muted)] p-4">
-                    <p className="text-xs leading-relaxed text-[var(--color-fg-subtle)]">
-                      {t('admin:settings.fields.searchDuckduckgoHint')}
-                    </p>
-                  </div>
-                )}
-
                 {searchProvider === 'searxng' && (
-                  <div className="quiet-field-group rounded-[8px] bg-[var(--color-bg-muted)] p-4">
+                  <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
                     <Field
                       label={t('admin:settings.fields.searchBaseUrl')}
                       htmlFor="search-url"
-                      hint={t('admin:settings.fields.searchBaseUrlHint')}
+                      className="sm:col-span-2"
                     >
                       <Input
                         id="search-url"
@@ -440,7 +428,6 @@ export default function AdminTools() {
                     <Field
                       label={t('admin:settings.fields.searchResultCount')}
                       htmlFor="search-result-count"
-                      hint={t('admin:settings.fields.searchResultCountHint')}
                     >
                       <Input
                         id="search-result-count"
@@ -448,7 +435,7 @@ export default function AdminTools() {
                         min={1}
                         max={50}
                         step={1}
-                        className="max-w-32"
+                        wrapperClassName="w-32"
                         value={typeof draft.search_result_count === 'number' || draft.search_result_count === ''
                           ? draft.search_result_count : 5}
                         disabled={saving}
@@ -461,23 +448,25 @@ export default function AdminTools() {
                   </div>
                 )}
 
-                {(searchProvider === 'serper' || searchProvider === 'brave' || searchProvider === 'tavily') && (
-                  <div className="quiet-field-group rounded-[8px] bg-[var(--color-bg-muted)] p-4">
-                    <Field
-                      label={t('admin:settings.fields.searchApiKey')}
-                      htmlFor="search-key"
-                      hint={t('admin:settings.fields.searchApiKeyHint')}
-                    >
-                      <Input
-                        id="search-key"
-                        type="password"
-                        autoComplete="off"
-                        value={readString('search_api_key')}
-                        disabled={saving}
-                        onChange={(e) => setDraft({ ...draft, search_api_key: e.target.value })}
-                      />
-                    </Field>
-                  </div>
+                {['serper', 'brave', 'tavily', 'anysearch'].includes(searchProvider) && (
+                  <Field
+                    label={t(searchProvider === 'anysearch'
+                      ? 'admin:settings.fields.searchApiKeyOptional'
+                      : 'admin:settings.fields.searchApiKey')}
+                    htmlFor="search-key"
+                  >
+                    <Input
+                      id="search-key"
+                      type="password"
+                      autoComplete="off"
+                      value={readString('search_api_key')}
+                      disabled={saving}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setDraft((current) => ({ ...current, search_api_key: value }))
+                      }}
+                    />
+                  </Field>
                 )}
               </div>
             </SettingsBlock>
@@ -496,7 +485,7 @@ export default function AdminTools() {
                   <span>{t('admin:settings.fields.sandboxMissing')}</span>
                 </p>
               ) : null}
-              <div className="flex flex-col gap-5">
+              <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <Field
                   label={t('admin:settings.fields.sandboxUrl')}
                   htmlFor="sandbox-url"
@@ -532,13 +521,13 @@ export default function AdminTools() {
                 <Field
                   label={t('admin:settings.fields.sandboxExecTimeout')}
                   htmlFor="sandbox-exec-timeout"
-                  hint={t('admin:settings.fields.sandboxExecTimeoutHint')}
                 >
                   <Input
                     id="sandbox-exec-timeout"
                     type="number"
                     min={10}
                     max={600}
+                    wrapperClassName="w-40"
                     placeholder="120"
                     value={readString('sandbox_exec_timeout_sec')}
                     disabled={saving}
@@ -548,13 +537,13 @@ export default function AdminTools() {
                 <Field
                   label={t('admin:settings.fields.sandboxIdleTtl')}
                   htmlFor="sandbox-idle-ttl"
-                  hint={t('admin:settings.fields.sandboxIdleTtlHint')}
                 >
                   <Input
                     id="sandbox-idle-ttl"
                     type="number"
                     min={60}
                     max={86400}
+                    wrapperClassName="w-40"
                     placeholder="1800"
                     value={readString('sandbox_idle_ttl_sec')}
                     disabled={saving}
