@@ -19,7 +19,8 @@ import (
 )
 
 // Diagnostic fields are opt-in and excluded from JSON/console logs. Recorders
-// must sanitize them before persistence. Unknown usage does not imply zero cost.
+// must sanitize them before persistence. Missing counts in valid responses settle
+// at zero; unreadable usage or failed transport remains unknown.
 type Record struct {
 	Metadata
 	RequestedModel string        `json:"requested_model"`
@@ -120,6 +121,8 @@ func New(cfg Config) (*Client, error) {
 		u.Path = "/api/v1/systemone"
 	case u.Path == "":
 		u.Path = "/v1/systemone"
+	case strings.HasSuffix(u.Path, "/compatible-mode"):
+		u.Path += "/v1/systemone"
 	default:
 		u.Path += "/systemone"
 	}
@@ -212,18 +215,21 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 	if err != nil {
 		return nil, err
 	}
-	expected := strings.TrimSpace(opts.ExpectedModel)
-	// OpenRouter Decisions accepts a routing ID and reports the resolved model.
-	// Its documented request/response IDs differ; do not infer a version pin from
-	// the request or assume every provider follows Jev's release naming scheme.
-	if c.cfg.Protocol != OpenRouterDecisionsProtocol && !isFloatingDecisionModel(req.Model, c.openRouterModels) {
-		if expected != "" && !decisionModelsMatch(req.Model, expected, c.openRouterModels, true) {
-			return nil, failure(ErrValidation, "expected release conflicts with pinned request model")
+	// Aliyun's System One compatibility schema accepts string instructions.
+	if strings.Contains(c.endpoint, "/compatible-mode/") {
+		for id, question := range snapshot.Questions {
+			if _, ok := question.Instructions.(string); !ok {
+				instructions, _ := json.Marshal(question.Instructions)
+				question.Instructions = string(instructions)
+				snapshot.Questions[id] = question
+			}
 		}
-		if expected == "" {
-			expected = req.Model
+		body, err = json.Marshal(snapshot)
+		if err != nil {
+			return nil, failure(ErrValidation, "invalid compatible decision request")
 		}
 	}
+	expected := strings.TrimSpace(opts.ExpectedModel)
 	responseFailure := func(kind ErrorKind, message string) *Error {
 		return &Error{Kind: kind, StatusCode: record.StatusCode, RequestID: record.RequestID, Message: message}
 	}
@@ -286,14 +292,15 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 		}
 		// Decode envelope/usage first so invalid answers do not erase known costs.
 		var envelope struct {
-			ID       string          `json:"id"`
-			Provider string          `json:"provider"`
-			Model    string          `json:"model"`
-			Answers  json.RawMessage `json:"answers"`
-			Usage    *struct {
-				Input  *int     `json:"input_tokens"`
-				Output *int     `json:"output_tokens"`
-				Cost   *float64 `json:"cost"`
+			ID        string          `json:"id"`
+			RequestID string          `json:"request_id"`
+			Provider  string          `json:"provider"`
+			Model     string          `json:"model"`
+			Answers   json.RawMessage `json:"answers"`
+			Usage     *struct {
+				Input  json.RawMessage `json:"input_tokens"`
+				Output json.RawMessage `json:"output_tokens"`
+				Cost   *float64        `json:"cost"`
 			} `json:"usage"`
 		}
 		if json.Unmarshal(raw, &envelope) != nil {
@@ -301,27 +308,46 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 		}
 		record.ServedModel = envelope.Model
 		if record.RequestID == "" {
+			record.RequestID = safeRequestID(envelope.RequestID)
+		}
+		if record.RequestID == "" {
 			record.RequestID = safeRequestID(envelope.ID)
 		}
 		result = &Response{ID: envelope.ID, Provider: envelope.Provider, Model: envelope.Model, RequestedModel: req.Model, RequestID: record.RequestID}
-		if envelope.Usage == nil || envelope.Usage.Input == nil || envelope.Usage.Output == nil || *envelope.Usage.Input < 0 || *envelope.Usage.Output < 0 {
-			return result, responseFailure(ErrResponse, "missing or invalid token usage")
+		// Compatible endpoints may omit unbilled usage; missing counts settle at zero.
+		if envelope.Usage != nil {
+			input, inputOK := optionalTokenCount(envelope.Usage.Input)
+			output, outputOK := optionalTokenCount(envelope.Usage.Output)
+			if !inputOK || !outputOK {
+				return result, responseFailure(ErrResponse, "invalid token usage")
+			}
+			result.Usage = Usage{InputTokens: input, OutputTokens: output, Cost: envelope.Usage.Cost}
 		}
-		result.Usage = Usage{InputTokens: *envelope.Usage.Input, OutputTokens: *envelope.Usage.Output, Cost: envelope.Usage.Cost}
 		record.Usage, record.UsageKnown = result.Usage, true
-		if json.Unmarshal(envelope.Answers, &result.Answers) != nil {
-			result.Answers = nil
+		var answers map[string]json.RawMessage
+		if json.Unmarshal(envelope.Answers, &answers) != nil {
 			return result, responseFailure(ErrResponse, "invalid answers JSON")
+		}
+		result.Answers = make(map[string]Answer, len(snapshot.Questions))
+		for id := range snapshot.Questions {
+			if raw, ok := answers[id]; ok {
+				var answer Answer
+				if json.Unmarshal(raw, &answer) != nil {
+					result.Answers = nil
+					return result, responseFailure(ErrResponse, "invalid answer JSON")
+				}
+				result.Answers[id] = answer
+			}
 		}
 		validationExpected := expected
 		if c.openRouterModels && expected != "" {
-			if !decisionModelsMatch(expected, result.Model, true, strings.TrimSpace(opts.ExpectedModel) == "") {
+			if !decisionModelsMatch(expected, result.Model, true, false) {
 				result.Answers = nil
 				return result, responseFailure(ErrModelVersion, "served model does not match expected release")
 			}
 			validationExpected = ""
 		}
-		if err := validateDecisionResponse(snapshot, result, validationExpected, c.cfg.Protocol == OpenRouterDecisionsProtocol); err != nil {
+		if err := validateResponse(snapshot, result, validationExpected); err != nil {
 			// Preserve usage/version for accounting, but never expose invalid judgments.
 			result.Answers = nil
 			if apiErr, ok := err.(*Error); ok {
@@ -329,6 +355,9 @@ func (c *Client) Evaluate(ctx context.Context, req Request, opts Options) (resul
 				apiErr.RequestID = record.RequestID
 			}
 			return result, err
+		}
+		if strings.TrimSpace(result.Model) == "" {
+			result.Model = req.Model
 		}
 		return result, nil
 	}
@@ -339,6 +368,17 @@ func (c *Client) log(event string, record Record) {
 		body, _ := json.Marshal(record)
 		c.cfg.Logger.Printf("typesafe event=%s %s", event, body)
 	}
+}
+
+func optionalTokenCount(raw json.RawMessage) (int, bool) {
+	if len(raw) == 0 {
+		return 0, true
+	}
+	var count *int
+	if json.Unmarshal(raw, &count) != nil || count == nil || *count < 0 {
+		return 0, false
+	}
+	return *count, true
 }
 
 func safeRequestID(id string) string {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -166,10 +167,13 @@ func TestResponseValidationRetainsUsage(t *testing.T) {
 		{"range", strings.Replace(noulResponse, `"noul":0`, `"noul":1.5`, 1), ErrResponse, true},
 		{"wrong type", strings.Replace(noulResponse, `"type":"noul"`, `"type":"choice"`, 1), ErrResponse, true},
 		{"wrong value type", strings.Replace(noulResponse, `"noul":0`, `"noul":"yes"`, 1), ErrResponse, true},
-		{"version drift", strings.Replace(noulResponse, DefaultModel, "jev-1.14.0", 1), ErrModelVersion, true},
-		{"missing usage", `{"model":"jev-1.13.0","answers":{}}`, ErrResponse, false},
+		{"missing answer and usage", `{"model":"jev-1.13.0","answers":{}}`, ErrResponse, true},
 		{"null token count", strings.Replace(noulResponse, `"input_tokens":100`, `"input_tokens":null`, 1), ErrResponse, false},
 		{"negative usage", strings.Replace(noulResponse, `"input_tokens":100`, `"input_tokens":-1`, 1), ErrResponse, false},
+		{"null output", strings.Replace(noulResponse, `"output_tokens":10`, `"output_tokens":null`, 1), ErrResponse, false},
+		{"negative output", strings.Replace(noulResponse, `"output_tokens":10`, `"output_tokens":-1`, 1), ErrResponse, false},
+		{"string count", strings.Replace(noulResponse, `"input_tokens":100`, `"input_tokens":"100"`, 1), ErrResponse, false},
+		{"fractional count", strings.Replace(noulResponse, `"input_tokens":100`, `"input_tokens":1.5`, 1), ErrResponse, false},
 		{"malformed JSON", `{`, ErrResponse, false},
 		{"trailing JSON", noulResponse + `{}`, ErrResponse, false},
 	}
@@ -187,6 +191,135 @@ func TestResponseValidationRetainsUsage(t *testing.T) {
 				t.Fatal("invalid answers remain available")
 			}
 		})
+	}
+}
+
+func TestCompatibleResponseOptionalUsage(t *testing.T) {
+	for _, protocol := range []string{"typesafe.decisions", OpenRouterDecisionsProtocol} {
+		for _, tc := range []struct {
+			name, usage   string
+			input, output int
+		}{
+			{"complete", `,"usage":{"input_tokens":100,"output_tokens":10}`, 100, 10},
+			{"input only", `,"usage":{"input_tokens":100}`, 100, 0},
+			{"output only", `,"usage":{"output_tokens":10}`, 0, 10},
+			{"zero input", `,"usage":{"input_tokens":0}`, 0, 0},
+			{"empty usage", `,"usage":{}`, 0, 0},
+			{"null usage", `,"usage":null`, 0, 0},
+			{"no usage", ``, 0, 0},
+		} {
+			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+				var record Record
+				c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprint(w, `{"model":"decision-model-preview","request_id":"compatible-request-1","answers":{"scope":{"choice":"full_tools","confidence":0.87,"probabilities":{"full_tools":0.93,"search_only":0.07},"type":"choice"}}`+tc.usage+`}`)
+				}, func(cfg *Config) {
+					cfg.Protocol = protocol
+					cfg.Recorder = func(_ context.Context, r Record) error { record = r; return nil }
+				})
+				result, err := c.Evaluate(t.Context(), openRouterScopeRequest("decision-model-preview"), Options{})
+				if err != nil {
+					t.Fatalf("compatible response rejected: %v", err)
+				}
+				if *result.Answers["scope"].Choice != "full_tools" || result.Usage.InputTokens != tc.input || result.Usage.OutputTokens != tc.output || result.RequestID != "compatible-request-1" {
+					t.Fatalf("incorrect response: %+v", result)
+				}
+				if !record.UsageKnown || record.Usage.InputTokens != tc.input || record.Usage.OutputTokens != tc.output || record.RequestID != result.RequestID || record.Attempts != 1 {
+					t.Fatalf("incorrect accounting record: %+v", record)
+				}
+				stats := c.Stats()
+				if stats.Failures != 0 || stats.Attempts != 1 || stats.UnknownUsage != 0 || stats.InputTokens != uint64(tc.input) || stats.OutputTokens != uint64(tc.output) {
+					t.Fatalf("incorrect usage statistics: %+v", stats)
+				}
+			})
+		}
+	}
+}
+
+func TestCompatibleResponseRequestID(t *testing.T) {
+	for _, tc := range []struct {
+		name, header, requestID, id, want string
+	}{
+		{"header takes precedence", "header-id", "body-request-id", "body-id", "header-id"},
+		{"body request ID", "", "body-request-id", "body-id", "body-request-id"},
+		{"body ID fallback", "", "", "body-id", "body-id"},
+		{"invalid request ID", "", "unsafe request ID", "body-id", "body-id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var record Record
+			c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Request-ID", tc.header)
+				fmt.Fprintf(w, `{"model":"jev-1.13.0","request_id":%q,"id":%q,"answers":{}}`, tc.requestID, tc.id)
+			}, func(cfg *Config) {
+				cfg.Recorder = func(_ context.Context, r Record) error { record = r; return nil }
+			})
+			result, err := c.Evaluate(t.Context(), request(), Options{})
+			var apiErr *Error
+			if !errors.As(err, &apiErr) || apiErr.Kind != ErrResponse || apiErr.RequestID != tc.want || record.RequestID != tc.want || result == nil || result.RequestID != tc.want {
+				t.Fatalf("request ID lost: result=%+v record=%+v error=%v", result, record, err)
+			}
+		})
+	}
+}
+
+func TestCompatibleResponseMinimalAnswers(t *testing.T) {
+	for _, protocol := range []string{"typesafe.decisions", OpenRouterDecisionsProtocol} {
+		for _, tc := range []struct {
+			name, answer string
+			q            Question
+			confidence   float64
+		}{
+			{"probabilities only", `{"choice":"a","probabilities":{"a":0.9,"b":0.1}}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.8},
+			{"confidence only", `{"type":"choice","choice":"a","confidence":0.9}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.9},
+			{"partial probabilities", `{"choice":"a","confidence":0.9,"probabilities":{"a":0.7}}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.9},
+			{"invalid distribution", `{"choice":"a","confidence":0.9,"probabilities":{"a":0.7,"b":0.8}}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.9},
+			{"invalid confidence with probabilities", `{"choice":"a","confidence":-1,"probabilities":{"a":0.9,"b":0.1}}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.8},
+			{"malformed optional metadata", `{"choice":"a","confidence":0.9,"probabilities":"unavailable","legend":[]}`, NewChoice("q", map[string]any{"a": nil, "b": nil}), 0.9},
+			{"score with confidence", `{"score":0.3,"confidence":0.9}`, NewScore("q", []any{"low", "high"}), 0.9},
+			{"score with probabilities", `{"score":0.3,"probabilities":{"0":0.7,"1":0.3}}`, NewScore("q", []any{"low", "high"}), 0.4},
+			{"noul only", `{"noul":0}`, NewNoul("q", nil), 0},
+			{"noul metadata", `{"noul":0,"confidence":0.9}`, NewNoul("q", nil), 0},
+		} {
+			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+				var record Record
+				c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, `{"answers":{"check":%s,"extra":"ignored"}}`, tc.answer)
+				}, func(cfg *Config) {
+					cfg.Protocol = protocol
+					cfg.Recorder = func(_ context.Context, r Record) error { record = r; return nil }
+				})
+				result, err := c.Evaluate(t.Context(), Request{State: "text", Questions: map[string]Question{"check": tc.q}}, Options{})
+				if err != nil || result == nil {
+					t.Fatalf("usable answer rejected: result=%+v err=%v", result, err)
+				}
+				a := result.Answers["check"]
+				if len(result.Answers) != 1 || a.Type != tc.q.Type || result.Model != DefaultModel || !record.UsageKnown || record.Usage.InputTokens != 0 || record.Usage.OutputTokens != 0 {
+					t.Fatalf("incorrect normalized answer/accounting: result=%+v record=%+v", result, record)
+				}
+				if tc.q.Type == Noul {
+					if a.Confidence != nil || a.Noul == nil || *a.Noul != 0 {
+						t.Fatalf("incorrect noul answer: %+v", a)
+					}
+				} else if a.Confidence == nil || math.Abs(*a.Confidence-tc.confidence) > 1e-9 {
+					t.Fatalf("incorrect confidence fallback: %+v", a)
+				}
+				if tc.q.Type == Score && (a.Score == nil || *a.Score != 0.3 || len(a.Legend) != 2) {
+					t.Fatalf("score/legend missing: %+v", a)
+				}
+			})
+		}
+	}
+}
+
+func TestCompatibleResponseDifferentServedModel(t *testing.T) {
+	var record Record
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, strings.Replace(noulResponse, DefaultModel, "decision-model-preview", 1))
+	}, func(cfg *Config) {
+		cfg.Recorder = func(_ context.Context, r Record) error { record = r; return nil }
+	})
+	result, err := c.Evaluate(t.Context(), request(), Options{})
+	if err != nil || result == nil || result.Model != "decision-model-preview" || record.ServedModel != result.Model || record.RequestedModel != DefaultModel {
+		t.Fatalf("compatible model metadata rejected/lost: result=%+v record=%+v err=%v", result, record, err)
 	}
 }
 
@@ -321,13 +454,13 @@ func TestChoiceAndScoreRejectMalformedAnswers(t *testing.T) {
 		answer string
 	}{
 		{"unknown choice", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"choice":"a"`, `"choice":"c"`, 1)},
-		{"missing confidence", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `,"confidence":0.5`, ``, 1)},
-		{"invalid confidence", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"confidence":0.5`, `"confidence":-1`, 1)},
-		{"null probability", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"b":0.3`, `"b":null`, 1)},
-		{"missing probability", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `,"b":0.3`, ``, 1)},
-		{"invalid distribution", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"b":0.3`, `"b":0.8`, 1)},
+		{"missing decision confidence", NewChoice("q", map[string]any{"a": nil, "b": nil}), `{"choice":"a"}`},
+		{"invalid decision metadata", NewChoice("q", map[string]any{"a": nil, "b": nil}), `{"choice":"a","confidence":-1,"probabilities":{"a":null,"b":2}}`},
+		{"missing score confidence", NewScore("q", []any{"low", "high"}), `{"score":0.3}`},
+		{"missing choice", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"choice":"a",`, ``, 1)},
+		{"invalid choice type", NewChoice("q", map[string]any{"a": nil, "b": nil}), strings.Replace(choice, `"choice":"a"`, `"choice":1`, 1)},
 		{"score out of range", NewScore("q", []any{"low", "high"}), strings.Replace(score, `"score":0.3`, `"score":2`, 1)},
-		{"missing legend", NewScore("q", []any{"low", "high"}), strings.Replace(score, `,"legend":{"0":"low","1":"high"}`, ``, 1)},
+		{"missing score", NewScore("q", []any{"low", "high"}), strings.Replace(score, `"score":0.3,`, ``, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +471,52 @@ func TestChoiceAndScoreRejectMalformedAnswers(t *testing.T) {
 				t.Fatalf("out=%+v err=%v", out, err)
 			}
 		})
+	}
+}
+
+func TestAliyunSystemOneCompatibleEndpoint(t *testing.T) {
+	for _, base := range []string{"https://maas.qianwenaiapi.com/compatible-mode", "https://maas.qianwenaiapi.com/compatible-mode/v1", "https://maas.qianwenaiapi.com/compatible-mode/v1/systemone"} {
+		c, err := New(Config{APIKey: "key", BaseURL: base, Model: "decision-model-preview"})
+		if err != nil || c.endpoint != "https://maas.qianwenaiapi.com/compatible-mode/v1/systemone" {
+			t.Fatalf("invalid Aliyun endpoint: client=%+v err=%v", c, err)
+		}
+	}
+}
+
+func TestAliyunSystemOneDocumentedResponse(t *testing.T) {
+	var record Record
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/compatible-mode/v1/systemone" {
+			t.Errorf("wrong Aliyun compatibility path: %s", r.URL.Path)
+		}
+		var sent Request
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := sent.Questions["escalate"].Instructions.(string); !ok {
+			t.Error("Aliyun received non-string instructions")
+		}
+		fmt.Fprint(w, `{"model":"decision-model-preview","request_id":"7b986c65-b223-9341-b5f0-b988e27ecaac","answers":{"department":{"type":"choice","choice":"billing","confidence":0.88,"probabilities":{"billing":0.94,"technical":0.06}},"escalate":{"type":"noul","noul":0.99},"severity":{"type":"score","score":2.25,"confidence":0.91,"legend":{"0":"minor","1":"partial","2":"unavailable","3":"serious"},"probabilities":{"0":0,"1":0.01,"2":0.73,"3":0.26}}},"usage":{"input_tokens":125},"latency_ms":52.9}`)
+	}))
+	defer srv.Close()
+	c, err := New(Config{APIKey: "key", BaseURL: srv.URL + "/compatible-mode", Model: "decision-model-preview", Recorder: func(_ context.Context, r Record) error { record = r; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := Request{State: "ticket", Questions: map[string]Question{
+		"department": NewChoice("Team?", map[string]any{"billing": "Payments", "technical": "Bugs"}),
+		"escalate":   NewNoul(map[string]any{"question": "Escalate?", "category": "Urgent"}, nil),
+		"severity":   NewScore("Severity?", []any{"minor", "partial", "unavailable", "serious"}),
+	}}
+	result, err := c.Evaluate(t.Context(), req, Options{})
+	if err != nil || result == nil {
+		t.Fatalf("Aliyun response rejected: %v", err)
+	}
+	if len(result.Answers) != 3 || *result.Answers["department"].Confidence != 0.88 || *result.Answers["severity"].Score != 2.25 || *result.Answers["escalate"].Noul != 0.99 || record.Usage.InputTokens != 125 || record.Usage.OutputTokens != 0 || result.RequestID != "7b986c65-b223-9341-b5f0-b988e27ecaac" {
+		t.Fatalf("Aliyun response lost fields: result=%+v record=%+v", result, record)
+	}
+	if _, ok := req.Questions["escalate"].Instructions.(map[string]any); !ok {
+		t.Fatal("caller request mutated")
 	}
 }
 
@@ -357,8 +536,8 @@ func TestStateShapesAndExplicitVersionPolicy(t *testing.T) {
 	if _, err := c.Evaluate(context.Background(), req, Options{ExpectedModel: "jev-1.14.0"}); KindOf(err) != ErrModelVersion {
 		t.Fatalf("alias guard: %v", err)
 	}
-	if _, err := c.Evaluate(context.Background(), request(), Options{ExpectedModel: "jev-1.14.0"}); KindOf(err) != ErrValidation {
-		t.Fatalf("conflicting pin: %v", err)
+	if _, err := c.Evaluate(context.Background(), request(), Options{ExpectedModel: "jev-1.14.0"}); KindOf(err) != ErrModelVersion {
+		t.Fatalf("explicit version guard: %v", err)
 	}
 }
 

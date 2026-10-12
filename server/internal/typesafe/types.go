@@ -9,7 +9,7 @@ import (
 
 const (
 	DefaultBaseURL = "https://api.typesafe.ai/v1"
-	// Pin the release used to validate this integration. Aliases remain opt-in.
+	// Default request model; response model names may differ on compatible gateways.
 	DefaultModel = "jev-1.13.0"
 )
 
@@ -65,26 +65,39 @@ type Answer struct {
 	Legend        map[string]json.RawMessage `json:"legend,omitempty"`
 }
 
-// UnmarshalJSON rejects null probabilities (encoding/json would otherwise
-// silently turn them into zero, which is a valid and actionable probability).
+// UnmarshalJSON decodes decision values strictly, while auxiliary metadata is optional.
 func (a *Answer) UnmarshalJSON(data []byte) error {
 	type plain Answer
 	var wire struct {
 		*plain
-		Probabilities map[string]*float64 `json:"probabilities"`
+		Confidence    json.RawMessage `json:"confidence"`
+		Probabilities json.RawMessage `json:"probabilities"`
+		Legend        json.RawMessage `json:"legend"`
 	}
 	decoded := Answer{}
 	wire.plain = (*plain)(&decoded)
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	if wire.Probabilities != nil {
-		decoded.Probabilities = make(map[string]float64, len(wire.Probabilities))
-		for k, v := range wire.Probabilities {
-			if v == nil {
-				return failure(ErrResponse, "null probability")
+	if len(wire.Confidence) > 0 {
+		if json.Unmarshal(wire.Confidence, &decoded.Confidence) != nil {
+			decoded.Confidence = nil
+		}
+	}
+	if len(wire.Probabilities) > 0 {
+		var probabilities map[string]*float64
+		if json.Unmarshal(wire.Probabilities, &probabilities) == nil {
+			decoded.Probabilities = make(map[string]float64, len(probabilities))
+			for k, v := range probabilities {
+				if v != nil && probability(*v) {
+					decoded.Probabilities[k] = *v
+				}
 			}
-			decoded.Probabilities[k] = *v
+		}
+	}
+	if len(wire.Legend) > 0 {
+		if json.Unmarshal(wire.Legend, &decoded.Legend) != nil {
+			decoded.Legend = nil
 		}
 	}
 	*a = decoded
@@ -103,7 +116,7 @@ type Response struct {
 	Model    string            `json:"model"`
 	Answers  map[string]Answer `json:"answers"`
 	Usage    Usage             `json:"usage"`
-	// RequestID is the upstream x-request-id, when provided. RequestedModel
+	// RequestID is the upstream X-Request-ID, request_id or id. RequestedModel
 	// preserves an alias even when Model reports a concrete release.
 	RequestID      string `json:"-"`
 	RequestedModel string `json:"-"`
@@ -123,8 +136,7 @@ type Options struct {
 	// Timeout bounds the complete evaluation, including retries/backoff.
 	// Zero uses Config.Timeout; a caller's earlier deadline always wins.
 	Timeout time.Duration
-	// ExpectedModel optionally locks an alias to a tested concrete release.
-	// TypeSafe pinned requests enforce their version automatically. OpenRouter
-	// Decisions reports a resolved model ID and only enforces an explicit pin.
+	// ExpectedModel optionally locks the response to a tested concrete release.
+	// Model names and versions are otherwise treated as informational metadata.
 	ExpectedModel string
 }

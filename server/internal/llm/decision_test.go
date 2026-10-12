@@ -97,6 +97,68 @@ func TestDecisionAccountingAndPrivacy(t *testing.T) {
 	}
 }
 
+func TestDecisionCompatibleResponseAccounting(t *testing.T) {
+	for _, tc := range []struct {
+		name, usage   string
+		input, output int
+		cost          int64
+	}{
+		{"input only", `,"usage":{"input_tokens":1000000}`, 1000000, 0, 42000},
+		{"output only", `,"usage":{"output_tokens":10}`, 0, 10, 0},
+		{"empty usage", `,"usage":{}`, 0, 0, 0},
+		{"no usage", ``, 0, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := decisionTestDB(t)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `{"model":"decision-model-preview","request_id":"compatible-request-1","answers":{"scope":{"choice":"full_tools","confidence":0.87,"probabilities":{"full_tools":0.93,"search_only":0.07},"type":"choice"}},"latency_ms":63.4`+tc.usage+`}`)
+			}))
+			defer srv.Close()
+			seedDecisionModel(t, db, srv.URL, "compatible-decision")
+			if err := store.SetSetting(db, "daily_token_limit", 2000000); err != nil {
+				t.Fatal(err)
+			}
+			task := NewTaskLLM(db, nil, nil)
+			result, err := task.RunDecision(t.Context(), "decision-model", typesafe.Request{
+				State:     "input",
+				Questions: map[string]typesafe.Question{"scope": typesafe.NewChoice("Choose the tool scope", map[string]any{"full_tools": nil, "search_only": nil})},
+			}, typesafe.Options{Metadata: typesafe.Metadata{UserID: "decision-user", MessageID: "compatible-message", Purpose: "task.test_decision"}})
+			if err != nil || result == nil || *result.Answers["scope"].Choice != "full_tools" {
+				t.Fatalf("compatible decision rejected: result=%+v err=%v", result, err)
+			}
+			var count, input, output int
+			var cost int64
+			if err := db.QueryRow(`SELECT COUNT(*),COALESCE(SUM(input_tokens),0),COALESCE(SUM(output_tokens),0),COALESCE(SUM(cost_micros),0) FROM billing_usage`).Scan(&count, &input, &output, &cost); err != nil {
+				t.Fatal(err)
+			}
+			wantCount := 0
+			if tc.input+tc.output > 0 {
+				wantCount = 1
+			}
+			if count != wantCount || input != tc.input || output != tc.output || cost != tc.cost {
+				t.Fatalf("wrong billing: count=%d input=%d output=%d cost=%d", count, input, output, cost)
+			}
+			var status, detail string
+			var loggedInput, loggedOutput int
+			var loggedCost float64
+			if err := db.QueryRow(`SELECT status,error,input_tokens,output_tokens,cost FROM usage_logs`).Scan(&status, &detail, &loggedInput, &loggedOutput, &loggedCost); err != nil {
+				t.Fatal(err)
+			}
+			if status != "ok" || detail != "" || loggedInput != tc.input || loggedOutput != tc.output || math.Abs(loggedCost-float64(tc.cost)/1e6) > 1e-10 {
+				t.Fatalf("wrong diagnostic record: status=%s error=%s input=%d output=%d cost=%f", status, detail, loggedInput, loggedOutput, loggedCost)
+			}
+			var quotaStatus string
+			var actual int64
+			if err := db.QueryRow(`SELECT status,actual_micros FROM quota_ledger WHERE user_id='decision-user' AND scope_type='daily_token'`).Scan(&quotaStatus, &actual); err != nil {
+				t.Fatal(err)
+			}
+			if quotaStatus != store.QuotaStatusFinalized || actual != int64(tc.input+tc.output)*1000000 {
+				t.Fatalf("quota reservation not settled with reported usage: status=%s actual=%d", quotaStatus, actual)
+			}
+		})
+	}
+}
+
 func TestDecisionAccountingFailureNotSilenced(t *testing.T) {
 	db := decisionTestDB(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

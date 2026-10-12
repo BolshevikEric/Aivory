@@ -110,12 +110,9 @@ func TestOpenRouterDecisionsExplicitExpectedModel(t *testing.T) {
 
 func TestOpenRouterDecisionsInvalidResponseRetainsHTTPContext(t *testing.T) {
 	for _, tc := range []struct{ name, before, after string }{
-		{"missing model", `"model": "microsoft/microsoft-decision-1-20261009"`, `"model": ""`},
 		{"unknown choice", `"choice": "search_only"`, `"choice": "unknown"`},
 		{"wrong answer type", `"type": "choice"`, `"type": "noul"`},
-		{"invalid confidence", `"confidence": 0.9881778647009158`, `"confidence": 2`},
-		{"invalid distribution", `"full_tools": 0.005911067649542063`, `"full_tools": 0.5`},
-		{"missing usage", `"input_tokens": 100`, `"unrecognized_tokens": 100`},
+		{"invalid usage", `"input_tokens": 100`, `"input_tokens": -1`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
