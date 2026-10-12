@@ -27,7 +27,7 @@ var auditSnapshotSpecs = map[string]auditSnapshotSpec{
 	"models":           {"models", "id", "label", "label,channel_id,kind,protocol,request_id,enabled,sort_order,fallback_channel_id,tool_mode,vision,stream,research_enabled,fast,moderation_enabled,moderation_mode,price_input,price_output,price_cache_read,price_cache_write,price_per_image,currency,dim,compaction_token_threshold,image_timeout_sec", "system_prompt,extra_params,official_tools,param_controls,builtin_tools,mcp_server_ids,tags"},
 	"user-groups":      {"user_groups", "id", "name", "name,is_default,sort_order,max_projects,max_kbs,max_storage_mb,credit_allowance_micros,credit_period_seconds,is_purchasable,monthly_price_amount_minor,yearly_price_amount_minor", "permissions"},
 	"model-tags":       {"model_tags", "id", "name", "name,sort_order", ""},
-	"mcp":              {"mcp_servers", "id", "name", "name,enabled,protocol_version,last_synced_at", "headers,url,discovered_tools"},
+	"mcp":              {"mcp_servers", "id", "name", "name,enabled,disabled_tools,protocol_version,last_synced_at", "headers,url,discovered_tools"},
 	"oauth-providers":  {"oauth_providers", "id", "name", "name,kind,enabled,sort_order", "client_secret,client_id,issuer_url,jwks_url,auth_url,token_url,userinfo_url,scopes"},
 	"skills":           {"skills", "id", "name", "name,enabled,sort_order", "instructions,assets"},
 	"prompts":          {"prompts", "id", "name", "name,enabled,sort_order", "content"},

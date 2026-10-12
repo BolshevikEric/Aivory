@@ -6,8 +6,45 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestMCPServerLegacyToolAvailabilityMigration(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "legacy-mcp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	start := strings.Index(schemaSQL, "CREATE TABLE IF NOT EXISTS mcp_servers")
+	if start < 0 {
+		t.Fatal("missing MCP schema")
+	}
+	end := strings.Index(schemaSQL[start:], ");")
+	if end < 0 {
+		t.Fatal("missing MCP table terminator")
+	}
+	legacySchema := strings.Replace(schemaSQL[start:start+end+2], "  disabled_tools   TEXT NOT NULL DEFAULT '[]',\n", "", 1)
+	if strings.Contains(legacySchema, "disabled_tools") {
+		t.Fatal("legacy schema still contains the new column")
+	}
+	if _, err := db.Exec(legacySchema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO mcp_servers(id,name,icon,description,url,enabled,discovered_tools)
+		VALUES('legacy-mcp','Legacy','Search','Existing tools','https://example.test/mcp',1,'[{"name":"search","inputSchema":{"type":"object"}}]')`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := Migrate(db); err != nil {
+			t.Fatalf("migrate existing MCP table: %v", err)
+		}
+	}
+	server, err := GetMCPServer(t.Context(), db, "legacy-mcp")
+	if err != nil || !server.Enabled || !server.ToolEnabled("search") || len(server.DisabledTools) != 0 || !bytes.Contains(server.DiscoveredTools, []byte(`"search"`)) {
+		t.Fatalf("migration changed existing tools: server=%+v err=%v", server, err)
+	}
+}
 
 func TestMCPServerStoreCRUDSyncAndBackup(t *testing.T) {
 	db, err := Open(filepath.Join(t.TempDir(), "mcp-servers.db"))
@@ -55,6 +92,10 @@ func TestMCPServerStoreCRUDSyncAndBackup(t *testing.T) {
 	if synced.ProtocolVersion != "2025-03-26" || synced.LastSyncedAt != 1234 || string(synced.DiscoveredTools) == "[]" {
 		t.Fatalf("sync state mismatch: %+v", synced)
 	}
+	disabled := []string{"get-tickets"}
+	if _, err := UpdateMCPServer(ctx, db, created.ID, MCPServerPatch{DisabledTools: &disabled}); err != nil {
+		t.Fatalf("disable discovered tool: %v", err)
+	}
 	failed, err := UpdateMCPServerSyncState(ctx, db, created.ID, nil, synced.ProtocolVersion, "connection failed", 1235)
 	if err != nil {
 		t.Fatalf("record sync failure: %v", err)
@@ -82,7 +123,7 @@ func TestMCPServerStoreCRUDSyncAndBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load restored MCP server: %v", err)
 	}
-	if restored.Headers["Authorization"] != "Bearer private-token" || restored.LastError != "connection failed" {
+	if restored.Headers["Authorization"] != "Bearer private-token" || restored.LastError != "connection failed" || restored.ToolEnabled("get-tickets") {
 		t.Fatalf("restored MCP server mismatch: %+v", restored)
 	}
 

@@ -388,6 +388,7 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   headers          TEXT NOT NULL DEFAULT '{}',
   enabled          INTEGER NOT NULL DEFAULT 0,
   discovered_tools TEXT NOT NULL DEFAULT '[]',
+  disabled_tools   TEXT NOT NULL DEFAULT '[]',
   protocol_version TEXT NOT NULL DEFAULT '',
   last_error       TEXT NOT NULL DEFAULT '',
   last_synced_at   BIGINT NOT NULL DEFAULT 0,

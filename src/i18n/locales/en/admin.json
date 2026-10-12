@@ -1041,6 +1041,16 @@
     "testSucceeded": "Connection successful",
     "syncSucceeded": "Tools synchronized",
     "toolCount": "{{count}} discovered",
+    "tools": {
+      "title": "{{name}} · Tools",
+      "manageServer": "Manage tools for {{name}}",
+      "available": "{{count}} / {{total}} tools enabled",
+      "search": "Search tools",
+      "toggle": "Enable tool {{name}}",
+      "parameters": "Parameter schema",
+      "empty": "No tools discovered",
+      "noResults": "No matching tools"
+    },
     "lastSynced": "Last synchronized {{time}}",
     "fields": {
       "name": "Name",

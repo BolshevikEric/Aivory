@@ -26,6 +26,43 @@ type registryMCPRequestRecord struct {
 	Arguments     map[string]string
 }
 
+func TestRegistryMCPDisabledToolEnforcedAndRestored(t *testing.T) {
+	db := newMCPRegistryTestDB(t)
+	createMCPRegistryServer(t, db, store.MCPServer{
+		ID: "selective-server", Name: "Selective", Icon: "Search", Description: "Selective tools", URL: "https://example.test/mcp", Enabled: true,
+		DiscoveredTools: json.RawMessage(`[{"name":"search","inputSchema":{"type":"object"}},{"name":"fetch","inputSchema":{"type":"object"}}]`),
+	})
+	registry := NewRegistry(db, config.Config{}, nil)
+	initial := registry.ListMCP("", "", "")
+	if len(initial) != 2 {
+		t.Fatalf("expected two tools: %+v", initial)
+	}
+	var oldName string
+	for _, tool := range initial {
+		if registry.mcpBindings[tool.Name].RemoteName == "search" {
+			oldName = tool.Name
+		}
+	}
+	disabled := []string{"search"}
+	if _, err := store.UpdateMCPServer(t.Context(), db, "selective-server", store.MCPServerPatch{DisabledTools: &disabled}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := registry.Run(t.Context(), oldName, []byte(`{}`), &llm.ToolContext{}); err == nil {
+		t.Fatal("stale declaration executed a disabled tool")
+	}
+	remaining := registry.ListMCP("", "", "")
+	if len(remaining) != 1 || registry.mcpBindings[remaining[0].Name].RemoteName != "fetch" {
+		t.Fatalf("other tools affected: %+v", remaining)
+	}
+	disabled = []string{}
+	if _, err := store.UpdateMCPServer(t.Context(), db, "selective-server", store.MCPServerPatch{DisabledTools: &disabled}); err != nil {
+		t.Fatal(err)
+	}
+	if restored := registry.ListMCP("", "", ""); len(restored) != 2 {
+		t.Fatalf("tool not restored: %+v", restored)
+	}
+}
+
 func TestRegistryListMCPMapsSnapshotWithoutUnsafeDefinitions(t *testing.T) {
 	db := newMCPRegistryTestDB(t)
 	remoteName := "  get tickets / 北京  "

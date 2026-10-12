@@ -1045,6 +1045,16 @@
     "testSucceeded": "连接成功",
     "syncSucceeded": "工具已同步",
     "toolCount": "已发现 {{count}} 个",
+    "tools": {
+      "title": "{{name}} · 工具",
+      "manageServer": "管理 {{name}} 的工具",
+      "available": "已启用 {{count}} / {{total}} 个工具",
+      "search": "搜索工具",
+      "toggle": "启用工具 {{name}}",
+      "parameters": "参数定义",
+      "empty": "尚未发现工具",
+      "noResults": "没有匹配的工具"
+    },
     "lastSynced": "上次同步于 {{time}}",
     "fields": {
       "name": "名称",

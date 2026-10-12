@@ -1041,6 +1041,16 @@
     "testSucceeded": "Connexion réussie",
     "syncSucceeded": "Outils synchronisés",
     "toolCount": "{{count}} détectés",
+    "tools": {
+      "title": "{{name}} · Outils",
+      "manageServer": "Gérer les outils de {{name}}",
+      "available": "{{count}} / {{total}} outils activés",
+      "search": "Rechercher un outil",
+      "toggle": "Activer l'outil {{name}}",
+      "parameters": "Schéma des paramètres",
+      "empty": "Aucun outil détecté",
+      "noResults": "Aucun outil correspondant"
+    },
     "lastSynced": "Dernière synchronisation : {{time}}",
     "fields": {
       "name": "Nom",

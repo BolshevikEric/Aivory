@@ -342,6 +342,7 @@ type MCPServer struct {
 	Headers         map[string]string `json:"-"`
 	Enabled         bool              `json:"enabled"`
 	DiscoveredTools json.RawMessage   `json:"discovered_tools"`
+	DisabledTools   []string          `json:"disabled_tools"`
 	ProtocolVersion string            `json:"protocol_version"`
 	LastError       string            `json:"last_error"`
 	LastSyncedAt    int64             `json:"last_synced_at"`

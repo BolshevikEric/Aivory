@@ -135,6 +135,40 @@ func TestMCPAdminCRUDMasksAndPreservesHeaders(t *testing.T) {
 	}
 }
 
+func TestMCPAdminIndividualToolToggles(t *testing.T) {
+	fixture := newMCPAdminFixture(t)
+	server, err := store.CreateMCPServer(t.Context(), fixture.db, store.MCPServer{
+		Name: "Search", Icon: "Search", Description: "Search tools", URL: "https://example.test/mcp", Enabled: true,
+		DiscoveredTools: json.RawMessage(`[{"name":"search","inputSchema":{"type":"object"}},{"name":"fetch","inputSchema":{"type":"object"}}]`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := decodeMCPAdminResponse[adminMCPServerResponse](t, fixture.request(t, http.MethodPatch, "/api/admin/mcp/"+server.ID, map[string]any{"disabled_tools": []string{"search"}}), http.StatusOK)
+	var discovered []json.RawMessage
+	if json.Unmarshal(updated.DiscoveredTools, &discovered) != nil || len(discovered) != 2 || len(updated.DisabledTools) != 1 || updated.DisabledTools[0] != "search" || !updated.Enabled {
+		t.Fatalf("tool configuration not retained: %+v", updated)
+	}
+	current, err := store.GetMCPServer(t.Context(), fixture.db, server.ID)
+	if err != nil || current.ToolEnabled("search") || !current.ToolEnabled("fetch") {
+		t.Fatalf("wrong tool availability: server=%+v err=%v", current, err)
+	}
+	if _, err := store.UpdateMCPServerSyncState(t.Context(), fixture.db, server.ID, current.DiscoveredTools, "2025-03-26", "", 0); err != nil {
+		t.Fatal(err)
+	}
+	current, _ = store.GetMCPServer(t.Context(), fixture.db, server.ID)
+	if current.ToolEnabled("search") {
+		t.Fatal("sync re-enabled disabled tool")
+	}
+	if rec := fixture.request(t, http.MethodPatch, "/api/admin/mcp/"+server.ID, map[string]any{"disabled_tools": []string{"unknown"}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown tool accepted: %d %s", rec.Code, rec.Body.String())
+	}
+	restored := decodeMCPAdminResponse[adminMCPServerResponse](t, fixture.request(t, http.MethodPatch, "/api/admin/mcp/"+server.ID, map[string]any{"disabled_tools": []string{}}), http.StatusOK)
+	if len(restored.DisabledTools) != 0 {
+		t.Fatalf("tool was not re-enabled: %+v", restored)
+	}
+}
+
 func TestMCPResponsesStripLegacyURLCredentials(t *testing.T) {
 	const legacyURL = "https://legacy-user:legacy-password@mcp.example.test/rpc?token=legacy-query-secret#fragment"
 	const headerSecret = "legacy-header-secret"

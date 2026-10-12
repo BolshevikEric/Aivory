@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -229,6 +230,7 @@ type mcpServerSnapshot struct {
 	Headers         map[string]string
 	Enabled         bool
 	DiscoveredTools json.RawMessage
+	DisabledTools   []string
 	ProtocolVersion string
 	LastSyncedAt    int64
 	URL             string
@@ -303,7 +305,7 @@ func (r *Registry) ListMCP(_ string, userID string, workspaceID string) []llm.MC
 		servers = append(servers, mcpServerSnapshot{
 			ID: server.ID, Name: server.Name, Icon: server.Icon, Description: server.Description,
 			URL: server.URL, Headers: server.Headers,
-			Enabled: server.Enabled, DiscoveredTools: server.DiscoveredTools,
+			Enabled: server.Enabled, DiscoveredTools: server.DiscoveredTools, DisabledTools: server.DisabledTools,
 			ProtocolVersion: server.ProtocolVersion, LastSyncedAt: server.LastSyncedAt,
 		})
 	}
@@ -384,9 +386,10 @@ func (r *Registry) mergeMCPDefinitions(servers []mcpServerSnapshot) []llm.MCPToo
 		// Snapshots can come from an older database/backup that predates API-side
 		// redaction. Sanitize again before schema text reaches an LLM provider.
 		remoteTools = redactMCPToolSnapshotMetadata(remoteTools, server.Headers)
+		availability := store.MCPServer{DisabledTools: server.DisabledTools}
 		for _, remote := range remoteTools {
 			remote.Name = strings.TrimSpace(remote.Name)
-			if remote.Name == "" || !validMCPInputSchema(remote.InputSchema) {
+			if remote.Name == "" || !availability.ToolEnabled(remote.Name) || !validMCPInputSchema(remote.InputSchema) {
 				continue
 			}
 			remoteKey := fmt.Sprintf("%t\x00%s\x00%s\x00%s\x00%s",
@@ -444,7 +447,7 @@ func (r *Registry) mergeMCPDefinitions(servers []mcpServerSnapshot) []llm.MCPToo
 func mcpSnapshotRuntimeFingerprint(server mcpServerSnapshot) string {
 	return mcpRuntimeFingerprint(&store.MCPServer{
 		ID: server.ID, URL: server.URL, Headers: server.Headers, Enabled: server.Enabled,
-		DiscoveredTools: server.DiscoveredTools, ProtocolVersion: server.ProtocolVersion,
+		DiscoveredTools: server.DiscoveredTools, DisabledTools: server.DisabledTools, ProtocolVersion: server.ProtocolVersion,
 		LastSyncedAt: server.LastSyncedAt,
 	})
 }
@@ -817,6 +820,9 @@ func (r *Registry) runMCP(ctx context.Context, binding mcpBinding, input []byte,
 	if !server.Enabled {
 		return "", nil, errors.New("MCP service is disabled")
 	}
+	if !server.ToolEnabled(binding.RemoteName) {
+		return "", nil, errors.New("MCP tool is disabled")
+	}
 	if !mcpSnapshotContainsTool(server.DiscoveredTools, binding.RemoteName) {
 		return "", nil, errors.New("MCP tool is no longer available")
 	}
@@ -924,6 +930,7 @@ func sameMCPRuntimeState(left, right *store.MCPServer) bool {
 	}
 	return left.ID == right.ID && left.URL == right.URL &&
 		left.Enabled == right.Enabled &&
+		slices.Equal(left.DisabledTools, right.DisabledTools) &&
 		left.ProtocolVersion == right.ProtocolVersion &&
 		left.LastSyncedAt == right.LastSyncedAt &&
 		mcpStringMapsEqual(left.Headers, right.Headers) &&
@@ -1033,6 +1040,7 @@ func mcpRuntimeFingerprint(server *store.MCPServer) string {
 		return ""
 	}
 	headerJSON, _ := json.Marshal(server.Headers)
+	disabledJSON, _ := json.Marshal(server.DisabledTools)
 	digest := sha256.New()
 	for _, value := range []string{
 		server.ID,
@@ -1042,6 +1050,7 @@ func mcpRuntimeFingerprint(server *store.MCPServer) string {
 		server.ProtocolVersion,
 		fmt.Sprintf("%d", server.LastSyncedAt),
 		string(server.DiscoveredTools),
+		string(disabledJSON),
 	} {
 		_, _ = digest.Write([]byte(fmt.Sprintf("%d:", len(value))))
 		_, _ = digest.Write([]byte(value))

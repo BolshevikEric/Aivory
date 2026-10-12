@@ -1041,6 +1041,16 @@
     "testSucceeded": "連線成功",
     "syncSucceeded": "工具已同步",
     "toolCount": "已探索 {{count}} 個",
+    "tools": {
+      "title": "{{name}} · 工具",
+      "manageServer": "管理 {{name}} 的工具",
+      "available": "已啟用 {{count}} / {{total}} 個工具",
+      "search": "搜尋工具",
+      "toggle": "啟用工具 {{name}}",
+      "parameters": "參數定義",
+      "empty": "尚未探索工具",
+      "noResults": "沒有符合的工具"
+    },
     "lastSynced": "上次同步於 {{time}}",
     "fields": {
       "name": "名稱",

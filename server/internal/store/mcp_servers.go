@@ -16,15 +16,15 @@ var (
 )
 
 const mcpServerColumns = `id, name, icon, description, url, headers, enabled,
-	discovered_tools, protocol_version, last_error, last_synced_at, created_at, updated_at`
+	discovered_tools, disabled_tools, protocol_version, last_error, last_synced_at, created_at, updated_at`
 
 func scanMCPServer(s scanner) (MCPServer, error) {
 	var server MCPServer
-	var headersText, discoveredToolsText string
+	var headersText, discoveredToolsText, disabledToolsText string
 	var enabled int
 	if err := s.Scan(
 		&server.ID, &server.Name, &server.Icon, &server.Description, &server.URL,
-		&headersText, &enabled, &discoveredToolsText, &server.ProtocolVersion,
+		&headersText, &enabled, &discoveredToolsText, &disabledToolsText, &server.ProtocolVersion,
 		&server.LastError, &server.LastSyncedAt, &server.CreatedAt, &server.UpdatedAt,
 	); err != nil {
 		return server, err
@@ -40,6 +40,9 @@ func scanMCPServer(s scanner) (MCPServer, error) {
 	}
 	server.Enabled = enabled == 1
 	server.DiscoveredTools = json.RawMessage(discoveredToolsText)
+	if err := json.Unmarshal([]byte(disabledToolsText), &server.DisabledTools); err != nil {
+		return server, fmt.Errorf("decode MCP server %s disabled tools: %w", server.ID, err)
+	}
 	return server, nil
 }
 
@@ -127,12 +130,16 @@ func CreateMCPServer(ctx context.Context, db *sql.DB, server MCPServer) (*MCPSer
 	if server.UpdatedAt <= 0 {
 		server.UpdatedAt = now
 	}
+	disabledTools, err := json.Marshal(nonNilMCPDisabledTools(server.DisabledTools))
+	if err != nil {
+		return nil, err
+	}
 	_, err = db.ExecContext(ctx, `INSERT INTO mcp_servers(
 		id, name, icon, description, url, headers, enabled, discovered_tools,
-		protocol_version, last_error, last_synced_at, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		disabled_tools, protocol_version, last_error, last_synced_at, created_at, updated_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		server.ID, server.Name, server.Icon, server.Description, server.URL, string(headers),
-		boolInt(server.Enabled), string(discoveredTools), server.ProtocolVersion,
+		boolInt(server.Enabled), string(discoveredTools), string(disabledTools), server.ProtocolVersion,
 		server.LastError, server.LastSyncedAt, server.CreatedAt, server.UpdatedAt)
 	if err != nil {
 		switch {
@@ -151,12 +158,13 @@ func CreateMCPServer(ctx context.Context, db *sql.DB, server MCPServer) (*MCPSer
 // state is updated separately so a normal metadata edit cannot forge the
 // remote tools snapshot or connection status.
 type MCPServerPatch struct {
-	Name        *string
-	Icon        *string
-	Description *string
-	URL         *string
-	Headers     *map[string]string
-	Enabled     *bool
+	Name          *string
+	Icon          *string
+	Description   *string
+	URL           *string
+	Headers       *map[string]string
+	Enabled       *bool
+	DisabledTools *[]string
 	// ResetDiscovery atomically retires the snapshot negotiated for the previous
 	// endpoint/credentials. API callers set it when trust-bearing metadata changes
 	// or a disabled service is re-enabled, so runtime readers can never observe a
@@ -214,6 +222,14 @@ func updateMCPServer(
 		parts = append(parts, "enabled=?")
 		args = append(args, boolInt(*patch.Enabled))
 	}
+	if patch.DisabledTools != nil {
+		raw, err := json.Marshal(nonNilMCPDisabledTools(*patch.DisabledTools))
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, "disabled_tools=?")
+		args = append(args, string(raw))
+	}
 	if patch.ResetDiscovery {
 		parts = append(parts,
 			"discovered_tools=?", "protocol_version=?", "last_error=?", "last_synced_at=?",
@@ -235,6 +251,9 @@ func updateMCPServer(
 		where += ` AND url=? AND headers=? AND enabled=? AND discovered_tools=? AND protocol_version=? AND last_synced_at=?`
 		args = append(args, expected.URL, string(headers), boolInt(expected.Enabled),
 			string(expected.DiscoveredTools), expected.ProtocolVersion, expected.LastSyncedAt)
+		disabled, _ := json.Marshal(nonNilMCPDisabledTools(expected.DisabledTools))
+		where += ` AND disabled_tools=?`
+		args = append(args, string(disabled))
 	}
 	result, err := db.ExecContext(ctx,
 		`UPDATE mcp_servers SET `+strings.Join(parts, ", ")+` WHERE `+where, args...)
@@ -360,6 +379,43 @@ func DeleteMCPServer(ctx context.Context, db *sql.DB, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func nonNilMCPDisabledTools(names []string) []string {
+	if names == nil {
+		return []string{}
+	}
+	return names
+}
+
+func (server MCPServer) ToolEnabled(name string) bool {
+	for _, disabled := range server.DisabledTools {
+		if disabled == name {
+			return false
+		}
+	}
+	return true
+}
+
+func (server MCPServer) AvailableTools() json.RawMessage {
+	if len(server.DisabledTools) == 0 {
+		return server.DiscoveredTools
+	}
+	var tools []json.RawMessage
+	if json.Unmarshal(server.DiscoveredTools, &tools) != nil {
+		return json.RawMessage(`[]`)
+	}
+	available := make([]json.RawMessage, 0, len(tools))
+	for _, raw := range tools {
+		var tool struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &tool) == nil && server.ToolEnabled(strings.TrimSpace(tool.Name)) {
+			available = append(available, raw)
+		}
+	}
+	result, _ := json.Marshal(available)
+	return result
 }
 
 func normalizedMCPDiscoveredTools(raw json.RawMessage) (json.RawMessage, error) {

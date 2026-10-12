@@ -151,6 +151,7 @@ export interface ApiMCPServer {
   enabled: boolean
   protocol_version?: string
   discovered_tools?: ApiMCPTool[]
+  disabled_tools?: string[]
   last_error?: string
   last_synced_at?: number
   created_at?: number
@@ -159,7 +160,7 @@ export interface ApiMCPServer {
 
 export type ApiMCPServerInput = Pick<
   ApiMCPServer,
-  'name' | 'icon' | 'description' | 'url' | 'headers' | 'enabled'
+  'name' | 'icon' | 'description' | 'url' | 'headers' | 'enabled' | 'disabled_tools'
 >
 
 // ----- Auth ----------------------------------------------------------------

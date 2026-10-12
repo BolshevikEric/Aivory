@@ -29,12 +29,13 @@ const (
 )
 
 type mcpServerPayload struct {
-	Name        *string            `json:"name"`
-	Icon        *string            `json:"icon"`
-	Description *string            `json:"description"`
-	URL         *string            `json:"url"`
-	Headers     *map[string]string `json:"headers"`
-	Enabled     *bool              `json:"enabled"`
+	Name          *string            `json:"name"`
+	Icon          *string            `json:"icon"`
+	Description   *string            `json:"description"`
+	URL           *string            `json:"url"`
+	Headers       *map[string]string `json:"headers"`
+	Enabled       *bool              `json:"enabled"`
+	DisabledTools *[]string          `json:"disabled_tools"`
 }
 
 type adminMCPServerResponse struct {
@@ -46,6 +47,7 @@ type adminMCPServerResponse struct {
 	Headers         map[string]string `json:"headers"`
 	Enabled         bool              `json:"enabled"`
 	DiscoveredTools json.RawMessage   `json:"discovered_tools"`
+	DisabledTools   []string          `json:"disabled_tools"`
 	ProtocolVersion string            `json:"protocol_version"`
 	LastError       string            `json:"last_error"`
 	LastSyncedAt    int64             `json:"last_synced_at"`
@@ -69,7 +71,7 @@ func adminMCPServerJSON(server store.MCPServer) adminMCPServerResponse {
 	return adminMCPServerResponse{
 		ID: server.ID, Name: server.Name, Icon: server.Icon, Description: server.Description,
 		URL: mcpResponseURL(server.URL), Headers: headers, Enabled: server.Enabled,
-		DiscoveredTools: discoveredTools,
+		DiscoveredTools: discoveredTools, DisabledTools: append([]string{}, server.DisabledTools...),
 		ProtocolVersion: redactMCPHeaderValues(server.ProtocolVersion, server.Headers),
 		LastError:       redactMCPHeaderValues(server.LastError, server.Headers), LastSyncedAt: server.LastSyncedAt,
 		CreatedAt: server.CreatedAt, UpdatedAt: server.UpdatedAt,
@@ -199,6 +201,14 @@ func updateMCPServerAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if payload.DisabledTools != nil {
+		names, err := normalizeMCPDisabledTools(*payload.DisabledTools, *current)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		patch.DisabledTools, effective.DisabledTools = &names, names
+	}
 	metadataChanged := effective.URL != current.URL || !stringMapsEqual(effective.Headers, current.Headers)
 	needsFreshDiscovery := metadataChanged || (!current.Enabled && effective.Enabled)
 	patch.ResetDiscovery = needsFreshDiscovery
@@ -315,7 +325,7 @@ func mcpServerHasTools(server store.MCPServer) bool {
 	if !server.Enabled {
 		return false
 	}
-	return mcpDiscoveredToolsPresent(server.DiscoveredTools)
+	return mcpDiscoveredToolsPresent(server.AvailableTools())
 }
 
 func mcpRuntimeCapabilityChanged(before, after store.MCPServer) bool {
@@ -327,7 +337,7 @@ func mcpRuntimeCapabilityChanged(before, after store.MCPServer) bool {
 	if !beforeAvailable && !afterAvailable {
 		return false
 	}
-	return before.URL != after.URL || !stringMapsEqual(before.Headers, after.Headers)
+	return before.URL != after.URL || !stringMapsEqual(before.Headers, after.Headers) || !jsonValuesEqual(before.AvailableTools(), after.AvailableTools())
 }
 
 // A capability addition only needs to refresh connected clients. Cancelling
@@ -343,7 +353,43 @@ func mcpRuntimeCapabilityTightened(before, after store.MCPServer) bool {
 	if !afterAvailable {
 		return true
 	}
+	for _, name := range after.DisabledTools {
+		if before.ToolEnabled(name) {
+			return true
+		}
+	}
 	return before.URL != after.URL || !stringMapsEqual(before.Headers, after.Headers)
+}
+
+func normalizeMCPDisabledTools(names []string, server store.MCPServer) ([]string, error) {
+	if len(names) > 1024 {
+		return nil, errors.New("too many disabled MCP tools")
+	}
+	var tools []mcp.Tool
+	if json.Unmarshal(server.DiscoveredTools, &tools) != nil {
+		return nil, errors.New("invalid MCP tool snapshot")
+	}
+	known := make(map[string]bool, len(tools)+len(server.DisabledTools))
+	for _, tool := range tools {
+		known[strings.TrimSpace(tool.Name)] = true
+	}
+	for _, name := range server.DisabledTools {
+		known[name] = true
+	}
+	seen := make(map[string]bool, len(names))
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || !known[name] {
+			return nil, errors.New("unknown MCP tool")
+		}
+		if !seen[name] {
+			result = append(result, name)
+			seen[name] = true
+		}
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func mcpCatalogPresentationChanged(before, after store.MCPServer) bool {

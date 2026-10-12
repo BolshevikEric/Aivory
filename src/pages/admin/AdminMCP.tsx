@@ -5,9 +5,11 @@ import {
   Cable,
   Eye,
   EyeOff,
+  List,
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   X,
 } from 'lucide-react'
@@ -110,10 +112,34 @@ export default function AdminMCP() {
   const [togglingID, setTogglingID] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<ApiMCPServer | null>(null)
   const [editor, setEditor] = useState<EditorState>({ open: false, draft: newDraft() })
+  const [toolsServerID, setToolsServerID] = useState('')
+  const [toolQuery, setToolQuery] = useState('')
+  const [toolBusy, setToolBusy] = useState('')
+  const toolBusyRef = useRef(false)
   const savingRef = useRef(false)
   const deletingRef = useRef(false)
   const togglingRef = useRef('')
   const busyActionRef = useRef('')
+  const toolsServer = rows.find((server) => server.id === toolsServerID)
+  const visibleTools = (toolsServer?.discovered_tools ?? []).filter((tool) => `${tool.name} ${tool.title ?? ''} ${tool.description ?? ''}`.toLocaleLowerCase().includes(toolQuery.trim().toLocaleLowerCase()))
+
+  async function toggleTool(server: ApiMCPServer, name: string, enabled: boolean) {
+    if (toolBusyRef.current) return
+    toolBusyRef.current = true
+    setToolBusy(name)
+    const disabled = new Set(server.disabled_tools ?? [])
+    if (enabled) disabled.delete(name)
+    else disabled.add(name)
+    try {
+      const updated = await adminApi.updateMCPServer(server.id, { disabled_tools: [...disabled] })
+      setRows((current) => current.map((row) => row.id === server.id ? updated : row))
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('admin:common.failed'))
+    } finally {
+      toolBusyRef.current = false
+      setToolBusy('')
+    }
+  }
 
   async function refreshRows() {
     setRows(await adminApi.mcpServers())
@@ -362,10 +388,11 @@ export default function AdminMCP() {
               { id: 'name', header: t('admin:mcp.fields.name'), width: 200, render: (server) => <div className="flex min-w-0 items-center gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-[8px] bg-[var(--color-bg-muted)]"><LucideGlyph name={server.icon || 'Blocks'} size={16} aria-hidden /></span><span className="truncate font-medium" title={server.name}>{server.name}</span></div> },
               { id: 'url', header: t('admin:mcp.fields.url'), width: 260, render: (server) => <span className="block truncate font-mono text-[12px] text-[var(--color-fg-muted)]" title={server.url} dir="ltr">{server.url}</span> },
               { id: 'details', header: t('admin:mcp.fields.description'), width: 250, render: (server) => <div><span className="block truncate text-[var(--color-fg-muted)]" title={server.description}>{server.description || '—'}</span>{server.last_error ? <span className="block truncate text-[12px] text-[var(--color-danger)]" title={server.last_error}>{server.last_error}</span> : server.last_synced_at ? <span className="block text-[12px] text-[var(--color-fg-muted)]">{t('admin:mcp.lastSynced', { time: formatTimestamp(server.last_synced_at) })}</span> : null}</div> },
-              { id: 'status', header: t('admin:common.status'), width: 120, render: (server) => <div className="flex flex-wrap gap-1"><Badge size="xs" variant={server.last_error ? 'danger' : server.last_synced_at ? 'success' : 'neutral'}>{t(server.last_error ? 'admin:mcp.status.error' : server.last_synced_at ? 'admin:mcp.status.connected' : 'admin:mcp.status.notTested')}</Badge><span className="text-[12px] text-[var(--color-fg-muted)]">{t('admin:mcp.toolCount', { count: server.discovered_tools?.length ?? 0 })}</span></div> },
+              { id: 'status', header: t('admin:common.status'), width: 160, render: (server) => <div className="flex flex-col items-start gap-1.5"><Badge size="xs" variant={server.last_error ? 'danger' : server.last_synced_at ? 'success' : 'neutral'}>{t(server.last_error ? 'admin:mcp.status.error' : server.last_synced_at ? 'admin:mcp.status.connected' : 'admin:mcp.status.notTested')}</Badge><button type="button" className="inline-flex items-center gap-1.5 rounded-sm text-[12px] text-[var(--color-fg-muted)] hover:text-[var(--color-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]" aria-label={t('admin:mcp.tools.manageServer', { name: server.name })} onClick={() => { setToolsServerID(server.id); setToolQuery('') }}><List size={13} aria-hidden />{t('admin:mcp.toolCount', { count: server.discovered_tools?.length ?? 0 })}</button></div> },
               { id: 'enabled', header: t('admin:mcp.fields.enabled'), width: 90, align: 'center', render: (server) => <Switch checked={server.enabled} disabled={Boolean(togglingID) || Boolean(busyAction)} onCheckedChange={(value) => void toggleEnabled(server, value)} aria-label={t('admin:mcp.fields.enabled')} /> },
               { id: 'actions', header: t('admin:common.actions'), width: 200, align: 'right', render: (server) => (
                 <div className="flex items-center gap-1">
+                  <Tooltip content={t('admin:mcp.tools.manageServer', { name: server.name })}><Button size="icon-sm" variant="ghost" aria-label={t('admin:mcp.tools.manageServer', { name: server.name })} onClick={() => { setToolsServerID(server.id); setToolQuery('') }}><List size={14} aria-hidden /></Button></Tooltip>
                   <Tooltip content={t('admin:mcp.actions.test')}><Button size="icon-sm" variant="ghost" aria-label={t('admin:mcp.actions.test')} loading={busyAction === `test:${server.id}`} disabled={Boolean(busyAction) || Boolean(togglingID)} onClick={() => void runAction(server, 'test')}><Cable size={14} aria-hidden /></Button></Tooltip>
                   <Tooltip content={t('admin:mcp.actions.sync')}><Button size="icon-sm" variant="ghost" aria-label={t('admin:mcp.actions.sync')} loading={busyAction === `sync:${server.id}`} disabled={Boolean(busyAction) || Boolean(togglingID)} onClick={() => void runAction(server, 'sync')}><RefreshCw size={14} aria-hidden /></Button></Tooltip>
                   <Button size="icon-sm" variant="ghost" title={t('admin:common.edit')} aria-label={`${t('admin:common.edit')}: ${server.name}`} disabled={Boolean(busyAction) || Boolean(togglingID)} onClick={() => openEdit(server)}><Pencil size={14} aria-hidden /></Button>
@@ -376,6 +403,38 @@ export default function AdminMCP() {
           />
         )}
       </section>
+
+      <Dialog open={Boolean(toolsServer)} onOpenChange={(open) => { if (!open && !toolBusyRef.current) setToolsServerID('') }}>
+        <DialogContent presentation="drawer" size="lg" closeDisabled={Boolean(toolBusy)}>
+          <DialogHeader>
+            <DialogTitle>{t('admin:mcp.tools.title', { name: toolsServer?.name ?? '' })}</DialogTitle>
+            <DialogDescription>{t('admin:mcp.tools.available', { count: (toolsServer?.discovered_tools ?? []).filter((tool) => !(toolsServer?.disabled_tools ?? []).includes(tool.name)).length, total: toolsServer?.discovered_tools?.length ?? 0 })}</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className="flex items-center gap-3">
+              <Input wrapperClassName="min-w-0 flex-1" leadingIcon={<Search size={15} aria-hidden />} value={toolQuery} onChange={(event) => setToolQuery(event.target.value)} placeholder={t('admin:mcp.tools.search')} aria-label={t('admin:mcp.tools.search')} />
+              <Tooltip content={t('admin:mcp.actions.sync')}><Button size="icon-sm" variant="ghost" aria-label={t('admin:mcp.actions.sync')} loading={busyAction === `sync:${toolsServerID}`} disabled={Boolean(busyAction) || Boolean(togglingID) || Boolean(toolBusy)} onClick={() => { if (toolsServer) void runAction(toolsServer, 'sync') }}><RefreshCw size={15} aria-hidden /></Button></Tooltip>
+            </div>
+            {visibleTools.length === 0 ? <p className="py-10 text-center text-sm text-[var(--color-fg-muted)]">{t(toolQuery ? 'admin:mcp.tools.noResults' : 'admin:mcp.tools.empty')}</p> : (
+              <div className="mt-4 space-y-1">
+                {visibleTools.map((tool) => (
+                  <div key={tool.name} className="rounded-[6px] px-3 py-3 hover:bg-[var(--color-bg-muted)]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-medium text-[var(--color-fg)]">{tool.title || tool.name}</p>
+                        {tool.title && tool.title !== tool.name ? <p className="mt-0.5 break-all font-mono text-xs text-[var(--color-fg-subtle)]">{tool.name}</p> : null}
+                        {tool.description ? <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--color-fg-muted)]">{tool.description}</p> : null}
+                      </div>
+                      <Switch className="mt-0.5 shrink-0" checked={!(toolsServer?.disabled_tools ?? []).includes(tool.name)} disabled={Boolean(toolBusy) || Boolean(busyAction) || Boolean(togglingID)} aria-label={t('admin:mcp.tools.toggle', { name: tool.name })} onCheckedChange={(enabled) => { if (toolsServer) void toggleTool(toolsServer, tool.name, enabled) }} />
+                    </div>
+                    {tool.inputSchema ? <details className="mt-2.5"><summary className="cursor-pointer text-xs text-[var(--color-fg-subtle)] hover:text-[var(--color-fg)]">{t('admin:mcp.tools.parameters')}</summary><pre className="mt-2 overflow-auto rounded-[6px] bg-[var(--color-bg-muted)] p-3 text-xs leading-relaxed" dir="ltr">{JSON.stringify(tool.inputSchema, null, 2)}</pre></details> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={editor.open}

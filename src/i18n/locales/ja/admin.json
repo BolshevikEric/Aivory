@@ -1041,6 +1041,16 @@
     "testSucceeded": "接続に成功しました",
     "syncSucceeded": "ツールを同期しました",
     "toolCount": "{{count}} 件を検出",
+    "tools": {
+      "title": "{{name}} · ツール",
+      "manageServer": "{{name}} のツールを管理",
+      "available": "{{total}} 件中 {{count}} 件のツールが有効",
+      "search": "ツールを検索",
+      "toggle": "ツール {{name}} を有効にする",
+      "parameters": "パラメータ定義",
+      "empty": "ツールが検出されていません",
+      "noResults": "一致するツールがありません"
+    },
     "lastSynced": "最終同期: {{time}}",
     "fields": {
       "name": "名前",
