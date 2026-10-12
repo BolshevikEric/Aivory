@@ -49,7 +49,11 @@ try {
       throw new Error(`Composer did not settle: ${JSON.stringify(sizes)}`, { cause: error })
     }
   }
-  const openMenu = () => page.click(`${shell} button[aria-label="${page.viewport().width < 640 ? 'More' : 'Features'}"]`)
+  const openMenu = async () => {
+    const selector = `${shell} button[aria-label="${page.viewport().width < 640 ? 'More' : 'Features'}"]`
+    await page.waitForSelector(selector, { visible: true })
+    await page.click(selector)
+  }
   const closeMenu = async () => {
     await page.keyboard.press('Escape')
     await page.waitForFunction(() => !document.querySelector('[data-radix-popper-content-wrapper] [role="dialog"]'))
@@ -87,6 +91,7 @@ try {
   const defaultToggle = '[data-composer-menu="skills"] button[aria-label="Enable or remove skill generative-ui"]'
   assert.equal(await page.$eval(defaultToggle, e => e.getAttribute('aria-checked')), 'true')
   assert.doesNotMatch(await page.$eval('[data-composer-menu="skills"]', e => e.textContent), /Model defaults stay active in this chat/)
+  assert.doesNotMatch(await page.$eval('[data-composer-menu="skills"]', e => e.textContent), /Visual answers|Extract action items/, 'plus-menu skills must not show descriptions')
   await page.click(defaultToggle)
   assert.equal(await page.$eval(defaultToggle, e => e.getAttribute('aria-checked')), 'false')
   await page.click('[data-composer-menu="skills"] button[aria-label="Enable or remove skill meeting-notes"]')
@@ -131,6 +136,7 @@ try {
   await page.click(`${shell} .tiptap`)
   await page.keyboard.type('/generative-ui')
   await page.waitForSelector('[role="option"]')
+  assert.equal(await page.$eval('[role="option"] [data-command-description]', e => e.textContent), 'Visual answers', 'slash skills must retain their descriptions')
   const skill = await page.evaluateHandle(() => [...document.querySelectorAll('[role="option"]')].find(e => e.textContent.includes('generative-ui')))
   await skill.asElement().click()
   await page.waitForSelector(`${shell} button[aria-label="Remove skill generative-ui"]`)
