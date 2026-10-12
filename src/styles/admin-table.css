@@ -144,6 +144,13 @@
   position: sticky;
   right: 0;
   z-index: 1;
+  padding-inline: 8px;
+}
+
+.admin-data-table [data-column='actions'] > .admin-table-cell {
+  width: max-content;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .admin-data-table th[data-column='actions'] {
