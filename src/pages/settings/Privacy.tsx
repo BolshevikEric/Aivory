@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SettingsRow, SettingsSection } from './SettingsLayout'
 import { Button } from '@/components/ui/button'
-import { Archive, Download, Trash2, Upload } from 'lucide-react'
+import { Archive, Download, Link2, Trash2, Upload } from 'lucide-react'
 import { parseConversationExport } from '@/lib/conversation-import'
 import {
   Dialog,
@@ -198,12 +198,12 @@ export default function Privacy() {
 
       <SettingsSection title={t('settings:privacy.management.title')}>
         <SettingsRow className="flex-row items-center" label={t('settings:privacy.management.archivedTitle')} description={t('settings:privacy.management.archivedDescription')}>
-          <Button variant="secondary" aria-haspopup="dialog" aria-label={`${t('settings:privacy.management.manage')} ${t('settings:privacy.management.archivedTitle')}`} onClick={(event) => { managementTriggerRef.current = event.currentTarget; setManagement('archived') }}>
+          <Button variant="secondary" leadingIcon={<Archive size={13} aria-hidden />} aria-haspopup="dialog" aria-label={`${t('settings:privacy.management.manage')} ${t('settings:privacy.management.archivedTitle')}`} onClick={(event) => { managementTriggerRef.current = event.currentTarget; setManagement('archived') }}>
             {t('settings:privacy.management.manage')}
           </Button>
         </SettingsRow>
         <SettingsRow className="flex-row items-center" label={t('settings:privacy.management.linksTitle')} description={t('settings:privacy.management.linksDescription')}>
-          <Button variant="secondary" aria-haspopup="dialog" aria-label={`${t('settings:privacy.management.manage')} ${t('settings:privacy.management.linksTitle')}`} onClick={(event) => { managementTriggerRef.current = event.currentTarget; setManagement('links') }}>
+          <Button variant="secondary" leadingIcon={<Link2 size={13} aria-hidden />} aria-haspopup="dialog" aria-label={`${t('settings:privacy.management.manage')} ${t('settings:privacy.management.linksTitle')}`} onClick={(event) => { managementTriggerRef.current = event.currentTarget; setManagement('links') }}>
             {t('settings:privacy.management.manage')}
           </Button>
         </SettingsRow>

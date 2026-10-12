@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArchiveRestore, ChevronLeft, ChevronRight, Copy, ExternalLink, RefreshCw, Trash2, Unlink } from 'lucide-react'
+import { ArchiveRestore, ChevronLeft, ChevronRight, Copy, ExternalLink, Trash2, Unlink } from 'lucide-react'
 import { apiUrl, conversationsApi } from '@/api'
 import { userLinksApi } from '@/api/user-links'
 import { useAuth } from '@/store/auth'
@@ -191,20 +191,7 @@ function ConversationSection({ userId, view, revision, onConversationDeleted, on
   const canShare = userCan(user, 'allow_sharing')
 
   return (
-    <SettingsSection
-      id={`settings-conversations-${view}`}
-      actions={
-        <Button
-          variant="secondary"
-          leadingIcon={<RefreshCw size={13} aria-hidden />}
-          disabled={loading || Boolean(busy)}
-          aria-label={t('settings:conversations.refresh')}
-          onClick={() => setVersion((value) => value + 1)}
-        >
-          {t('settings:conversations.refreshLabel')}
-        </Button>
-      }
-    >
+    <SettingsSection id={`settings-conversations-${view}`}>
       <div data-conversation-view={view} aria-busy={loading || Boolean(busy) || undefined}>
         {confirmation && (
           <div className="mb-3 rounded-[10px] bg-[var(--color-bg-muted)] px-4 py-4" role="alert">
