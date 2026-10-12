@@ -34,14 +34,11 @@ export function ComposerSkillMenu({ defaults, available, selected, disabledIds, 
     return matches(explicit?.name ?? skill.name, explicit ? skillDisplayDescription(explicit) : skill.display_description)
   })
 
-  const row = (id: string, name: string, icon: string, scope: string, active: boolean, toggle: () => void, unavailable = false) => (
+  const row = (id: string, name: string, icon: string, active: boolean, toggle: () => void, unavailable = false) => (
     <div key={id} className="py-0.5">
       <button type="button" role="checkbox" aria-checked={active} aria-label={t('composer.skills.toggle', { name })} disabled={unavailable} onClick={toggle} className={cn('flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left interactive hover:bg-[var(--color-bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-40 disabled:cursor-not-allowed', active && 'bg-[var(--color-tool-selection-soft)]')}>
         <SkillIcon name={icon} size={15} className="shrink-0 text-[var(--color-fg-muted)]" aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{name}</span>
-          <span className="block text-[11px] text-[var(--color-fg-muted)]">{scope}</span>
-        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{name}</span>
         <span className={cn('inline-flex size-7 shrink-0 items-center justify-center', active ? 'text-[var(--color-tool-selection-text)]' : 'text-[var(--color-fg-muted)]')}>
           {active ? <Check size={15} aria-hidden /> : <Plus size={15} aria-hidden />}
         </span>
@@ -61,14 +58,14 @@ export function ComposerSkillMenu({ defaults, available, selected, disabledIds, 
         {modelDefaults.map(skill => {
           const explicit = selected.find(item => item.source_skill_id === skill.id)
           const active = Boolean(explicit) || (defaultsEnabled && !disabledIds.includes(skill.id))
-          return row(`model:${skill.id}`, explicit?.name ?? skill.name, explicit?.icon ?? skill.icon, t(explicit ? 'composer.skills.manualScope' : 'composer.skills.defaultScope'), active, () => onToggleDefault(skill), !defaultsEnabled && !explicit && (selected.length >= MAX_SELECTED_USER_SKILLS || !available.some(item => item.source_skill_id === skill.id)))
+          return row(`model:${skill.id}`, explicit?.name ?? skill.name, explicit?.icon ?? skill.icon, active, () => onToggleDefault(skill), !defaultsEnabled && !explicit && (selected.length >= MAX_SELECTED_USER_SKILLS || !available.some(item => item.source_skill_id === skill.id)))
         })}
       </section> : null}
       {manual.length ? <section aria-label={t('composer.skills.addSkills')} className={modelDefaults.length ? 'mt-3' : undefined}>
         <p className="px-2.5 pb-1 pt-1 text-xs font-medium text-[var(--color-fg-muted)]">{t('composer.skills.addSkills')}</p>
         {manual.map(skill => {
           const active = selected.some(item => item.id === skill.id)
-          return row(skill.id, skill.name, skill.icon, t('composer.skills.manualScope'), active, () => onToggleManual(skill), !active && selected.length >= MAX_SELECTED_USER_SKILLS)
+          return row(skill.id, skill.name, skill.icon, active, () => onToggleManual(skill), !active && selected.length >= MAX_SELECTED_USER_SKILLS)
         })}
       </section> : null}
       {loading ? <div role="status" className="space-y-2 px-2.5 py-3" aria-label={t('composer.skills.loading')}><div className="h-8 animate-pulse rounded-[8px] bg-[var(--color-bg-muted)] motion-reduce:animate-none" /><div className="h-8 animate-pulse rounded-[8px] bg-[var(--color-bg-muted)] motion-reduce:animate-none" /></div> : null}
