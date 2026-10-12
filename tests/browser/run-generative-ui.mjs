@@ -66,6 +66,12 @@ try {
   assert.equal(await page.$$eval('[data-case="markdown-table"] [data-generative-ui]', e => e.length), 0)
   assert.equal(await page.$$eval('[data-case="markdown-table"] table', e => e.length), 1)
   assert.equal(await page.$$eval('[data-case="advanced"] [data-generative-function]', e => e.length), 1)
+  for (const name of ['function-fragment', 'private-function-fragment']) {
+    const selector = `[data-case="${name}"]`
+    assert.equal(await page.$$eval(`${selector} [data-generative-function]`, nodes => nodes.length), 1)
+    assert.equal(await page.$$eval(`${selector} [data-function-path]`, nodes => nodes.filter(node => node.getAttribute('d')?.length > 20).length), 2)
+  }
+  assert.equal(await page.$$eval('[data-case="unfenced-function"] [data-generative-ui], [data-case="user-function"] [data-generative-ui]', nodes => nodes.length), 0)
   assert.equal(await page.$$eval('[data-case="advanced"] [data-generative-heatmap] td', e => e.length), 6)
   await page.$eval('[data-case="cards"]', e => e.scrollIntoView({ block: 'start' }))
   await page.waitForFunction(() => document.querySelectorAll('[data-case="cards"] img').length === 2 && [...document.querySelectorAll('[data-case="cards"] img')].every(e => e.complete && e.naturalWidth > 0) && document.querySelector('[data-case="cards"] [role="status"]')?.textContent === 'Image unavailable')
@@ -426,6 +432,9 @@ try {
         await new Promise(resolve => setTimeout(resolve, 100))
         await page.screenshot({ path: `/tmp/aivory-generative-ui/${name}-${width}-${theme}.png` })
       }
+      await page.$eval('[data-case="function-fragment"]', node => node.scrollIntoView({ block: 'start' }))
+      assert(await page.$$eval('[data-case="function-fragment"] [data-function-path]', nodes => nodes.every(node => node.getAttribute('d')?.length > 20)), 'standalone functions must render at every screen size')
+      await page.screenshot({ path: `/tmp/aivory-generative-ui/function-fragment-${width}-${theme}.png` })
       await page.$eval('[data-case="questions"]', e => e.scrollIntoView({ block: 'start' }))
       await page.screenshot({ path: `/tmp/aivory-generative-ui/questions-${width}-${theme}.png` })
       await page.$eval('[data-case="form-preview"]', e => e.scrollIntoView({ block: 'start' }))

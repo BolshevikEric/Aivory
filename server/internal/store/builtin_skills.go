@@ -20,6 +20,7 @@ const generativeUIDescription = "Proactively use inline UI whenever it improves 
 // Retain only fingerprints for upgrading untouched defaults in existing databases.
 // The current prompt is the sole embedded instruction document.
 var retiredGenerativeUIInstructionHashes = []string{
+	"0306f32751b80cd28d465705d11b4343f4fc4caf940cb1bf8455d257ceeda05e",
 	"5b315c93055a958bdec680b1098ca0b8b43ee32bc5c03298e7ec54a9ad2b8a5b",
 	"85d503b348c5f3a19bb372f4a0de1db0037171af1e511e91e516ddb10049a00f",
 	"9745bb2871794a09e980c0872e1f80afb0bdbd4d9ac9ad3709595d15f1b1da26",

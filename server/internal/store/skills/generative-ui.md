@@ -15,7 +15,15 @@ These are examples, not limits. Choose the simplest useful presentation for the 
 
 ## Preset components
 
-Output valid JSON in a fenced `aivory-ui` block. Root fields: `version: 1`, `blocks: [...]`, optional `title` and `description`.
+Output a complete JSON document in a fenced `aivory-ui` block directly in the assistant reply. Root fields: `version: 1`, `blocks: [...]`, optional `title` and `description`. Put every component inside `blocks`, even when there is only one. These are answer formats, not tools or functions; never call `aivory_ui` or `aivory_html` to render them, and never output bare UI JSON.
+
+Complete example:
+
+```aivory-ui
+{"version":1,"blocks":[{"type":"function","title":"Compare curves","functions":[{"expression":"sin(x)/x","label":"sin(x)/x"},{"expression":"2/(1+exp(-50*x))-1","label":"Smooth step"}],"range":{"min":-6,"max":6}}]}
+```
+
+The shapes below are components for the document's `blocks` array, not complete replies.
 Escape double quotes inside string values as `\"` and line breaks as `\n`. For example: `{"type":"text","text":"A section titled \"School food safety\"."}`. Never leave literal double quotes unescaped inside text.
 
 Supported block shapes:

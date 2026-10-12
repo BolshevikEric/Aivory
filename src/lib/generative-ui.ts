@@ -266,7 +266,11 @@ export function parseUIDocument(source: string): UIDocument | null {
         value = JSON.parse(jsonrepair(escapeEmbeddedQuotes(source)))
       }
     }
-    const root = record(value)
+    const input = record(value)
+    // A single preset inside an explicit UI fence has the same validation as a document.
+    const root: Record<string, unknown> = input.version === undefined && typeof input.type === 'string'
+      ? { version: 1, blocks: [input] }
+      : input
     if (root.version !== 1) return null
     let count = 0
     function blocks(v: unknown, depth = 0): UIBlock[] {

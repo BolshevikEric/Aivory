@@ -717,6 +717,9 @@ func formatSelectedUserSkills(skills []store.UserSkill) string {
 		b.WriteString("\">\nDescription: ")
 		b.WriteString(skill.Description)
 		b.WriteString("\n\n")
+		if isGenerativeUISkill(skill.SourceSkillID, skill.Name) {
+			b.WriteString(generativeUIOutputContract)
+		}
 		b.WriteString(skill.Instructions)
 		b.WriteString("\n</user-selected-skill>\n")
 	}

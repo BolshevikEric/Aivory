@@ -5,6 +5,26 @@ import { generativeLanguage, MAX_GENERATIVE_SOURCE, parseUIDocument } from '@/li
 
 const parse = (blocks: unknown[]) => parseUIDocument(JSON.stringify({ version: 1, blocks }))
 describe('generative UI protocol', () => {
+  it('accepts a standalone function preset without a document wrapper', () => {
+    const block = { type: 'function', title: 'Discontinuity examples', functions: [
+      { expression: '2/(1+exp(-50*x))-1', label: 'Smooth step' },
+      { expression: 'sin(x)/x', label: 'Removable discontinuity' },
+    ], variable: 'x', range: { min: -6, max: 6 } }
+    const result = parseUIDocument(JSON.stringify(block))
+    expect(result).toEqual(parse([block]))
+    expect(result?.title).toBeUndefined()
+    expect(result?.blocks[0]).toMatchObject({ type: 'function', title: block.title, functions: block.functions, min: -6, max: 6 })
+    expect(parseUIDocument(JSON.stringify({ type: 'question', questions: [{ id: 'platform', question: 'Platform?', options: ['Windows', 'macOS'] }] }))?.blocks[0].type).toBe('question')
+  })
+  it('applies protocol versions and safety checks to standalone presets', () => {
+    for (const block of [
+      { type: 'function', expression: 'fetch(x)', range: { min: -6, max: 6 } },
+      { type: 'function', expression: 'sin(x)' },
+      { type: 'function', version: 2, expression: 'sin(x)', range: { min: -6, max: 6 } },
+      { type: 'card', title: 'Unsafe', image: { url: 'javascript:alert(1)' } },
+      { type: 'script', code: 'alert(1)' },
+    ]) expect(parseUIDocument(JSON.stringify(block))).toBeNull()
+  })
   it('repairs unescaped quotes in nested news text without losing the content', () => {
     const source = `{"version":1,"title":"News","blocks":[{"type":"tabs","items":[{"title":"Domestic","blocks":[{"type":"text","text":"新增"学校食品安全""网络食品经营"专节，并回应"安保三文件"问题。"}]}]}]}`
     const result = parseUIDocument(source)
@@ -40,6 +60,12 @@ describe('generative UI protocol', () => {
       examples++
     }
     expect(examples).toBeGreaterThanOrEqual(15)
+    const documents = [...prompt.matchAll(/```aivory-ui\s*\n([\s\S]*?)\n```/g)]
+    expect(documents.length).toBeGreaterThan(0)
+    for (const [, source] of documents) {
+      expect(JSON.parse(source)).toMatchObject({ version: 1, blocks: expect.any(Array) })
+      expect(parseUIDocument(source)).not.toBeNull()
+    }
   })
   it('supports optional card content and safe images/links in nested sections', () => {
     const item = { title: 'Search result', description: 'Summary', meta: 'Source · Today', image: { url: 'https://images.example.test/photo.png', alt: 'Photo' }, link: { url: 'https://example.test/article', label: 'Read more' } }

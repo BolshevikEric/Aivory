@@ -678,6 +678,12 @@ type SkillFull struct {
 	Instructions string
 }
 
+const generativeUIOutputContract = "Inline UI is answer content, not a tool: emit complete fenced `aivory-ui` JSON ({\"version\":1,\"blocks\":[...]}) or fenced `aivory-html` HTML directly in the assistant reply. Never call `aivory_ui` or `aivory_html` to render UI, and never emit unfenced UI JSON.\n"
+
+func isGenerativeUISkill(id, name string) bool {
+	return id == store.GenerativeUISkillID || strings.EqualFold(strings.TrimSpace(name), "generative-ui")
+}
+
 func loadEnabledModelSkills(ctx context.Context, db *sql.DB, modelID string, policy *ToolAccessPolicy, selected ...[]store.UserSkill) ([]SkillIndex, []SkillFull, []SkillFull) {
 	return loadTurnModelSkills(ctx, db, modelID, policy, nil, selected...)
 }
@@ -711,7 +717,7 @@ func loadTurnModelSkills(ctx context.Context, db *sql.DB, modelID string, policy
 		instructions := SkillFull{ID: skill.ID, Name: skill.Name, Instructions: skill.Instructions}
 		// Presentation needs no tool execution. Preload it so vague requests and
 		// automatic no-tools turns can still produce useful visual answers.
-		if skill.ID == store.GenerativeUISkillID || strings.EqualFold(skill.Name, "generative-ui") {
+		if isGenerativeUISkill(skill.ID, skill.Name) {
 			presentation = append(presentation, instructions)
 			continue
 		}
@@ -1097,6 +1103,7 @@ func composeSystemPrompt(o systemPromptOpts) string {
 	if o.PresentationSkillsAllowed && len(o.PresentationSkills) > 0 {
 		b.WriteString(l.presentationHeader)
 		b.WriteString(l.presentationBody)
+		b.WriteString(generativeUIOutputContract)
 		for _, s := range o.PresentationSkills {
 			fmt.Fprintf(&b, "\n### %s\n%s\n", s.Name, s.Instructions)
 		}

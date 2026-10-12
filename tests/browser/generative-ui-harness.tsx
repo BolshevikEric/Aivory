@@ -77,6 +77,10 @@ const nativeForm = JSON.stringify({ version: 1, blocks: [{ type: 'form', title: 
   { id: 'time', type: 'time', label: 'Time', value: '09:30' }, { id: 'datetime', type: 'datetime-local', label: 'Date and time', value: '2026-10-11T09:30' },
   { id: 'confirmation', type: 'checkbox', label: 'Confirm these preferences', required: true },
 ] }] })
+const functionFragment = JSON.stringify({ type: 'function', title: 'Discontinuity examples', functions: [
+  { expression: '2/(1+exp(-50*x))-1', label: 'Smooth step' },
+  { expression: 'sin(x)/x', label: 'Removable discontinuity' },
+], variable: 'x', range: { min: -6, max: 6 } })
 let questionAttempts = 0
 let formAttempts = 0
 function Harness() {
@@ -93,6 +97,10 @@ function Harness() {
     <section data-case="rich-table"><Markdown allowGenerativeUI content={fence('aivory-ui', richTable)} /></section>
     <section data-case="cards"><Markdown allowGenerativeUI content={fence('aivory-ui', cards)} /></section>
     <section data-case="advanced"><Markdown allowGenerativeUI content={fence('aivory-ui', advanced)} /></section>
+    <section data-case="function-fragment"><Markdown allowGenerativeUI content={fence('aivory-ui', functionFragment)} /></section>
+    <section data-case="private-function-fragment"><PrivateMarkdown allowGenerativeUI text={fence('aivory-ui', functionFragment)} /></section>
+    <section data-case="unfenced-function"><Markdown allowGenerativeUI content={functionFragment} /></section>
+    <section data-case="user-function"><Markdown content={fence('aivory-ui', functionFragment)} /></section>
     <section data-case="questions"><GenerativeReplyProvider messageId="question-message" status="ready" onReply={async (messageId, text) => {
       Reflect.set(window, '__QUESTION_REPLY__', { messageId, text })
       await new Promise(resolve => setTimeout(resolve, 150))

@@ -72,6 +72,9 @@ func TestPresentationSkillPreloadedWithoutToolRoundTrip(t *testing.T) {
 			if strings.Count(request.SystemPrompt, "PRESENTATION_BODY") != 1 || strings.Contains(request.SystemPrompt, "- generative-ui:") {
 				t.Fatalf("presentation was not preloaded exactly once: %s", request.SystemPrompt)
 			}
+			if strings.Count(request.SystemPrompt, generativeUIOutputContract) != 1 {
+				t.Fatal("presentation lacks the inline output contract")
+			}
 			if request.SystemPromptOptions == nil || !request.SystemPromptOptions.PresentationSkillsAllowed || request.SearchOnly != tc.wantSearchOnly {
 				t.Fatalf("incorrect presentation/route state: %+v", request.SystemPromptOptions)
 			}
@@ -133,6 +136,9 @@ func TestPresentationSkillRespectsPermissionCeilings(t *testing.T) {
 			if len(provider.mainRequests) != 1 || strings.Contains(provider.mainRequests[0].SystemPrompt, "PRESENTATION_BODY") {
 				t.Fatal("automatic presentation bypassed " + name)
 			}
+			if strings.Contains(provider.mainRequests[0].SystemPrompt, generativeUIOutputContract) {
+				t.Fatal("presentation contract bypassed " + name)
+			}
 		})
 	}
 }
@@ -159,6 +165,9 @@ func TestPresentationSkillExplicitSelectionWins(t *testing.T) {
 			history, _ := json.Marshal(request.History)
 			if strings.Contains(request.SystemPrompt, "PRESENTATION_BODY") || strings.Count(string(history), marker) != 1 || len(request.SystemPromptOptions.PresentationSkills) != 0 {
 				t.Fatal("selected presentation instructions were duplicated")
+			}
+			if strings.Contains(request.SystemPrompt, generativeUIOutputContract) || !strings.Contains(renderBlocksAsText(request.History[len(request.History)-1].Blocks), generativeUIOutputContract) {
+				t.Fatal("manual presentation contract must stay at user authority")
 			}
 			if personalCopy && strings.Contains(string(history), "PRESENTATION_BODY") {
 				t.Fatal("catalog instructions overrode the edited personal copy")
