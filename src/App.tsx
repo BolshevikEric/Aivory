@@ -192,8 +192,8 @@ function SettingsRedirect() {
 export default function App() {
   useAppViewport()
   const location = useLocation()
-  // §23: realtime notify stream (multi-device sync) + invisible version
-  // upgrades. Both are idempotent singletons; the realtime loop follows the
+  // §23: realtime notify stream (multi-device sync) + version detection.
+  // Both are idempotent singletons; the realtime loop follows the
   // auth store on its own (connects after login, stops on logout).
   useEffect(() => {
     initRealtime()
@@ -202,8 +202,8 @@ export default function App() {
   useEffect(() => {
     setRealtimeEnabled(isChatShellPath(location.pathname))
   }, [location.pathname])
-  // A route navigation is a safe, invisible moment to apply a pending upgrade
-  // (never fires while a message is streaming — see maybeApplyUpdate). The
+  // A visible route navigation can apply a pending upgrade once reload guards
+  // allow it. App/tab switching only detects updates and preserves this page. The
   // settings dialog no longer navigates (pure UI state), so every pathname
   // change here is a real page swap the user already perceives as a jump.
   useEffect(() => {

@@ -38,7 +38,7 @@ function formatStamp(unixMs: number): string {
 }
 
 export default function AdminUserConversation() {
-  const { t } = useTranslation('admin')
+  const { t, i18n } = useTranslation('admin')
   const { id = '', cid = '' } = useParams<{ id: string; cid: string }>()
   const [conv, setConv] = useState<ApiConversation | null>(null)
   // The FULL message tree (all branches) + which leaf is shown. Branch switching
@@ -76,7 +76,7 @@ export default function AdminUserConversation() {
         setActiveLeaf(c.active_leaf_id || '')
         setUsers(us)
       } catch (e) {
-        if (!cancelled) toast.error(e instanceof ApiError ? e.message : t('common.failed'))
+        if (!cancelled) toast.error(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -85,7 +85,7 @@ export default function AdminUserConversation() {
     return () => {
       cancelled = true
     }
-  }, [cid, t])
+  }, [cid, i18n])
 
   const headerTitle = useMemo(() => conv?.title || t('users.untitledConversation'), [conv, t])
   // Resolve the conversation's model id → label for the page header (the raw

@@ -19,7 +19,7 @@ function applyLanguage(code: LanguageCode) {
   } catch {
     /* noop */
   }
-  void i18n.changeLanguage(code)
+  if (i18n.language !== code) void i18n.changeLanguage(code)
   if (typeof document !== 'undefined') document.documentElement.lang = code
 }
 

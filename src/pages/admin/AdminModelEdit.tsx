@@ -248,7 +248,7 @@ function ChannelRoutingHint({ label, text }: { label: string; text: string }) {
 }
 
 export default function AdminModelEdit() {
-  const { t } = useTranslation(['admin', 'common'])
+  const { t, i18n } = useTranslation(['admin', 'common'])
   const navigate = useNavigate()
   const { id = '' } = useParams<{ id: string }>()
   const [channels, setChannels] = useState<ApiChannel[]>([])
@@ -338,7 +338,7 @@ export default function AdminModelEdit() {
           }
         }
       } catch (e) {
-        if (!cancelled) toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+        if (!cancelled) toast.error(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
       } finally {
         if (!cancelled) {
           setBuiltinToolsLoading(false)
@@ -351,7 +351,7 @@ export default function AdminModelEdit() {
     return () => {
       cancelled = true
     }
-  }, [id, t])
+  }, [id, i18n])
 
   useEffect(() => {
     let cancelled = false

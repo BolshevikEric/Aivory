@@ -179,13 +179,13 @@ export default function UserFiles() {
       setRows(response.files)
     } catch (error) {
       if (request !== listRequestRef.current) return
-      const message = error instanceof ApiError ? error.message : t('files:preview.failed')
+      const message = error instanceof ApiError ? error.message : i18n.t('files:preview.failed')
       setListError(message)
       toast.error(message)
     } finally {
       if (request === listRequestRef.current) setLoading(false)
     }
-  }, [fileType, order, origin, page, searchDebounced, sort, t])
+  }, [fileType, order, origin, page, searchDebounced, sort, i18n])
 
   useEffect(() => {
     void load()
