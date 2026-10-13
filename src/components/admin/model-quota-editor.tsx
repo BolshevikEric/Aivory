@@ -40,7 +40,7 @@ function toRow(q?: ApiModelQuota): Row {
 }
 
 export function ModelQuotaEditor({ modelId }: { modelId: string }) {
-  const { t } = useTranslation(['admin', 'common'])
+  const { t, i18n } = useTranslation(['admin', 'common'])
   const [groups, setGroups] = useState<ApiUserGroup[]>([])
   const [rows, setRows] = useState<Record<string, Row>>({})
   const [loading, setLoading] = useState(true)
@@ -58,12 +58,14 @@ export function ModelQuotaEditor({ modelId }: { modelId: string }) {
         for (const g of gs) next[g.id] = toRow(byGroup[g.id])
         setRows(next)
       })
-      .catch((e) => toast.error(e instanceof ApiError ? e.message : t('admin:common.failed')))
+      .catch((e) => {
+        if (active) toast.error(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
+      })
       .finally(() => active && setLoading(false))
     return () => {
       active = false
     }
-  }, [modelId, t])
+  }, [modelId, i18n])
 
   function patch(groupId: string, p: Partial<Row>) {
     setRows((r) => ({ ...r, [groupId]: { ...r[groupId], ...p } }))

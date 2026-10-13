@@ -37,7 +37,7 @@ function formatStamp(unixSec: number): string {
 }
 
 export default function AdminUserConversations({ userId, embedded = false }: { userId?: string; embedded?: boolean } = {}) {
-  const { t } = useTranslation(['admin', 'common'])
+  const { t, i18n } = useTranslation(['admin', 'common'])
   const { id: routeId = '' } = useParams<{ id: string }>()
   const id = userId ?? routeId
   const [user, setUser] = useState<ApiUser | null>(null)
@@ -86,7 +86,7 @@ export default function AdminUserConversations({ userId, embedded = false }: { u
         const labels = new Map(models.map((model) => [model.id, model.label.trim() || model.request_id]))
         setRows(convs.map((conv) => ({ ...conv, model_label: conv.model_label ?? labels.get(conv.model_id) ?? '' })))
       } catch (e) {
-        if (!cancelled) setError(e instanceof ApiError ? e.message : t('admin:common.failed'))
+        if (!cancelled) setError(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
       } finally {
         if (!cancelled) {
           setLoadedId(id)
@@ -98,7 +98,7 @@ export default function AdminUserConversations({ userId, embedded = false }: { u
     return () => {
       cancelled = true
     }
-  }, [id, embedded, reloadKey, t])
+  }, [id, embedded, reloadKey, i18n])
 
   const currentUser = user?.id === id ? user : null
   const pageLoading = loading || loadedId !== id

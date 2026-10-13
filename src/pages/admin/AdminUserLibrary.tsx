@@ -40,7 +40,7 @@ function formatBytes(n: number): string {
 }
 
 export default function AdminUserLibrary() {
-  const { t } = useTranslation(['admin', 'common'])
+  const { t, i18n } = useTranslation(['admin', 'common'])
   const navigate = useNavigate()
   const { id = '' } = useParams<{ id: string }>()
   const [user, setUser] = useState<ApiUser | null>(null)
@@ -114,7 +114,7 @@ export default function AdminUserLibrary() {
         setImages(imgs)
         setImagesMore(imgs.length === IMAGES_PAGE)
       } catch (e) {
-        if (!cancelled) toast.error(e instanceof ApiError ? e.message : t('common.failed'))
+        if (!cancelled) toast.error(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -123,7 +123,7 @@ export default function AdminUserLibrary() {
     return () => {
       cancelled = true
     }
-  }, [id, t])
+  }, [id, i18n])
 
   const headerName = useMemo(() => user?.name || user?.email || id, [user, id])
   const projectName = (pid: string) => projects.find((p) => p.id === pid)?.name
