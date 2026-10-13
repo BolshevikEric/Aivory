@@ -1176,7 +1176,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
         {/* Branch picker during streaming — the action bar below is hidden while
             tokens arrive, but a freshly-retried answer should show its
             `< n/m >` immediately (§4.15 R2). */}
-        {!readOnly && onBranchSwitch && !isUser && message.streaming && message.branchCount && message.branchCount > 1 && typeof message.branchIndex === 'number' ? (
+        {onBranchSwitch && !isUser && message.streaming && message.branchCount && message.branchCount > 1 && typeof message.branchIndex === 'number' ? (
           <div className="mt-2 inline-flex items-center">
             <BranchSwitcher message={message} onSwitch={onBranchSwitch} t={t} />
           </div>
@@ -1187,7 +1187,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
             after a retry (R2) — shown the instant the branch exists rather than
             waiting for a hover, and kept visible in read-only (admin) triage. The
             hover action bar below no longer carries its own copy. */}
-        {!readOnly && onBranchSwitch && !editing && !message.streaming && message.branchCount && message.branchCount > 1 && typeof message.branchIndex === 'number' ? (
+        {onBranchSwitch && !editing && !message.streaming && message.branchCount && message.branchCount > 1 && typeof message.branchIndex === 'number' ? (
           <div className="mt-2 inline-flex items-center">
             <BranchSwitcher message={message} onSwitch={onBranchSwitch} t={t} />
           </div>

@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
-import { act, createElement, useEffect, type ReactElement } from 'react'
+import { act, createElement, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import '@/i18n/admin-resources'
 import { AuthGate } from '@/components/auth/auth-gate'
-import { ReasoningTrace } from '@/components/chat/reasoning-trace'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import AdminUserConversation from '@/pages/admin/AdminUserConversation'
 import AdminUserConversations from '@/pages/admin/AdminUserConversations'
@@ -15,7 +14,6 @@ import AdminModelEdit from '@/pages/admin/AdminModelEdit'
 import UserFiles from '@/pages/files/UserFiles'
 import { useAuth } from '@/store/auth'
 import type { ApiMessage, ApiUser } from '@/api/types'
-import type { Message } from '@/types/chat'
 
 const mocks = vi.hoisted(() => ({
   me: vi.fn(), conversation: vi.fn(), conversationMessages: vi.fn(), users: vi.fn(),
@@ -23,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   userKbs: vi.fn(), userImages: vi.fn(), kbDocuments: vi.fn(), channels: vi.fn(),
   modelTags: vi.fn(), skills: vi.fn(), builtinTools: vi.fn(), mcpServers: vi.fn(),
   settings: vi.fn(), modelChannels: vi.fn(), channelCapabilities: vi.fn(), userGroups: vi.fn(), modelQuotas: vi.fn(),
-  myFiles: vi.fn(), myStorage: vi.fn(), error: vi.fn(), messageUnmount: vi.fn(),
+  myFiles: vi.fn(), myStorage: vi.fn(), error: vi.fn(),
   load: vi.fn().mockResolvedValue(undefined), getById: vi.fn(), sync: vi.fn(),
 }))
 vi.mock('@/api', () => ({
@@ -52,23 +50,15 @@ vi.mock('@/store/settings', () => ({
 }))
 vi.mock('@/store/composer-prefs', () => ({ useComposerPrefs: { getState: () => ({ setDefaultToolMode: mocks.sync, resetForNewConversation: mocks.sync }) } }))
 vi.mock('@/store/accent', () => ({ useAccent: { getState: () => ({ applyAccent: mocks.sync }) } }))
-vi.mock('@/store/theme', () => ({ useTheme: { getState: () => ({ applyPref: mocks.sync }) } }))
+vi.mock('@/store/theme', () => ({ useTheme: Object.assign(
+  (select: (state: unknown) => unknown) => select({ resolved: 'light' }),
+  { getState: () => ({ applyPref: mocks.sync }) },
+) }))
 vi.mock('@/hooks/use-toast', () => ({ toast: { error: mocks.error, success: vi.fn() } }))
 vi.mock('@/hooks/use-media-query', () => ({ useMediaQuery: () => true }))
 vi.mock('@/components/files/document-preview', () => ({ DocumentPreview: () => null }))
 vi.mock('@/components/layout/content-header', () => ({ ContentHeader: ({ title }: { title: string }) => <h1>{title}</h1> }))
 vi.mock('@/components/chat/markdown', () => ({ Markdown: ({ content }: { content: string }) => createElement('p', null, content) }))
-vi.mock('@/components/chat/message-row', () => ({
-  // Keep the real reasoning disclosure to detect loss of local child state.
-  MessageRow: ({ message, onBranchSwitch }: { message: Message; onBranchSwitch: (id: string) => void }) => {
-    useEffect(() => () => mocks.messageUnmount(message.id), [message.id])
-    return <article data-message={message.id}>
-      <p>{message.content}</p>
-      <ReasoningTrace reasoning={message.reasoning} />
-      {message.siblings?.map((id) => <button key={id} data-branch={id} onClick={() => onBranchSwitch(id)}>{id}</button>)}
-    </article>
-  },
-}))
 
 const administrator = {
   id: 'admin', name: 'Administrator', email: 'admin@example.test', role: 'admin',
@@ -162,20 +152,21 @@ describe('administrator conversation inspection during app switching', () => {
     await mount(<AdminUserConversation />, '/admin/users/:id/conversations/:cid', '/admin/users/target/conversations/conv')
     expect(mocks.conversation).toHaveBeenCalledTimes(1)
     expect(mocks.conversationMessages).toHaveBeenCalledWith('conv', 'tree')
-    await click('[data-branch="branch-b"]')
-    await click('[data-message="branch-b"] button[aria-expanded]')
-    const node = container.querySelector('[data-message="branch-b"]')
-    mocks.messageUnmount.mockClear()
+    await click(`[data-message-id="branch-a"] button[aria-label="${i18n.t('chat:actions.nextBranch')}"]`)
+    await click('[data-message-id="branch-b"] button[aria-expanded]')
+    const node = container.querySelector('[data-message-id="branch-b"]')
     for (const language of ['zh', 'zh', 'en']) await foreground(language)
     expect(mocks.me).toHaveBeenCalledTimes(3)
     expect(i18n.language).toBe('en')
-    expect(container.querySelector('[data-message="branch-b"]')).toBe(node)
+    expect(container.querySelector('[data-message-id="branch-b"]')).toBe(node)
     expect(node?.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('true')
-    expect(mocks.messageUnmount).not.toHaveBeenCalled()
     expect(mocks.conversation).toHaveBeenCalledTimes(1)
     expect(mocks.conversationMessages).toHaveBeenCalledTimes(1)
     expect(mocks.users).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain(i18n.t('admin:users.backToConversations'))
+    for (const action of ['edit', 'regenerate', 'delete', 'more']) {
+      expect(container.querySelector(`button[aria-label="${i18n.t(`chat:actions.${action}`)}"]`)).toBeNull()
+    }
   })
 
   it('loads a newly selected conversation and ignores the previous route response', async () => {
@@ -187,7 +178,7 @@ describe('administrator conversation inspection during app switching', () => {
     expect(container.textContent).toContain('New conversation')
     await act(async () => old.resolve(conversation))
     expect(container.textContent).toContain('New conversation')
-    expect(container.querySelector('[data-message="branch-b"]')).not.toBeNull()
+    expect(container.querySelector('[data-message-id="branch-b"]')).not.toBeNull()
   })
 
   it('keeps list rows mounted when returning with a different language', async () => {
