@@ -1,14 +1,14 @@
 /**
- * app-update — invisible in-place upgrade after a deploy (§23).
+ * app-update — apply a deployed version at a navigation boundary (§23).
  *
  * Every build bakes a version id into the bundle (__APP_VERSION__) and emits
  * the same id as /version.json. An open tab compares the two and, when they
- * diverge, reloads itself at a SAFE moment so the user never notices:
+ * diverge, waits for a safe navigation boundary before reloading:
  *
- *   - immediately, if the tab is hidden (user isn't looking);
- *   - on the next route navigation (a full reload at a navigation boundary is
- *     indistinguishable from the navigation itself) — except overlay
+ *   - on the next visible route navigation — except overlay
  *     navigations (the settings modal), which users perceive as staying put;
+ *   - switching apps or tabs never applies an update: hidden pages still have
+ *     reading position, expanded messages, and editor drafts to preserve;
  *   - NEVER while any message is streaming, an upload/recording is in flight,
  *     or unsent composer text exists (sync-guards' reload blockers) — a reload
  *     would silently destroy work.
@@ -123,20 +123,14 @@ function applyReload(): void {
 }
 
 /**
- * Reload now if it's safe. Called on: arm, tab-hidden transitions, and route
- * navigations (from App.tsx). Never interrupts a live generation stream, an
- * in-flight upload/recording, or unsent composer text (reload blockers).
+ * Apply only on a visible route navigation (from App.tsx). Detecting an update,
+ * a sibling-tab broadcast, or switching apps must preserve the current page.
+ * Never interrupts a live stream, an upload/recording, or unsent composer text.
  */
-export function maybeApplyUpdate(trigger: 'armed' | 'hidden' | 'navigation' | 'storage'): void {
-  if (window.aivoryDesktop || !pending) return
+export function maybeApplyUpdate(trigger: 'armed' | 'navigation' | 'storage'): void {
+  if (window.aivoryDesktop || !pending || trigger !== 'navigation' || document.visibilityState !== 'visible') return
   if (anyStreaming() || isReloadBlocked()) return
-  if (document.visibilityState === 'hidden') {
-    applyReload()
-    return
-  }
-  if (trigger === 'navigation') {
-    applyReload()
-  }
+  applyReload()
 }
 
 /** Wire the listeners once (called from App on mount). */
@@ -145,11 +139,7 @@ export function initAppUpdate(): void {
   initialized = true
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      maybeApplyUpdate('hidden')
-    } else {
-      void checkForUpdate()
-    }
+    if (document.visibilityState === 'visible') void checkForUpdate()
   })
 
   // A sibling tab detected an update — arm locally without re-broadcasting,
