@@ -37,6 +37,7 @@ export default function Account() {
   const logout = useAuth((s) => s.logout)
   const [name, setName] = useState(user?.name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
+  const previousProfile = useRef({ id: user?.id, name: user?.name, email: user?.email })
   const [saving, setSaving] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const avatarRef = useRef<HTMLInputElement>(null)
@@ -121,10 +122,14 @@ export default function Account() {
   }
 
   useEffect(() => {
-    if (!user) return
-    setName(user.name)
-    setEmail(user.email)
-  }, [user])
+    if (!user?.id) return
+    const previous = previousProfile.current
+    const accountChanged = previous.id !== user.id
+    // Background profile sync must not replace an unsaved local edit.
+    setName((current) => accountChanged || current === previous.name ? user.name : current)
+    setEmail((current) => accountChanged || current === previous.email ? user.email : current)
+    previousProfile.current = { id: user.id, name: user.name, email: user.email }
+  }, [user?.id, user?.name, user?.email])
 
   async function save() {
     setSaving(true)
