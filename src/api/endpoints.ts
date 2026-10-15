@@ -1049,7 +1049,7 @@ export const conversationsApi = {
 // ----- Public share view (no auth) ----------------------------------------
 
 export const sharedApi = {
-  get: (token: string) => api<ApiSharedConversation>(`/public/shared/${encodeURIComponent(token)}`),
+  get: (token: string) => api<ApiSharedConversation>(`/public/shared/${encodeURIComponent(token)}`, { anonymous: true }),
   clone: (token: string) =>
     api<ApiConversation>(`/shared/${encodeURIComponent(token)}/clone`, { method: 'POST' }),
 }

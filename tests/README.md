@@ -30,6 +30,25 @@ The code-wrap suite finds Chrome/Edge on macOS, Linux and Windows, or accepts
 `CHROME_PATH`. It creates and removes its own temporary browser profile and Vite
 cache, preserving the installed browser's normal profile. It runs on port 5196.
 
+The public sharing suite runs against a production preview so development
+StrictMode's duplicate effect probes do not change the request ordering:
+
+```sh
+npm run build
+npm run preview -- --host 127.0.0.1 --port 5184 --strictPort
+# In another terminal:
+npm run test:share
+```
+
+It mocks API responses in the browser and checks anonymous access even with
+automatic OAuth redirects enabled, session restoration during snapshot loading,
+retry after rate limiting, and missing links at desktop and mobile widths. It
+also checks that public snapshot requests omit session credentials and that
+rendering stays within the viewport. It accepts `AIVORY_SHARE_TEST_URL` and
+`CHROME_PATH`, discovers Chrome/Edge, and saves screenshots in the OS temporary
+directory. If the build reaches Node's default heap limit, run it with
+`NODE_OPTIONS=--max-old-space-size=8192 npm run build`.
+
 Go is the deliberate exception. Go only compiles same-package `_test.go` files
 from the package directory, and these unit tests exercise package-private
 invariants. They therefore remain beside their Go package and run with:

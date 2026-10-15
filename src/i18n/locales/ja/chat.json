@@ -485,6 +485,8 @@
     "cloneDone": "自分のチャットに複製しました",
     "missingTitle": "この共有は利用できません",
     "missingBody": "リンクが誤っているか、所有者がこの会話の共有を解除した可能性があります。",
+    "viewLoadFailedTitle": "共有を読み込めませんでした",
+    "viewLoadFailedBody": "ネットワーク接続を確認して、しばらくしてから再試行してください。",
     "eyebrow": "共有された会話",
     "untitled": "無題の会話",
     "roleUser": "ユーザー",

@@ -485,6 +485,8 @@
     "cloneDone": "已克隆到我的对话",
     "missingTitle": "该分享不可用",
     "missingBody": "链接可能有误，或所有者已取消分享此对话。",
+    "viewLoadFailedTitle": "暂时无法加载分享",
+    "viewLoadFailedBody": "请检查网络连接，稍后重试。",
     "eyebrow": "分享的对话",
     "untitled": "未命名对话",
     "roleUser": "用户",
