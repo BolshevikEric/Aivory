@@ -216,6 +216,10 @@ docker compose --env-file .env -f docker-compose.prod.yml up -d
 
 Postgres / Redis / Qdrant use named volumes (`pgdata`, `redisdata`, `qdrantdata`). Uploads, generated artifacts, and API-owned local objects such as avatars are bind-mounted from `DATA_DIR` (default `./data`) — files land directly on the host, no container access needed. Local objects default to `UPLOAD_DIR/object-storage`; override that path with `AIVORY_LOCAL_STORAGE_DIR` when needed. The admin backup page can also generate an async full migration ZIP that includes DB rows, files, and Qdrant vectors; completed archives live under `BACKUP_DIR` (default `DATA_DIR/backups`).
 
+## Conversation sharing
+
+Conversation sharing supports selected-message PNG, paginated text-layer PDF, versioned JSON, and plain TXT exports, alongside existing share links. Image exports use a dedicated document, bounded resource preparation, standard/high quality, and an in-memory result cache. The app container bundles Chromium and CJK fonts for server-side PDF printing; clients do not need to install a print browser. See the [file-sharing implementation and operations guide](docs/conversation-file-sharing.zh-CN.md).
+
 ## Interleaved tools & Python sandbox
 
 The orchestrator runs **up to 48 tool calls across 12 provider cycles in a single turn**. Tools chain freely: results from web searches, fetched pages, Python, and generated files become context for the next call without user handoffs. RAG is routed separately by the orchestrator and injected automatically when relevant.

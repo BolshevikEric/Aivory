@@ -37,3 +37,28 @@
 .conversation-image-document .katex-display { overflow: visible !important; }
 .conversation-image-document .truncate { white-space: normal; overflow: visible; text-overflow: clip; }
 .conversation-image-document [data-code-toolbar] button { display: none; }
+
+/* Export-only typography keeps image/PDF documents independent of chat controls. */
+.conversation-share-row { min-width: 0; }
+.conversation-share-role { margin-bottom: 10px; color: var(--color-fg-muted); font-size: 12px; font-weight: 600; }
+.conversation-share-content { line-height: 1.65; overflow-wrap: anywhere; }
+.conversation-share-content p { margin: 0 0 12px; }
+.conversation-share-content h1, .conversation-share-content h2, .conversation-share-content h3 { margin: 20px 0 12px; font-weight: 600; line-height: 1.4; }
+.conversation-share-content h1 { font-size: 24px; }
+.conversation-share-content h2 { font-size: 21px; }
+.conversation-share-content h3 { font-size: 18px; }
+.conversation-share-content ul { list-style: disc; padding-left: 24px; margin: 12px 0; }
+.conversation-share-content ol { list-style: decimal; padding-left: 24px; margin: 12px 0; }
+.conversation-share-content blockquote { border-left: 3px solid var(--color-border); padding-left: 16px; margin: 12px 0; color: var(--color-fg-muted); }
+.conversation-share-content pre { background: var(--color-bg-muted); border-radius: 8px; padding: 14px; font: 13px/1.6 var(--font-mono); margin: 12px 0; }
+.conversation-share-content code { font-family: var(--font-mono); }
+.conversation-share-content table { border-collapse: collapse; font-size: 14px; margin: 12px 0; }
+.conversation-share-content th, .conversation-share-content td { padding: 8px 10px; border: 1px solid var(--color-border); text-align: left; }
+.conversation-share-content th { background: var(--color-bg-muted); font-weight: 600; }
+.conversation-share-content img { display: block; height: auto; margin: 12px 0; max-width: 100%; }
+.conversation-share-content a { color: var(--color-accent); text-decoration: underline; }
+.conversation-share-content .math-copy-wrap { display: inline; }
+.conversation-share-citations { font-size: 12px; color: var(--color-fg-muted); margin-top: 16px; }
+/* Explicit item spacing avoids margin collapse changing during DOM capture. */
+.conversation-share-content li { margin: 0 0 12px; }
+.conversation-share-content li > p { margin: 0; }

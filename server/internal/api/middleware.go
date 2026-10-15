@@ -560,6 +560,11 @@ func verifiedRequestPayloadDigest(r *http.Request, claimed string) (string, erro
 	if r.Method == http.MethodPost && r.URL.Path == "/api/private-chat" {
 		bodyLimit = privateChatBodyLimit
 	}
+	if r.Method == http.MethodPost {
+		if _, matched := matchPath(splitPath("/api/conversations/:id/export/pdf"), splitPath(r.URL.Path)); matched {
+			bodyLimit = conversationPDFBodyLimit
+		}
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, bodyLimit+1))
 	if err != nil || int64(len(body)) > bodyLimit {
 		return "", errors.New("invalid request signature payload")

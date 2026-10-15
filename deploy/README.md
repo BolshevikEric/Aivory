@@ -25,6 +25,10 @@ See the [official documentation](https://docs.aivorygo.com) for guided deploymen
 and configuration references, or the [root README](../README.md) for the full
 project overview. This file remains the versioned deployment cheat-sheet.
 
+## Conversation PDF printing
+
+Conversation PDF sharing prints with Chromium inside the app container. The runtime image includes `chromium` and `fonts-noto-cjk`; clients do not need to install a browser. Deploy a rebuilt/new image to receive these dependencies. For a directly hosted API, `AIVORY_PDF_CHROME_PATH` can point to an existing server-side browser. A missing browser only affects PDF. See the [file-sharing guide](../docs/conversation-file-sharing.zh-CN.md).
+
 ## How backend selection works
 
 The API binary is the **same** in both profiles. It resolves backends at boot:

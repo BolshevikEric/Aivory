@@ -31,6 +31,7 @@
     "test:code-wrap": "node tests/browser/run-code-wrap.mjs",
     "test:layout": "node tests/browser/run-layout.mjs",
     "test:share": "node tests/browser/run-share.mjs",
+    "test:conversation-share": "node tests/browser/run-conversation-image.mjs",
     "test:mobile-layout": "node tests/browser/run-mobile-layout.mjs",
     "test:generative-ui": "node tests/browser/run-generative-ui.mjs"
   },

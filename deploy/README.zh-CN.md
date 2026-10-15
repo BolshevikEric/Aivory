@@ -24,6 +24,10 @@
 部署与配置指南见[官方文档](https://docs.aivorygo.com)，完整项目介绍见
 [根目录 README](../README.zh-CN.md)。本文档继续作为随代码版本维护的部署速查。
 
+## 会话 PDF 打印
+
+会话 PDF 分享使用 app 容器内的 Chromium 原生分页打印，运行镜像已包含 `chromium` 与 `fonts-noto-cjk`，客户端无需安装浏览器。此次升级需要重新构建或拉取包含这些依赖的新镜像。直接运行 API 时，可设置 `AIVORY_PDF_CHROME_PATH` 指向服务端已有的浏览器；缺少它只影响 PDF。详见[会话文件分享](../docs/conversation-file-sharing.zh-CN.md)。
+
 ## 后端选择机制
 
 个人版、完整版和本地开发使用同一个 API 二进制，启动时按配置选择后端：

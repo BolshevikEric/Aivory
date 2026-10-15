@@ -5,6 +5,10 @@ describe('single conversation image dimensions', () => {
   it('exports short conversations at double resolution', () => {
     expect(conversationImageDimensions(500.5)).toEqual({ width: 760, height: 501, pixelRatio: 2 })
   })
+  it('reduces canvas pixels for standard quality without changing layout', () => {
+    expect(conversationImageDimensions(500.5, 'standard')).toEqual({ width: 760, height: 501, pixelRatio: 1.5 })
+    expect(conversationImageDimensions(10000, 'standard')).toEqual(conversationImageDimensions(10000, 'high'))
+  })
   it('keeps the full height of long conversations while bounding canvas memory', () => {
     for (const height of [6000, 10000, 16384]) {
       const dimensions = conversationImageDimensions(height)

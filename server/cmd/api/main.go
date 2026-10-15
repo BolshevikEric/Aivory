@@ -29,6 +29,7 @@ import (
 	"aivory/server/internal/envcfg"
 	"aivory/server/internal/llm"
 	"aivory/server/internal/mail"
+	"aivory/server/internal/pdfexport"
 	"aivory/server/internal/queue"
 	"aivory/server/internal/rag"
 	"aivory/server/internal/store"
@@ -186,7 +187,10 @@ func main() {
 	ragSvc.SetTaskLLM(taskRouterAdapter{t: taskLLM})
 	orchestrator := llm.NewOrchestrator(db, providers, toolRegistry, ragSvc, cacheLayer, q, taskLLM, memoryWorker, logger, cfg.UploadDir, cfg.ArtifactDir)
 
+	pdfRenderer := pdfexport.New()
+	defer pdfRenderer.Close()
 	apiDeps := api.Deps{
+		RenderPDF:    pdfRenderer.Render,
 		Config:       cfg,
 		DB:           db,
 		Cache:        cacheLayer,
