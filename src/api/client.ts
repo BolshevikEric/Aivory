@@ -187,6 +187,8 @@ export function assertNetworkOnline(): void {
 
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+  /** Public capability requests do not depend on the current account or session. */
+  anonymous?: boolean
   /** Plain object (will be JSON.stringified) or FormData. */
   body?: unknown
   /** Abort signal. */
@@ -234,12 +236,13 @@ function isAuthPath(path: string): boolean {
 
 async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): Promise<T> {
   const epoch = accountRequestEpoch
-  const assertCurrent = () => { if (!isAuthPath(path)) assertAccountRequestCurrent(epoch) }
+  const accountBound = !opts.anonymous && !isAuthPath(path)
+  const assertCurrent = () => { if (accountBound) assertAccountRequestCurrent(epoch) }
   assertNetworkOnline()
   const isForm = opts.body instanceof FormData
   const method = opts.method ?? 'GET'
   const serializedBody = isForm || !opts.body ? '' : JSON.stringify(opts.body)
-  const authHeaders = await authenticatedRequestHeaders(path, method, serializedBody, isForm)
+  const authHeaders = opts.anonymous ? {} : await authenticatedRequestHeaders(path, method, serializedBody, isForm)
   assertCurrent()
   const headers: Record<string, string> = {
     accept: 'application/json',
@@ -249,7 +252,7 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
   }
   const res = await apiFetch(API_BASE + path, {
     method,
-    credentials: 'include',
+    credentials: opts.anonymous ? 'omit' : 'include',
     headers,
     body: isForm ? (opts.body as FormData) : serializedBody || undefined,
     signal: opts.signal,
@@ -259,7 +262,7 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
   // The access token is short-lived (2h). When it expires an open tab would
   // start 401-ing "auth required" out of nowhere — silently refresh once via the
   // long-lived refresh cookie and retry, so the session keeps working.
-  if (res.status === 401 && !retried && !isAuthPath(path)) {
+  if (res.status === 401 && !retried && accountBound) {
     const refreshed = await tryRefresh()
     assertCurrent()
     if (refreshed) return apiRequest<T>(path, opts, true)
@@ -277,14 +280,14 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
   if (!res.ok) {
     const errBody = parsed as ApiErrorShape | undefined
     const message = errBody?.error ?? `Request failed with status ${res.status}`
-    if (res.status === 401 && retried && !isAuthPath(path) && isAuthExpiredMessage(message)) {
+    if (res.status === 401 && retried && accountBound && isAuthExpiredMessage(message)) {
       notifyAuthLost()
     }
     // A banned account (any in-flight request after an admin ban) → notify the
     // app once so it can sign the user out with a clear "suspended" message,
     // instead of a silent logout or a generic error.
-    if (message === 'account_suspended') notifyBanned()
-    if (message === 'initial_password_required') notifyInitialPasswordRequired()
+    if (!opts.anonymous && message === 'account_suspended') notifyBanned()
+    if (!opts.anonymous && message === 'initial_password_required') notifyInitialPasswordRequired()
     throw new ApiError(res.status, message, parsed)
   }
   return parsed as T
