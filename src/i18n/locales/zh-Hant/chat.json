@@ -485,6 +485,8 @@
     "cloneDone": "已複製到我的對話",
     "missingTitle": "該分享不可用",
     "missingBody": "連結可能有誤，或所有者已取消分享此對話。",
+    "viewLoadFailedTitle": "暫時無法載入分享",
+    "viewLoadFailedBody": "請檢查網路連線，稍後重試。",
     "eyebrow": "分享的對話",
     "untitled": "未命名對話",
     "roleUser": "使用者",

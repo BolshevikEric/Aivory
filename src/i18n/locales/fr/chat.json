@@ -485,6 +485,8 @@
     "cloneDone": "Conversation clonée",
     "missingTitle": "Ce partage n'est pas disponible",
     "missingBody": "Le lien est peut-être incorrect, ou le propriétaire a cessé de partager cette conversation.",
+    "viewLoadFailedTitle": "Impossible de charger ce partage",
+    "viewLoadFailedBody": "Vérifiez votre connexion et réessayez dans un instant.",
     "eyebrow": "Conversation partagée",
     "untitled": "Conversation sans titre",
     "roleUser": "Utilisateur",

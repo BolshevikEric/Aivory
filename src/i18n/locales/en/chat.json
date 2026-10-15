@@ -493,6 +493,8 @@
     "cloneDone": "Cloned to your chats",
     "missingTitle": "This share isn’t available",
     "missingBody": "The link may be wrong, or the owner has unshared this conversation.",
+    "viewLoadFailedTitle": "Could not load this share",
+    "viewLoadFailedBody": "Check your connection and try again in a moment.",
     "eyebrow": "Shared conversation",
     "untitled": "Untitled conversation",
     "roleUser": "User",

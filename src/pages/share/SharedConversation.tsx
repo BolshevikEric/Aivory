@@ -19,7 +19,7 @@ import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/store/auth'
 import { useConversations } from '@/store/conversations'
 import { SharedMessageIdentity } from './shared-message-identity'
-import { Copy, FileText, Ghost, Link2, Loader2 } from 'lucide-react'
+import { AlertCircle, Copy, FileText, Ghost, Link2, Loader2, RefreshCw } from 'lucide-react'
 
 function messageText(blocks: ApiBlock[]): string {
   return blocks
@@ -61,12 +61,15 @@ export default function SharedConversation() {
   const user = useAuth((s) => s.user)
   const adoptConversation = useConversations((s) => s.adoptConversation)
   const [data, setData] = useState<ApiSharedConversation | null>(null)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'missing'>('loading')
+  const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [cloning, setCloning] = useState(false)
   const isAuthenticated = authStatus === 'authenticated' && Boolean(user)
 
   useEffect(() => {
     let active = true
+    setData(null)
+    setStatus('loading')
     sharedApi
       .get(token)
       .then((d) => {
@@ -76,12 +79,12 @@ export default function SharedConversation() {
       })
       .catch((e) => {
         if (!active) return
-        setStatus(e instanceof ApiError && e.status === 404 ? 'missing' : 'missing')
+        setStatus(e instanceof ApiError && e.status === 404 ? 'missing' : 'error')
       })
     return () => {
       active = false
     }
-  }, [token])
+  }, [token, loadAttempt])
 
   async function cloneToMyChats() {
     if (!token || cloning) return
@@ -140,6 +143,20 @@ export default function SharedConversation() {
         {status === 'loading' ? (
           <div className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-[var(--layout-gutter-mobile)] py-8 text-sm text-[var(--color-fg-subtle)] sm:px-6 lg:px-8">
             {t('common:common.loading')}
+          </div>
+        ) : status === 'error' ? (
+          <div role="alert" className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-[var(--layout-gutter-mobile)] pt-16 sm:px-6 lg:px-8">
+            <EmptyState
+              icon={<AlertCircle size={22} aria-hidden />}
+              title={t('chat:share.viewLoadFailedTitle')}
+              description={t('chat:share.viewLoadFailedBody')}
+              action={
+                <Button variant="secondary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+                  <RefreshCw size={14} aria-hidden />
+                  {t('common:actions.tryAgain')}
+                </Button>
+              }
+            />
           </div>
         ) : status === 'missing' || !data ? (
           <div className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-[var(--layout-gutter-mobile)] pt-16 sm:px-6 lg:px-8">
