@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"log/slog"
@@ -23,6 +24,7 @@ import (
 	"aivory/server/internal/envcfg"
 	"aivory/server/internal/llm"
 	"aivory/server/internal/mail"
+	"aivory/server/internal/pdfexport"
 	"aivory/server/internal/queue"
 	"aivory/server/internal/rag"
 	"aivory/server/internal/store"
@@ -31,6 +33,8 @@ import (
 
 // Deps is the dependency bundle passed to NewRouter.
 type Deps struct {
+	// RenderPDF prints a self-contained document; tests can inject a renderer.
+	RenderPDF    func(context.Context, string) ([]byte, error)
 	Config       config.Config
 	DB           *sql.DB
 	Cache        cache.Cache
@@ -139,6 +143,9 @@ var (
 
 // NewRouter returns the fully-wired http.Handler.
 func NewRouter(d Deps) http.Handler {
+	if d.RenderPDF == nil {
+		d.RenderPDF = pdfexport.New().Render
+	}
 	// Async title generation persists after the request's chat SSE has finished.
 	// Bridge its committed metadata updates into the same realtime stream used by
 	// cross-device conversation changes; background work has no originating tab.
@@ -456,6 +463,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.handle("GET", "/api/sandbox/availability", requireAuth(d, sandboxUploadAvailabilityHandler))
 	mux.handle("POST", "/api/conversations/:id/sandbox/folders", requireAuth(d, uploadSandboxFolderHandler))
 	sharingPermission := func(p store.UserGroupPermissions) bool { return p.AllowSharing }
+	mux.handle("POST", "/api/conversations/:id/export/pdf", rateLimitedIP(d, "conversation-pdf", 12, time.Minute, requireAuth(d, requireCapabilityHandler(errSharingGroupPermission, sharingPermission, requireCapabilityHandler(errConversationExportGroupPermission, func(p store.UserGroupPermissions) bool { return p.AllowConversationExport }, conversationPDFHandler)))))
 	mux.handle("GET", "/api/conversations/:id/share", requireAuth(d, requireCapabilityHandler(errSharingGroupPermission, sharingPermission, getShareHandler)))
 	mux.handle("POST", "/api/conversations/:id/share", requireAuth(d, requireCapabilityHandler(errSharingGroupPermission, sharingPermission, createShareHandler)))
 	mux.handle("DELETE", "/api/conversations/:id/share", requireAuth(d, requireCapabilityHandler(errSharingGroupPermission, sharingPermission, deleteShareHandler)))

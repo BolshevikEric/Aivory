@@ -1,6 +1,8 @@
 import { AIVORY_MARK_PATH } from '@/components/brand/logo'
 import wordmarkSource from '@/assets/brand/aivory-wordmark.svg?raw'
 import '@/styles/conversation-image.css'
+import { CAPTURE_STYLE_PROPERTIES, withCaptureAbort, embedConversationImages, conversationFontCSS, freezeConversationSVGs } from './conversation-capture'
+import { conversationShareFilename, saveConversationShareFile, type ConversationShareQuality } from './conversation-share'
 
 const IMAGE_WIDTH = 760
 const MAX_IMAGE_EDGE = 16384
@@ -10,14 +12,14 @@ export interface ConversationImageSource { id: string; node: HTMLElement }
 export interface ConversationImagePage { blob: Blob; filename: string }
 
 /** Keep a single complete image readable while bounding canvas memory on mobile. */
-export function conversationImageDimensions(height: number): { width: number; height: number; pixelRatio: number } {
+export function conversationImageDimensions(height: number, quality: ConversationShareQuality = 'high'): { width: number; height: number; pixelRatio: number } {
   if (!Number.isFinite(height) || height <= 0) throw new RangeError('invalid image size')
   const roundedHeight = Math.ceil(height)
   if (roundedHeight > MAX_IMAGE_EDGE) throw new Error('image selection too large')
   return {
     width: IMAGE_WIDTH,
     height: roundedHeight,
-    pixelRatio: Math.min(2, MAX_IMAGE_EDGE / roundedHeight, Math.sqrt(MAX_IMAGE_PIXELS / (IMAGE_WIDTH * roundedHeight))),
+    pixelRatio: Math.min(quality === 'standard' ? 1.5 : 2, MAX_IMAGE_EDGE / roundedHeight, Math.sqrt(MAX_IMAGE_PIXELS / (IMAGE_WIDTH * roundedHeight))),
   }
 }
 
@@ -28,17 +30,7 @@ function element(tag: string, className: string, text?: string): HTMLElement {
   return node
 }
 
-function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise
-  return new Promise((resolve, reject) => {
-    const aborted = () => reject(new DOMException('Image capture cancelled', 'AbortError'))
-    if (signal.aborted) { aborted(); return }
-    signal.addEventListener('abort', aborted, { once: true })
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', aborted))
-  })
-}
-
-function brand(): HTMLElement {
+export function conversationShareBrand(): HTMLElement {
   const group = element('div', 'conversation-image-brand')
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', '0 0 32 32')
@@ -104,12 +96,15 @@ export async function createConversationImages(input: {
   interactiveLabel: string
   assertActive: () => void
   signal?: AbortSignal
+  quality?: ConversationShareQuality
+  onProgress?: (stage: string) => void
+  resourceFailedLabel?: string
 }): Promise<ConversationImagePage[]> {
   if (!input.messages.length) throw new Error('empty selection')
   input.assertActive()
-  const { toBlob, getFontEmbedCSS } = await import('html-to-image')
-  input.assertActive()
-  await withAbort(document.fonts.ready, input.signal)
+  const started = performance.now()
+  const timings: Record<string, number> = {}
+  const { toBlob } = await import('html-to-image')
   input.assertActive()
   const root = element('section', 'conversation-image-document')
   root.setAttribute('aria-hidden', 'true')
@@ -117,7 +112,7 @@ export async function createConversationImages(input: {
   root.inert = true
   root.style.width = `${IMAGE_WIDTH}px`
   const header = element('header', 'conversation-image-heading')
-  header.append(brand(), element('h1', 'conversation-image-title', input.title))
+  header.append(conversationShareBrand(), element('h1', 'conversation-image-title', input.title))
   const viewport = element('div', 'conversation-image-viewport')
   const body = element('div', 'conversation-image-messages')
   for (const message of input.messages) {
@@ -133,34 +128,37 @@ export async function createConversationImages(input: {
   const onAbort = () => root.remove()
   input.signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    await withAbort(Promise.all(Array.from(root.querySelectorAll('img')).map(image => image.decode().catch(() => {}))), input.signal)
+    timings.layout = performance.now() - started
+    input.onProgress?.('resources')
+    const resourcesStarted = performance.now()
+    await embedConversationImages(root, input.resourceFailedLabel ?? input.interactiveLabel, input.signal)
+    timings.resources = performance.now() - resourcesStarted
     input.assertActive()
-    const dimensions = conversationImageDimensions(root.getBoundingClientRect().height)
     const fetchRequestInit: RequestInit = { credentials: 'same-origin', referrerPolicy: 'no-referrer', signal: input.signal }
-    const fontEmbedCSS = await withAbort(getFontEmbedCSS(root, { preferredFontFormat: 'woff2', fetchRequestInit }), input.signal)
+    const fontStarted = performance.now()
+    const fontEmbedCSS = await conversationFontCSS(root, input.signal)
+    freezeConversationSVGs(root)
+    timings.fonts = performance.now() - fontStarted
     input.assertActive()
-    const blob = await withAbort(toBlob(root, {
+    const dimensions = conversationImageDimensions(root.getBoundingClientRect().height, input.quality)
+    input.onProgress?.('rendering')
+    const captureStarted = performance.now()
+    const blob = await withCaptureAbort(toBlob(root, {
+      includeStyleProperties: CAPTURE_STYLE_PROPERTIES,
       ...dimensions, skipAutoScale: true,
       fontEmbedCSS, fetchRequestInit,
-      style: { position: 'relative', inset: 'auto', zIndex: 'auto' },
+      style: { ...Object.fromEntries(Array.from(getComputedStyle(root)).filter(name => name.startsWith('--')).map(name => [name, getComputedStyle(root).getPropertyValue(name)])), position: 'relative', inset: 'auto', zIndex: 'auto' },
     }), input.signal)
     input.assertActive()
     if (!blob || !blob.size) throw new Error('could not encode image')
-    const title = Array.from(input.title.replace(/[<>:"/\\|?*]/g, '').trim()).filter(char => char.codePointAt(0)! >= 32).slice(0, 80).join('') || 'Aivory'
-    return [{ blob, filename: `${title}.png` }]
+    timings.capture = performance.now() - captureStarted
+    timings.total = performance.now() - started
+    window.dispatchEvent(new CustomEvent('aivory:conversation-export', { detail: { format: 'image', timings } }))
+    return [{ blob, filename: conversationShareFilename(input.title, 'png') }]
   } finally {
     input.signal?.removeEventListener('abort', onAbort)
     root.remove()
   }
 }
 
-export function saveConversationImage(page: ConversationImagePage): void {
-  const url = URL.createObjectURL(page.blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = page.filename
-  document.body.append(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
-}
+export const saveConversationImage = saveConversationShareFile

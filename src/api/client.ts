@@ -199,6 +199,8 @@ interface ApiOptions {
   activity?: RequestActivityMode
   /** Allow a small request to finish while the page is navigating/reloading. */
   keepalive?: boolean
+  /** Authenticated binary responses share refresh and account isolation. */
+  responseType?: 'blob'
 }
 
 export interface UploadProgress {
@@ -245,7 +247,7 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
   const authHeaders = opts.anonymous ? {} : await authenticatedRequestHeaders(path, method, serializedBody, isForm)
   assertCurrent()
   const headers: Record<string, string> = {
-    accept: 'application/json',
+    accept: opts.responseType === 'blob' ? 'application/pdf, application/octet-stream' : 'application/json',
     ...(isForm ? {} : { 'content-type': 'application/json' }),
     ...opts.headers,
     ...authHeaders,
@@ -266,6 +268,11 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
     const refreshed = await tryRefresh()
     assertCurrent()
     if (refreshed) return apiRequest<T>(path, opts, true)
+  }
+  if (res.ok && opts.responseType === 'blob') {
+    const blob = await res.blob()
+    assertCurrent()
+    return blob as T
   }
   let parsed: unknown = undefined
   const text = await res.text()

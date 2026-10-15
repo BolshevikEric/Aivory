@@ -202,6 +202,10 @@ AIVORY_DESKTOP_BASE_URL=https://chat.example.com npm run desktop:build
 安装包及校验文件上传至 Release。详细配置、PowerShell 命令和签名说明见
 [桌面版构建指南](desktop/README.zh-CN.md)。
 
+## 会话分享
+
+会话支持分享链接，以及选中消息后导出图片、原生分页 PDF、版本化 JSON 和纯文本 TXT。图片导出使用独立排版、资源加载限制、标准/高清画质和内存结果缓存。app 容器已包含服务端 PDF 打印所需的 Chromium 与中文字体，客户端无需安装打印浏览器。详见[会话文件分享与部署说明](docs/conversation-file-sharing.zh-CN.md)。
+
 ## 多轮工具调用与 Python 沙箱
 
 编排器在一次对话中最多执行 **48 次工具调用，跨越 12 个模型循环**。网络搜索、网页内容、Python 结果和生成文件都可以成为下一次调用的输入，无需用户在中间手动接力。RAG 由编排器单独路由，并在相关时自动注入知识库内容。

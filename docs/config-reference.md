@@ -446,6 +446,8 @@ SSE 心跳、流恢复窗口、生成时长上限、分页与搜索上限、消�
 
 ### 9. 服务器启动 / 配置加载
 
+会话 PDF 打印的可选变量：`AIVORY_PDF_CHROME_PATH`（`string`，默认自动发现），指定 API 所在服务端的 Chromium 兼容浏览器可执行文件。Docker app 镜像已包含 Chromium 和 CJK 字体。此变量由 `internal/pdfexport/renderer.go` 在延迟启动打印浏览器时读取；修改后重启 API。详见[会话文件分享](conversation-file-sharing.zh-CN.md)。
+
 HTTP server 超时、优雅关闭、启动流程常量等。
 
 | 环境变量 | 类型 | 默认值 | 位置 | 说明 |

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal, Link2, Image, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal, Link2, Image, FileText, FileJson, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Composer } from '@/components/chat/composer'
 import { MessageList } from '@/components/chat/message-list'
 import { UserMenu } from '@/components/sidebar/sidebar'
@@ -10,7 +10,7 @@ import { ModelPicker } from '@/components/chat/model-picker'
 import { RenameConversationDialog } from '@/components/chat/rename-conversation-dialog'
 import { ShareConversationDialog } from '@/components/chat/share-conversation-dialog'
 import { ConversationImagePreviewDialog, ImageShareToolbar } from '@/components/chat/conversation-image-share'
-import { useConversationImageShare } from '@/hooks/use-conversation-image-share'
+import { useConversationShare } from '@/hooks/use-conversation-share'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { PanelFallback } from '@/components/ui/panel-fallback'
@@ -148,7 +148,8 @@ export default function ChatThread() {
   }, [])
 
   const scrollRef = useRef<HTMLDivElement>(null)
-  const imageShare = useConversationImageShare(conversation, canShare && !isWorkspaceGuest, scrollRef)
+  const canShareFiles = canShare && userCan(user, 'allow_conversation_export') && !isWorkspaceGuest
+  const fileShare = useConversationShare(conversation, canShareFiles)
   // Tracks the conversation id we've already positioned at the bottom, so the
   // instant "jump to newest" only runs once per conversation (not on every
   // streaming token).
@@ -637,8 +638,11 @@ export default function ChatThread() {
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger><Share2 size={13} aria-hidden /> {t('chat:sidebar.share')}</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={() => { imageShare.cancel(); setShareOpen(true) }}><Link2 size={13} aria-hidden />{t('chat:shareImage.asLink')}</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => { setShareOpen(false); imageShare.begin() }}><Image size={13} aria-hidden />{t('chat:shareImage.asImage')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => { fileShare.cancel(); setShareOpen(true) }}><Link2 size={13} aria-hidden />{t('chat:shareImage.asLink')}</DropdownMenuItem>
+                    {canShareFiles && <>
+                    <DropdownMenuItem onSelect={() => { setShareOpen(false); fileShare.begin('image') }}><Image size={13} aria-hidden />{t('chat:shareImage.asImage')}</DropdownMenuItem>
+                    {(['pdf', 'json', 'txt'] as const).map(format => <DropdownMenuItem key={format} onSelect={() => { setShareOpen(false); fileShare.begin(format) }}>{format === 'json' ? <FileJson size={13} aria-hidden /> : <FileText size={13} aria-hidden />}{t(`chat:shareFile.as${format.toUpperCase()}`)}</DropdownMenuItem>)}
+                    </>}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               ) : null}
@@ -731,7 +735,7 @@ export default function ChatThread() {
           {conversation.messages.length === 0 && loadStatus === 'loading' ? (
             <PanelFallback scope="fill" />
           ) : (
-            <MessageList conversation={conversation} scrollToMessageId={jumpTo} jumpKey={jumpKey} onGenerativeReplyAccepted={pinToBottom} imageSelection={imageShare.phase !== 'idle' ? { selected: imageShare.selected, toggle: imageShare.toggle, disabled: imageShare.busy || imageShare.phase === 'preview' } : undefined} />
+            <MessageList conversation={conversation} scrollToMessageId={jumpTo} jumpKey={jumpKey} onGenerativeReplyAccepted={pinToBottom} imageSelection={fileShare.phase !== 'idle' ? { selected: fileShare.selected, toggle: fileShare.toggle, disabled: fileShare.busy || fileShare.phase === 'preview' } : undefined} />
           )}
         </div>
         <div
@@ -744,13 +748,13 @@ export default function ChatThread() {
         />
         <ConversationMinimap conversation={conversation} scrollContainerRef={scrollRef} />
       </div>
-      {imageShare.phase === 'idle' && <InlineThreadLayer conversationId={conversation.id} scrollRef={scrollRef} readOnly={isWorkspaceGuest} />}
+      {fileShare.phase === 'idle' && <InlineThreadLayer conversationId={conversation.id} scrollRef={scrollRef} readOnly={isWorkspaceGuest} />}
 
       {/* Composer — a hairline separates it from the thread on phones, where it's
           a bottom-anchored bar rather than a floating card. */}
       <div className="relative bg-[var(--color-bg)]">
-        {imageShare.phase !== 'idle' && <ImageShareToolbar count={imageShare.selected.size} busy={imageShare.busy} error={imageShare.error} onSelectAll={() => void imageShare.selectAll()} onClear={imageShare.clear} onCancel={imageShare.cancel} onGenerate={() => void imageShare.generate()} />}
-        {showJump && imageShare.phase === 'idle' && (
+        {fileShare.phase !== 'idle' && <ImageShareToolbar format={fileShare.format} quality={fileShare.quality} stage={fileShare.stage} onFormat={fileShare.setFormat} onQuality={fileShare.setQuality} count={fileShare.selected.size} busy={fileShare.busy} error={fileShare.error} onSelectAll={() => void fileShare.selectAll()} onClear={fileShare.clear} onCancel={fileShare.cancel} onGenerate={() => void fileShare.generate()} />}
+        {showJump && fileShare.phase === 'idle' && (
           <button
             type="button"
             onClick={jumpToBottom}
@@ -765,7 +769,7 @@ export default function ChatThread() {
             <ArrowDown size={14} aria-hidden />
           </button>
         )}
-        <div hidden={imageShare.phase !== 'idle'} className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-3 sm:px-6 lg:px-8 pb-3 sm:pb-5 pt-1.5 sm:pt-2">
+        <div hidden={fileShare.phase !== 'idle'} className="mx-auto w-full max-w-[var(--layout-message-max-w)] px-3 sm:px-6 lg:px-8 pb-3 sm:pb-5 pt-1.5 sm:pt-2">
           {/* §workspace RBAC: guests are read-only — replace the composer with
               an explainer instead of letting them type into a 404. */}
           {isWorkspaceGuest ? (
@@ -885,8 +889,11 @@ export default function ChatThread() {
         <SheetContent side="bottom" size="sm" label={t('chat:actions.more')} className="h-auto max-h-[85dvh]">
           {mobileShareOptions && canShare && !isWorkspaceGuest ? <div className="flex flex-col px-2 py-2">
             <ThreadActionRow icon={<ChevronLeft size={18} aria-hidden />} label={t('common:actions.back')} onClick={() => setMobileShareOptions(false)} />
-            <ThreadActionRow icon={<Link2 size={18} aria-hidden />} label={t('chat:shareImage.asLink')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); imageShare.cancel(); setShareOpen(true) }} />
-            <ThreadActionRow icon={<Image size={18} aria-hidden />} label={t('chat:shareImage.asImage')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); imageShare.begin() }} />
+            <ThreadActionRow icon={<Link2 size={18} aria-hidden />} label={t('chat:shareImage.asLink')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); fileShare.cancel(); setShareOpen(true) }} />
+            {canShareFiles && <>
+            <ThreadActionRow icon={<Image size={18} aria-hidden />} label={t('chat:shareImage.asImage')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); fileShare.begin('image') }} />
+            {(['pdf', 'json', 'txt'] as const).map(format => <ThreadActionRow key={format} icon={format === 'json' ? <FileJson size={18} aria-hidden /> : <FileText size={18} aria-hidden />} label={t(`chat:shareFile.as${format.toUpperCase()}`)} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); fileShare.begin(format) }} />)}
+            </>}
           </div> : <div className="flex flex-col px-2 py-2">
             {!isWorkspaceGuest ? (
               <ThreadActionRow
@@ -974,7 +981,7 @@ export default function ChatThread() {
           onOpenChange={setShareOpen}
         />
       ) : null}
-      {imageShare.phase === 'preview' && imageShare.pages.length > 0 && <ConversationImagePreviewDialog pages={imageShare.pages} onClose={imageShare.cancel} onBack={imageShare.back} />}
+      {fileShare.phase === 'preview' && fileShare.pages.length > 0 && <ConversationImagePreviewDialog format={fileShare.format} pages={fileShare.pages} onClose={fileShare.cancel} onBack={fileShare.back} />}
     </div>
   )
 }
