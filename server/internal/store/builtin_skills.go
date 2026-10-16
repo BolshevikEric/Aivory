@@ -15,7 +15,7 @@ var generativeUIInstructions string
 const GenerativeUISkillID = "sk_generative_ui"
 const CatalogSkillCommandPrefix = "catalog:"
 
-const generativeUIDescription = "Proactively use inline UI whenever it improves readability, understanding, or interaction. Infer suitable components from the user's intent and conversation without requiring an explicit UI request."
+const generativeUIDescription = "Proactively use the simplest inline UI when it improves readability, comparison, calculation, understanding, or interaction; keep code and HTML requests as ordinary copyable code."
 
 // Retain only fingerprints for upgrading untouched defaults in existing databases.
 // The current prompt is the sole embedded instruction document.
@@ -27,12 +27,14 @@ var retiredGenerativeUIInstructionHashes = []string{
 	"2a738c843635627d92472662494d69bcaeedbc8f42a3e982bdbd9f10c1c9a9b7",
 	"127ca0b430f1a786f2115c3a30978c781191aa8b268a5ed6c772ff2eab970bad",
 	"85244ec4dbebcf3badd65881f6c07bcda89672830127d16cea6705e3b2565930",
+	"2bb004ec29fa4fa750ddce1dc94167110568739ba977a1932642e5403c2fa8c1",
 }
 
 var retiredGenerativeUIDescriptionHashes = []string{
 	"63bc4d66a3d87c566f33f4b8dea47161fa29a7acc4ebfe27299e370267ee809c",
 	"f7762a30ebcb63402798ce6f4f5364b4f6ac52132a9e04a3364019d80c6aef03",
 	"f45798cf5a1d5bb7e6dc430cc3d0d9256499c6c3a8923c21b61eb28a391b53e5",
+	"f814aa1c192f81ad4900a22d9bb5593c247a9c36ada1d0b29df7ecb7c842991c",
 }
 
 func builtinSkillFingerprint(value string) string {

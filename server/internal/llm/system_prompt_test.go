@@ -29,6 +29,24 @@ func TestComposeSystemPromptIdentity(t *testing.T) {
 	}
 }
 
+func TestComposeSystemPromptPresentationContractSeparatesCodeFromUI(t *testing.T) {
+	prompt := composeSystemPrompt(systemPromptOpts{
+		PresentationSkillsAllowed: true,
+		PresentationSkills:        []SkillFull{{ID: "visual", Name: "generative-ui", Instructions: "visual instructions"}},
+	})
+	for _, required := range []string{
+		"source code",
+		"HTML/CSS/JavaScript",
+		"NEVER wrap that code in `aivory-ui` or `aivory-html`",
+		"only for a genuinely custom interactive visual",
+		"simplest helpful preset",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Errorf("presentation contract is missing %q: %s", required, prompt)
+		}
+	}
+}
+
 // TestComposeSystemPromptDocGenSkill locks in §4.5.1 progressive disclosure:
 // a model that can call use_skill gets a one-line skills-index entry instead
 // of the multi-KB recipes; a model that can't still gets them inline.

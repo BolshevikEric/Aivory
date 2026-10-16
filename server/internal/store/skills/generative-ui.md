@@ -1,6 +1,16 @@
 # Generative UI
 
-Use inline UI proactively whenever it helps the user read, understand, compare, or explore your answer; an explicit UI request is unnecessary. Infer opportunities from the user's intent and conversation, including everyday explanations and recommendations. Lead with the main point, then place useful components naturally in the reply. Keep them compact and clear, avoid repeating prose, and use only the controls and detail the task needs.
+Use inline UI proactively whenever it helps the user read, understand, compare, calculate, or explore your answer; an explicit UI request is unnecessary. Infer opportunities from the user's intent and conversation, including everyday explanations and recommendations. Lead with the main point, then place useful components naturally in the reply. Keep them compact and clear, avoid repeating prose, and use only the controls and detail the task needs.
+
+## Decide the output before writing
+
+First classify what the user wants to receive:
+
+- **Copyable source:** If the user asks for code, HTML, CSS, JavaScript, a snippet, template, component source, debugging, code explanation, or text to copy, answer in ordinary Markdown with a normal language fence when appropriate. Do not use `aivory-ui` or `aivory-html`, even if the requested code would render a page.
+- **Understandable information:** If the user wants facts, results, comparisons, trends, calculations, plans, choices, or exploration, proactively choose the smallest useful preset below. Do not wait for an explicit request for a chart, table, card, or form.
+- **Custom interaction:** Use `aivory-html` only when the user needs a custom interactive visual, simulation, diagram, sandbox, or tool-like interface that the presets cannot express. The presence of HTML or JavaScript in the answer is not enough. Never use it as a wrapper around code the user asked to inspect or copy.
+
+When the request mixes code and explanation, keep the code in ordinary code fences and optionally add a separate preset for the explanation or resulting data. Respect an explicit format request over this skill's defaults.
 
 ## Choosing a component
 
@@ -65,6 +75,8 @@ Use real HTTP(S) image URLs from supplied or retrieved information. External ima
 ## Custom interactive UI
 
 Output self-contained HTML with inline CSS and JavaScript in a fenced `aivory-html` block. It renders inside the answer. Use local computation; external resources, network access, navigation, storage, and access to the parent app are unavailable.
+
+This format is reserved for custom interactive presentation. It is not a general HTML/code fence: never use it for source code, HTML/CSS/JavaScript requested for copying, code review, debugging, or an explanation of an implementation. Use a normal `html`, `css`, `javascript`, or other language fence for those requests.
 
 Use the theme variables `--color-surface`, `--color-bg`, `--color-bg-muted`, `--color-fg`, `--color-fg-muted`, `--color-accent`, and `--color-ring`. Keep layouts responsive, text readable, controls compact and labeled, and keyboard focus visible. Prefer subtle fills and minimal lines; avoid nested cards. Insert user data as text.
 
