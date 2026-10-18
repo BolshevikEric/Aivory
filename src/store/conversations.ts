@@ -342,6 +342,8 @@ interface ConversationStore {
     modelId?: string
     attachments?: Attachment[]
     parentId?: string
+    /** Original user turn when carrying attachments into an edited branch. */
+    editedMessageId?: string
     params?: Record<string, unknown>
     /** True when this message opens a NEW branch (edit-a-past-question, §4.15).
      *  The optimistic update then truncates the visible path to `parentId`
@@ -2133,6 +2135,7 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
           // (editing the root question) stays a root sibling instead of being
           // appended to the active leaf.
           branch: input.branch,
+          edited_message_id: input.editedMessageId,
           // 'deep-research' switches the backend to the research engine.
           mode: input.mode,
           // §verify: enable the secondary-auditor pass for this turn.

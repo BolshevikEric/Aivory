@@ -115,6 +115,9 @@ type postMessageReq struct {
 	Branch       bool   `json:"branch"`
 	Mode         string `json:"mode"`
 	GenerationID string `json:"generation_id"`
+	// EditedMessageID identifies the original user turn whose attachments an
+	// edit-resend may carry into a sibling branch under the same parent.
+	EditedMessageID string `json:"edited_message_id"`
 	// KBIDs is a per-turn snapshot of the composer's current selection. Raw JSON
 	// preserves the important difference between an omitted field (legacy client:
 	// use the conversation setting) and [] (explicitly use no optional KBs).
@@ -1282,6 +1285,18 @@ func postMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	if attachmentLeafID == "" {
 		attachmentLeafID = conv.ActiveLeafID
 	}
+	if req.EditedMessageID != "" {
+		edited, editedErr := store.GetMessage(r.Context(), d.DB, req.EditedMessageID)
+		if editedErr != nil && !errors.Is(editedErr, store.ErrNotFound) {
+			writeError(w, http.StatusInternalServerError, editedErr)
+			return
+		}
+		if !req.Branch || editedErr != nil || edited.ConversationID != id || edited.Role != "user" || edited.ParentID != req.ParentID {
+			writeError(w, http.StatusConflict, llm.ErrInvalidMessageParent)
+			return
+		}
+		attachmentLeafID = edited.ID
+	}
 	req.Attachments, err = normalizeConversationBranchAttachments(r.Context(), d.DB, id, u.ID, attachmentLeafID, req.Attachments)
 	if err != nil {
 		writeError(w, attachmentNormalizationErrorStatus(err), err)
@@ -1411,7 +1426,7 @@ func postMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	// start of the request. The generation lease resolves that parent atomically;
 	// if another tab switched branches in between, re-check attachments and
 	// unsent drafts against the parent the message will actually use.
-	if req.ParentID != attachmentLeafID {
+	if !req.Branch && req.ParentID != attachmentLeafID {
 		req.Attachments, err = normalizeConversationBranchAttachments(r.Context(), d.DB, id, u.ID, req.ParentID, req.Attachments)
 		if err != nil {
 			writeError(w, attachmentNormalizationErrorStatus(err), err)

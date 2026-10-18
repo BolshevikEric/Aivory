@@ -271,6 +271,7 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey, onGenera
         text: newContent,
         modelId: edited?.imageEdit ? edited.modelId : modelId,
         parentId,
+        editedMessageId: carryAtts?.length ? id : undefined,
         attachments: carryAtts,
         branch: true,
         // §fast-mode: a fast conversation forces the other features off and keeps

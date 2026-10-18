@@ -534,6 +534,49 @@ describe('stopped turn optimistic-id reconciliation', () => {
     })
   })
 
+  it.each(['', 'msg_previous_answer'])('resends an image edit with its original message and parent %s', async (parentId) => {
+    const originalUser = apiMessage('msg_original_user', 'user', parentId, 'complete', 'original question')
+    originalUser.attachments = [{ id: 'original_image', filename: 'question.png', kind: 'image', mime_type: 'image/png', url: '/api/files/original_image' }]
+    const originalAssistant = apiMessage('msg_original_assistant', 'assistant', originalUser.id, 'complete', 'original answer')
+    const prefix = parentId ? [apiMessage(parentId, 'assistant', '', 'complete', 'previous answer')] : []
+    resetStore([...prefix, originalUser, originalAssistant].map(toLocalMessage))
+
+    const editedUser = apiMessage('msg_edited_user', 'user', parentId, 'complete', 'edited question')
+    editedUser.attachments = originalUser.attachments
+    const editedAssistant = apiMessage('msg_edited_assistant', 'assistant', editedUser.id, 'complete', 'edited answer')
+    apiMocks.get.mockResolvedValue({
+      conversation: apiConversation(editedAssistant.id),
+      messages: [...prefix, editedUser, editedAssistant],
+      has_more: false,
+    })
+    apiMocks.streamSSE.mockReturnValue(events(
+      { type: 'message_start', message_id: editedAssistant.id },
+      { type: 'text_delta', text: 'edited answer' },
+      { type: 'done', stop_reason: 'stop' },
+    ))
+
+    await useConversations.getState().sendMessage({
+      conversationId: 'conv_stop', text: 'edited question', modelId: 'model_1',
+      parentId, branch: true, editedMessageId: originalUser.id,
+      attachments: toLocalMessage(originalUser).attachments, toolMode: 'disabled',
+    })
+
+    expect(apiMocks.streamSSE).toHaveBeenCalledWith(
+      '/conversations/conv_stop/messages',
+      expect.objectContaining({
+        edited_message_id: originalUser.id,
+        parent_id: parentId || undefined,
+        branch: true,
+        attachments: [expect.objectContaining({ id: 'original_image', kind: 'image' })],
+      }),
+      expect.any(AbortSignal),
+    )
+    const messages = useConversations.getState().conversations[0].messages
+    expect(messages.at(-2)?.attachments?.[0].id).toBe('original_image')
+    expect(messages.at(-1)).toMatchObject({ content: 'edited answer', streaming: false })
+    expect(messages.at(-1)?.error).toBeFalsy()
+  })
+
   it('does not restore a stopped reply after its round was deleted', async () => {
     apiMocks.streamSSE.mockImplementation(
       (_path: string, _body: Record<string, unknown>, signal: AbortSignal) =>
