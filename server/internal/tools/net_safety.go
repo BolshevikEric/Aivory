@@ -27,18 +27,22 @@ func isPublicIP(ip net.IP) bool { return netsafe.IsPublicIP(ip) }
 // Use for MODEL-controlled URLs (web_fetch).
 func ssrfSafeClient() *http.Client { return netsafe.SafeClient(ssrfSafeClientTimeout) }
 
-// toolHTTPClient is for ADMIN-configured tool endpoints (web search backends,
-// image-generation gateways). Like the LLM provider client (§B2/§F3) it bounds
-// connect/TLS/response-header time but not the overall body (image gen is slow),
-// and — unlike ssrfSafeClient — it does NOT block private IPs, because these base
-// URLs are admin-set and legitimately point at internal gateways. The query /
-// prompt that the model controls is request DATA, not the destination URL.
-var toolHTTPClient = &http.Client{
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: toolHTTPClientDialTimeout}).DialContext,
-		TLSHandshakeTimeout:   toolHTTPClientTLSHandshakeTimeout,
-		ResponseHeaderTimeout: toolHTTPClientResponseHeaderTimeout, // image gen can be slow; per-tool ctx is the real bound
-		IdleConnTimeout:       toolHTTPClientIdleConnTimeout,
-	},
+// These clients connect to administrator-configured endpoints, including
+// internal gateways. Model-controlled URLs must use ssrfSafeClient instead.
+var toolHTTPClient = newToolHTTPClient(toolHTTPClientResponseHeaderTimeout)
+
+// Image generation may return its first header only after rendering completes.
+// Its model timeout and parent context bound both headers and the response body.
+var imageHTTPClient = newToolHTTPClient(0)
+
+func newToolHTTPClient(responseHeaderTimeout time.Duration) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: toolHTTPClientDialTimeout}).DialContext,
+			TLSHandshakeTimeout:   toolHTTPClientTLSHandshakeTimeout,
+			ResponseHeaderTimeout: responseHeaderTimeout,
+			IdleConnTimeout:       toolHTTPClientIdleConnTimeout,
+		},
+	}
 }

@@ -32,6 +32,41 @@ type toolCallResult struct {
 	Err       error
 }
 
+func (tc *ToolContext) runToolWithinLimits(
+	ctx context.Context,
+	name string,
+	timeout time.Duration,
+	run func(context.Context) (string, []Citation, error),
+) (string, []Citation, error) {
+	if err := tc.charge(name); err != nil {
+		return "", nil, err
+	}
+	if name == "image_generate" && tc.isSystemTool(name) {
+		resumeBudget := tc.pauseToolTimeBudget()
+		defer resumeBudget()
+		return run(ctx)
+	}
+	if remaining, limited := tc.toolTimeRemaining(); tc.isSystemTool(name) && limited {
+		if remaining <= 0 {
+			return "", nil, tc.toolTimeBudgetError()
+		}
+		if timeout <= 0 || remaining < timeout {
+			timeout = remaining
+		}
+	}
+	parentCtx := ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	out, citations, err := run(ctx)
+	if err != nil && parentCtx.Err() == nil && tc.isSystemTool(name) && tc.toolTimeBudgetExceeded() {
+		err = tc.toolTimeBudgetError()
+	}
+	return out, citations, err
+}
+
 const (
 	publicToolCanceledMessage   = "The operation was canceled."
 	publicToolTimeoutMessage    = "The tool timed out. Please try again."

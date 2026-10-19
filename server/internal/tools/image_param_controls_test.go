@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"aivory/server/internal/llm"
 	"aivory/server/internal/store"
@@ -24,9 +27,9 @@ func (fn imageRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error
 
 func useImageTestHTTPClient(t *testing.T, fn imageRoundTripFunc) {
 	t.Helper()
-	previous := toolHTTPClient
-	toolHTTPClient = &http.Client{Transport: fn}
-	t.Cleanup(func() { toolHTTPClient = previous })
+	previous := imageHTTPClient
+	imageHTTPClient = &http.Client{Transport: fn}
+	t.Cleanup(func() { imageHTTPClient = previous })
 }
 
 func imageSuccessResponse(body string) *http.Response {
@@ -519,6 +522,117 @@ func TestGeminiImageGenerationDefaultsKnownModelsTo2K(t *testing.T) {
 			got, _ := imageConfig["imageSize"].(string)
 			if got != tt.want {
 				t.Fatalf("imageSize = %q, want %q; body=%#v", got, tt.want, captured)
+			}
+		})
+	}
+}
+
+func TestImageGenerationUsesConfiguredModelTimeout(t *testing.T) {
+	tool, convID := seedImageWorkflow(t, "openai", "gpt-image-2")
+	if _, err := tool.db.Exec(`UPDATE models SET image_timeout_sec=1 WHERE id='m_flow'`); err != nil {
+		t.Fatal(err)
+	}
+	useImageTestHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+
+	started := time.Now()
+	_, _, err := tool.Execute(context.Background(), []byte(`{"prompt":"draw","action":"generate","base_image":"none"}`), &llm.ToolContext{
+		UserID:       "u_flow",
+		ConvID:       convID,
+		MessageID:    "timeout-message",
+		ImageModelID: "m_flow",
+		DB:           tool.db,
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("image generation error=%v, want configured deadline", err)
+	}
+	if elapsed := time.Since(started); elapsed < 900*time.Millisecond || elapsed > 3*time.Second {
+		t.Fatalf("configured one-second timeout elapsed=%v", elapsed)
+	}
+}
+
+func TestImageGenerationUsesModelOrParentDeadline(t *testing.T) {
+	for _, channelType := range []string{"openai", "gemini"} {
+		for _, timeoutSec := range []int{0, 1200, 2400} {
+			t.Run(channelType+"/"+strconv.Itoa(timeoutSec), func(t *testing.T) {
+				tool, convID := seedImageWorkflow(t, channelType, "image-model")
+				if _, err := tool.db.Exec(`UPDATE models SET image_timeout_sec=? WHERE id='m_flow'`, timeoutSec); err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Minute)
+				defer cancel()
+				parentDeadline, _ := ctx.Deadline()
+				started := time.Now()
+				useImageTestHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+					deadline, ok := req.Context().Deadline()
+					if !ok {
+						t.Fatal("image request lost its parent deadline")
+					}
+					if timeoutSec == 1200 {
+						if deadline.Before(started.Add(1200*time.Second)) || deadline.After(time.Now().Add(1200*time.Second)) {
+							t.Fatalf("configured image deadline=%v, want 1200 seconds", deadline)
+						}
+					} else if !deadline.Equal(parentDeadline) {
+						t.Fatalf("image deadline=%v, want parent deadline %v", deadline, parentDeadline)
+					}
+					return nil, context.Canceled
+				})
+				_, _, err := tool.Execute(ctx, []byte(`{"prompt":"draw","action":"generate","base_image":"none"}`), &llm.ToolContext{
+					UserID: "u_flow", ConvID: convID, MessageID: "timeout-message", ImageModelID: "m_flow", DB: tool.db,
+				})
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("image request error=%v, want test transport cancellation", err)
+				}
+			})
+		}
+	}
+}
+
+func TestImageProvidersUseContextBoundHTTPClient(t *testing.T) {
+	transport, ok := imageHTTPClient.Transport.(*http.Transport)
+	if !ok || imageHTTPClient.Timeout != 0 || transport.ResponseHeaderTimeout != 0 {
+		t.Fatal("image HTTP client must use the model/parent context, not a fixed response timeout")
+	}
+	sharedTransport, ok := toolHTTPClient.Transport.(*http.Transport)
+	if !ok || sharedTransport.ResponseHeaderTimeout != toolHTTPClientResponseHeaderTimeout {
+		t.Fatal("non-image tool response-header timeout was changed")
+	}
+	previous := toolHTTPClient
+	toolHTTPClient = &http.Client{Transport: imageRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("image generation used the shared tool HTTP client")
+		return nil, errors.New("unexpected shared client")
+	})}
+	t.Cleanup(func() { toolHTTPClient = previous })
+
+	for _, provider := range []struct {
+		name string
+		run  func(context.Context, string, string, string, imgInput, []imageBytes, map[string]any, ...func(*http.Request)) ([]imageBytes, error)
+	}{
+		{name: "openai", run: openaiGenerateImages},
+		{name: "gemini", run: geminiGenerateImages},
+	} {
+		t.Run(provider.name, func(t *testing.T) {
+			requestStarted := make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				_, _ = io.Copy(io.Discard, req.Body)
+				close(requestStarted)
+				<-req.Context().Done()
+			}))
+			defer srv.Close()
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			go func() {
+				select {
+				case <-requestStarted:
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+			_, err := provider.run(ctx, srv.URL, "test", "image-model", imgInput{Prompt: "draw", N: 1}, nil, nil)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("image provider cancellation error=%v", err)
 			}
 		})
 	}

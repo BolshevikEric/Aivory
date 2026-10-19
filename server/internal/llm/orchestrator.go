@@ -194,10 +194,12 @@ type ToolContext struct {
 	// The orchestrator persists it + streams an "artifact" SSE event.
 	OnArtifact func(ArtifactRef)
 
-	// budgetMu guards counts; charged centrally by the runner before each call.
+	// budgetMu guards call counters and the tool-time clock.
 	budgetMu            sync.Mutex
 	counts              map[string]int
 	toolBudgetStartedAt time.Time
+	toolBudgetPausedAt  time.Time
+	toolBudgetPauses    int
 	toolStateMu         sync.Mutex
 	toolState           *toolExecutionState
 	// citationIndexes is non-nil only when a KB is attached. This preserves the
@@ -1065,7 +1067,11 @@ func (tc *ToolContext) charge(name string) error {
 	now := time.Now()
 	if tc.toolBudgetStartedAt.IsZero() {
 		tc.toolBudgetStartedAt = now
-	} else if timeCap > 0 && !now.Before(tc.toolBudgetStartedAt.Add(timeCap)) {
+	}
+	if !tc.toolBudgetPausedAt.IsZero() {
+		now = tc.toolBudgetPausedAt
+	}
+	if timeCap > 0 && !now.Before(tc.toolBudgetStartedAt.Add(timeCap)) {
 		return &ErrToolBudgetExceeded{Kind: "time", Duration: timeCap}
 	}
 	tc.counts["__total__"]++
@@ -1110,11 +1116,35 @@ func (tc *ToolContext) toolTimeRemaining() (time.Duration, bool) {
 	if tc.toolBudgetStartedAt.IsZero() {
 		return limit, true
 	}
-	remaining := time.Until(tc.toolBudgetStartedAt.Add(limit))
+	now := time.Now()
+	if !tc.toolBudgetPausedAt.IsZero() {
+		now = tc.toolBudgetPausedAt
+	}
+	remaining := tc.toolBudgetStartedAt.Add(limit).Sub(now)
 	if remaining < 0 {
 		remaining = 0
 	}
 	return remaining, true
+}
+
+// Image requests have their own admin-configured timeout. Exclude their wait
+// from the generic tool clock, counting overlapping image calls only once.
+func (tc *ToolContext) pauseToolTimeBudget() func() {
+	tc.budgetMu.Lock()
+	if tc.toolBudgetPauses == 0 {
+		tc.toolBudgetPausedAt = time.Now()
+	}
+	tc.toolBudgetPauses++
+	tc.budgetMu.Unlock()
+	return func() {
+		tc.budgetMu.Lock()
+		defer tc.budgetMu.Unlock()
+		tc.toolBudgetPauses--
+		if tc.toolBudgetPauses == 0 {
+			tc.toolBudgetStartedAt = tc.toolBudgetStartedAt.Add(time.Since(tc.toolBudgetPausedAt))
+			tc.toolBudgetPausedAt = time.Time{}
+		}
+	}
 }
 
 func (tc *ToolContext) toolTimeBudgetExceeded() bool {

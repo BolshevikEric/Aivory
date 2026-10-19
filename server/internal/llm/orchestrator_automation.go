@@ -1027,14 +1027,14 @@ func cloneBoolMap(source map[string]bool) map[string]bool {
 	return cloned
 }
 
-// toolTimeouts bounds a single tool invocation per tool type (§4.3: search
-// 10s / sandbox 120s / image 60s) so one slow tool can't stall the turn.
+// Image generation enforces the selected image model's timeout in the tool
+// itself; zero here leaves its parent generation context intact.
 var toolTimeouts = map[string]time.Duration{
 	toolnames.AivoryWebSearch: envcfg.Dur("AIVORY_LLM_TOOL_TIMEOUTS", 10*time.Second),
 	"web_fetch":               envcfg.Dur("AIVORY_LLM_TOOL_TIMEOUTS_2", 60*time.Second),
 	"fetch_image":             envcfg.Dur("AIVORY_LLM_TOOL_TIMEOUTS_FETCH_IMAGE", 45*time.Second),
 	"python_execute":          120 * time.Second,
-	"image_generate":          envcfg.Dur("AIVORY_LLM_TOOL_TIMEOUTS_3", 600*time.Second), // slow third-party image gateways need a wide window
+	"image_generate":          0,
 }
 
 var toolTimeoutDefault = envcfg.Dur("AIVORY_LLM_TOOL_TIMEOUT_DEFAULT", 100*time.Second)
@@ -1098,13 +1098,7 @@ func (r *orchToolRunner) runUntracked(ctx context.Context, name string, input []
 		}
 		defer release()
 	}
-	if err := r.ctx.charge(name); err != nil {
-		return "", nil, err
-	}
-	timeout, ok := toolTimeouts[name]
-	if !ok {
-		timeout = toolTimeoutDefault
-	}
+	timeout := toolCallTimeout(name)
 	if name == "python_execute" {
 		// The sandbox exec cap is admin-configurable (sandbox_exec_timeout_sec,
 		// up to 600s); a static 120s ctx here would silently cancel a longer-but-
@@ -1112,21 +1106,9 @@ func (r *orchToolRunner) runUntracked(ctx context.Context, name string, input []
 		// configured cap + margin so raising the setting actually takes effect.
 		timeout = sandboxExecCtxTimeout(r.orch.db)
 	}
-	if remaining, limited := r.ctx.toolTimeRemaining(); r.ctx.isSystemTool(name) && limited {
-		if remaining <= 0 {
-			return "", nil, r.ctx.toolTimeBudgetError()
-		}
-		if remaining < timeout {
-			timeout = remaining
-		}
-	}
-	parentCtx := ctx
-	ctx, cancel := context.WithTimeout(parentCtx, timeout)
-	defer cancel()
-	out, cites, err := r.orch.tools.Run(ctx, name, input, r.ctx)
-	if err != nil && parentCtx.Err() == nil && r.ctx.toolTimeBudgetExceeded() {
-		err = r.ctx.toolTimeBudgetError()
-	}
+	out, cites, err := r.ctx.runToolWithinLimits(ctx, name, timeout, func(callCtx context.Context) (string, []Citation, error) {
+		return r.orch.tools.Run(callCtx, name, input, r.ctx)
+	})
 	if err != nil && r.orch.logger != nil {
 		r.orch.logger.Printf("tool execution failed (conv=%s msg=%s tool=%s): %v", r.ctx.ConvID, r.ctx.MessageID, name, err)
 	}

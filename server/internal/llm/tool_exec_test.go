@@ -19,6 +19,93 @@ func (blockingTimeBudgetRegistry) Run(ctx context.Context, _ string, _ []byte, _
 	return "", nil, ctx.Err()
 }
 
+type toolDeadlineRegistry struct {
+	run func(context.Context) (string, []Citation, error)
+}
+
+func (toolDeadlineRegistry) List(string) []ToolDef { return nil }
+
+func (r toolDeadlineRegistry) Run(ctx context.Context, _ string, _ []byte, _ *ToolContext) (string, []Citation, error) {
+	return r.run(ctx)
+}
+
+func TestImageToolUsesParentDeadlineAndPreservesToolTimeBudget(t *testing.T) {
+	for _, mode := range []string{"normal", "fast", "research"} {
+		t.Run(mode, func(t *testing.T) {
+			tc := &ToolContext{Fast: mode == "fast", DeepResearch: mode == "research"}
+			limit := tc.toolTimeLimit()
+			if limit <= 0 {
+				t.Skip("tool-time budget disabled")
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Minute)
+			defer cancel()
+			wantDeadline, _ := ctx.Deadline()
+			runner := &orchToolRunner{
+				ctx: tc,
+				orch: &Orchestrator{tools: toolDeadlineRegistry{run: func(callCtx context.Context) (string, []Citation, error) {
+					if deadline, ok := callCtx.Deadline(); !ok || !deadline.Equal(wantDeadline) {
+						t.Fatalf("image deadline=%v (present=%v), want parent deadline %v", deadline, ok, wantDeadline)
+					}
+					// Simulate an image wait longer than the generic budget without
+					// sleeping or relying on scheduler timing.
+					tc.budgetMu.Lock()
+					tc.toolBudgetStartedAt = tc.toolBudgetStartedAt.Add(-2 * limit)
+					tc.toolBudgetPausedAt = tc.toolBudgetPausedAt.Add(-2 * limit)
+					tc.budgetMu.Unlock()
+					return "generated image", nil, nil
+				}}},
+			}
+			out, _, err := runner.Run(ctx, "image_generate", []byte(`{"prompt":"draw","action":"generate","base_image":"none"}`))
+			if err != nil || out != "generated image" {
+				t.Fatalf("slow image result=%q error=%v", out, err)
+			}
+			if err := tc.charge("aivory_web_search"); err != nil {
+				t.Fatalf("image wait exhausted the following search budget: %v", err)
+			}
+			if tc.counts["image_generate"] != 1 || tc.counts["__total__"] != 2 {
+				t.Fatalf("image bypassed call-count limits: %v", tc.counts)
+			}
+		})
+	}
+}
+
+func TestImageToolStillHonorsParentCancellationAndCallLimits(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	runner := &orchToolRunner{
+		ctx:  &ToolContext{},
+		orch: &Orchestrator{tools: blockingTimeBudgetRegistry{}},
+	}
+	if _, _, err := runner.Run(ctx, "image_generate", []byte(`{"prompt":"draw"}`)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled image error=%v", err)
+	}
+	runner.ctx = &ToolContext{counts: map[string]int{"__total__": maxToolCallsPerTurn}}
+	if _, _, err := runner.Run(t.Context(), "image_generate", []byte(`{"prompt":"draw"}`)); !IsToolBudgetExceeded(err) {
+		t.Fatalf("image ignored total call limit: %v", err)
+	}
+}
+
+func TestOverlappingImagesPauseToolClockOnce(t *testing.T) {
+	tc := &ToolContext{}
+	if err := tc.charge("image_generate"); err != nil {
+		t.Fatal(err)
+	}
+	resumeFirst := tc.pauseToolTimeBudget()
+	resumeSecond := tc.pauseToolTimeBudget()
+	if tc.toolBudgetPauses != 2 {
+		t.Fatalf("active image waits=%d, want 2", tc.toolBudgetPauses)
+	}
+	started, paused := tc.toolBudgetStartedAt, tc.toolBudgetPausedAt
+	resumeFirst()
+	if tc.toolBudgetPauses != 1 || !tc.toolBudgetStartedAt.Equal(started) || !tc.toolBudgetPausedAt.Equal(paused) {
+		t.Fatal("first completion resumed a clock still waiting for another image")
+	}
+	resumeSecond()
+	if tc.toolBudgetPauses != 0 || !tc.toolBudgetPausedAt.IsZero() || tc.toolBudgetStartedAt.Before(started) {
+		t.Fatal("last completion did not resume the tool clock")
+	}
+}
+
 func TestPublicToolErrorOutputDoesNotExposeUpstreamEndpoint(t *testing.T) {
 	err := &url.Error{
 		Op:  "Post",

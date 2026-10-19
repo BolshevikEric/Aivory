@@ -1371,27 +1371,9 @@ func (rs *researcher) execToolsConcurrent(ctx context.Context, specs []toolCallS
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			out, cites, err := rs.tc.executeTrackedTool(ctx, c.Name, c.Input, func() (string, []Citation, error) {
-				// Deep Research calls the registry directly so it can own source
-				// bookkeeping; keep the same central charging and wall-clock limits.
-				if chargeErr := rs.tc.charge(c.Name); chargeErr != nil {
-					return "", nil, chargeErr
-				}
-				timeout := drCallTimeout
-				if remaining, limited := rs.tc.toolTimeRemaining(); limited {
-					if remaining <= 0 {
-						return "", nil, rs.tc.toolTimeBudgetError()
-					}
-					if remaining < timeout {
-						timeout = remaining
-					}
-				}
-				cctx, cancel := context.WithTimeout(tooldiagnostics.WithCallID(ctx, c.ID), timeout)
-				defer cancel()
-				result, resultCitations, runErr := rs.o.tools.Run(cctx, c.Name, c.Input, rs.tc)
-				if runErr != nil && ctx.Err() == nil && rs.tc.toolTimeBudgetExceeded() {
-					runErr = rs.tc.toolTimeBudgetError()
-				}
-				return result, resultCitations, runErr
+				return rs.tc.runToolWithinLimits(tooldiagnostics.WithCallID(ctx, c.ID), c.Name, drCallTimeout, func(callCtx context.Context) (string, []Citation, error) {
+					return rs.o.tools.Run(callCtx, c.Name, c.Input, rs.tc)
+				})
 			})
 			recordTrackedToolFailure(rs.o.tools, ctx, c.Name, c.Input, rs.tc, err)
 			results[i] = toolCallResult{Output: out, Citations: cites, Err: err}

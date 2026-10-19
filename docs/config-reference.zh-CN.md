@@ -124,12 +124,12 @@
 | `AIVORY_LLM_MAX_TOOL_CALLS_PER_TURN` | `int` | `48` | `llm/orchestrator.go:169` | 普通模式下每条消息跨所有工具的工具调用总数全局上限，叠加在各工具单独上限之上。 |
 | `AIVORY_LLM_MAX_TOOL_CALLS_PER_TURN_DEEP` | `int` | `200` | `llm/orchestrator.go:170` | 深度研究运行时每条消息跨所有工具的工具调用总数全局上限。 |
 | `AIVORY_LLM_MAX_TOOL_CALLS_PER_TURN_FAST` | `int` | `12` | `llm/orchestrator.go` | 快速模式下系统工具的独立调用总数上限；服务商托管工具保持可用且不计入。 |
-| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN` | `duration` | `15*time.Minute` | `llm/orchestrator.go` | 普通消息中所有工具执行的累计墙钟时间预算。耗尽后移除全部工具，并仅允许模型执行一次无工具收尾请求。设为非正值可禁用该时间预算。 |
-| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN_DEEP` | `duration` | `25*time.Minute` | `llm/orchestrator.go` | 深度研究的工具时间预算，从首次工具调用开始计时。应大于 `AIVORY_LLM_DR_RESEARCH_BUDGET`，否则研究轮次会提前停止。设为非正值可禁用该时间预算。 |
-| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN_FAST` | `duration` | `3*time.Minute` | `llm/orchestrator.go` | 快速模式的累计工具执行时间预算，耗尽后仅执行一次无工具收尾请求。设为非正值可禁用该时间预算。 |
+| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN` | `duration` | `15*time.Minute` | `llm/orchestrator.go` | 普通消息的工具执行墙钟时间预算，不计等待图片生成的时间。耗尽后移除全部工具，并仅允许模型执行一次无工具收尾请求。设为非正值可禁用该时间预算。 |
+| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN_DEEP` | `duration` | `25*time.Minute` | `llm/orchestrator.go` | 深度研究的工具时间预算，从首次工具调用开始计时，图片生成期间暂停。应大于 `AIVORY_LLM_DR_RESEARCH_BUDGET`，否则研究轮次会提前停止。设为非正值可禁用该时间预算。 |
+| `AIVORY_LLM_MAX_TOOL_TIME_PER_TURN_FAST` | `duration` | `3*time.Minute` | `llm/orchestrator.go` | 快速模式的工具执行时间预算，不计图片生成时间，耗尽后仅执行一次无工具收尾请求。设为非正值可禁用该时间预算。 |
 | `AIVORY_LLM_TOOL_TIMEOUTS` | `duration` | `10*time.Second` | `llm/orchestrator.go:2326` | 单次 `aivory_web_search` 工具调用的每次调用超时上限。 |
 | `AIVORY_LLM_TOOL_TIMEOUTS_2` | `duration` | `60*time.Second` | `llm/orchestrator_automation.go` | 单次 web_fetch 的超时上限，为直连尝试后的 Jina 降级保留足够时间。 |
-| `AIVORY_LLM_TOOL_TIMEOUTS_3` | `duration` | `600*time.Second` | `llm/orchestrator.go:2329` | 单次 image_generate 工具调用的每次调用超时上限（为迟缓的第三方图像网关留出较宽窗口）。 |
+| `AIVORY_LLM_TOOL_TIMEOUTS_3` | `duration` | 已停用 | `tools/builtins.go` | 不再读取。改为在后台图片模型页面设置 `image_timeout_sec`，聊天绘图工具和直接绘图统一使用该时限；`0` 不加模型级超时，仍遵守整轮生成时限和主动停止。 |
 | `AIVORY_LLM_TOOL_TIMEOUT_DEFAULT` | `duration` | `100*time.Second` | `llm/orchestrator.go:2332` | 未在按类型配置的 toolTimeouts 映射中列出的工具所用的每次调用回退超时。 |
 | `AIVORY_LLM_PROMPT_MAX_ITER` | `int` | `10` | `llm/prompt_tools.go:36` | 提示模式工具循环在本轮结束前的最大迭代次数（每次迭代 = 一次模型生成加可选的工具调用）。 |
 | `AIVORY_LLM_PROMPT_MAX_RETRY` | `int` | `2` | `llm/prompt_tools.go:37` | 提示模式下重发格式错误的 <tool_call> JSON 或重试失败工具执行的最大重试次数。 |

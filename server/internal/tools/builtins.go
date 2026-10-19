@@ -2753,7 +2753,7 @@ func geminiGenerateImages(ctx context.Context, baseURL, apiKey, requestID string
 	}
 	req.Header.Set("content-type", "application/json")
 	notifyImageRequestObservers(req, requestObservers)
-	resp, err := tooldiagnostics.Do(toolHTTPClient, req)
+	resp, err := tooldiagnostics.Do(imageHTTPClient, req)
 	if resp != nil {
 		imageTTFTFromContext(ctx).responseReceived()
 	}
@@ -2924,7 +2924,7 @@ func openaiGenerateImages(ctx context.Context, baseURL, apiKey, requestID string
 	}
 	req.Header.Set("authorization", "Bearer "+apiKey)
 	notifyImageRequestObservers(req, requestObservers)
-	resp, err := tooldiagnostics.Do(toolHTTPClient, req)
+	resp, err := tooldiagnostics.Do(imageHTTPClient, req)
 	if resp != nil {
 		imageTTFTFromContext(ctx).responseReceived()
 	}
