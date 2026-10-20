@@ -15,6 +15,14 @@ func TestBuiltinSkillSeedPreservesAdministratorChanges(t *testing.T) {
 	if err != nil || !skill.Enabled || !strings.Contains(skill.Instructions, "aivory-ui") {
 		t.Fatalf("skill=%+v err=%v", skill, err)
 	}
+	if strings.Contains(strings.ToLower(skill.Instructions), "json") || strings.Contains(skill.Instructions, "blocks array") {
+		t.Fatal("built-in UI instructions mention the retired output format")
+	}
+	for _, required := range []string{"Both complete UI layouts", "Raw tags do not require a code fence or an outer container", "Separate groups do not share state"} {
+		if !strings.Contains(skill.Instructions, required) {
+			t.Errorf("built-in UI instructions are missing %q", required)
+		}
+	}
 	if _, err := db.Exec(`UPDATE skills SET instructions='custom',enabled=0 WHERE id=?`, GenerativeUISkillID); err != nil {
 		t.Fatal(err)
 	}

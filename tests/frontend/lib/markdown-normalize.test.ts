@@ -57,6 +57,15 @@ describe('normalizeThinkingMarkdown', () => {
 })
 
 describe('copyable markdown formulae', () => {
+  it('escapes HTML source in inline code once, including inside emphasis', () => {
+    for (const source of ['Use `<button>Example</button>` literally.', 'Use **`<button>Example</button>`** literally.']) {
+      const html = inlineMarkdownToHtml(source)
+      expect(html).toContain('<code>&lt;button&gt;Example&lt;/button&gt;</code>')
+      expect(html).not.toContain('&amp;lt;')
+      expect(html).not.toContain('<button>')
+    }
+    expect(inlineMarkdownToHtml('<button onclick="alert(1)">Unsafe</button>')).not.toContain('<button')
+  })
   it('preserves inline LaTeX as safely escaped copy metadata', () => {
     const html = inlineMarkdownToHtml('Solve \\(x^2 + "quoted" & y < z\\).')
 

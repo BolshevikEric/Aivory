@@ -39,11 +39,33 @@ func TestComposeSystemPromptPresentationContractSeparatesCodeFromUI(t *testing.T
 		"HTML/CSS/JavaScript",
 		"NEVER wrap that code in `aivory-ui` or `aivory-html`",
 		"only for a genuinely custom interactive visual",
-		"simplest helpful preset",
+		"HTML-like markup",
+		"Both complete UI layouts and raw tags naturally interleaved with Markdown are supported",
+		"No fence or outer container is required",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Errorf("presentation contract is missing %q: %s", required, prompt)
 		}
+	}
+}
+
+func TestComposeSystemPromptPresentationUsesMarkupAcrossLocales(t *testing.T) {
+	for locale := range promptL10nTable {
+		t.Run(locale, func(t *testing.T) {
+			prompt := composeSystemPrompt(systemPromptOpts{
+				Locale:                    locale,
+				PresentationSkillsAllowed: true,
+				PresentationSkills:        []SkillFull{{Name: "generative-ui", Instructions: "<box><text>Example</text></box>"}},
+			})
+			if !strings.Contains(prompt, "HTML-like markup") || !strings.Contains(prompt, "<box><text>Example</text></box>") {
+				t.Fatal("presentation prompt is missing the markup contract or instructions")
+			}
+			for _, retired := range []string{"json", "blocks array"} {
+				if strings.Contains(strings.ToLower(prompt), retired) {
+					t.Errorf("presentation prompt mentions retired UI format %q", retired)
+				}
+			}
+		})
 	}
 }
 

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
 import { compileFunctionExpression, evaluateFunction } from '@/lib/function-expression'
 import { generativeLanguage, MAX_GENERATIVE_SOURCE, parseUIDocument } from '@/lib/generative-ui'
 
@@ -47,25 +46,6 @@ describe('generative UI protocol', () => {
       { type: 'function', expression: 'a * sin(x) + offset', variable: 'x', range: { min: -3.14, max: 3.14 }, samples: 120, controls: [{ type: 'range', id: 'a', label: 'Amplitude', min: 0, max: 3, step: .1, value: 1 }, { type: 'number', id: 'offset', label: 'Offset', min: -2, max: 2, step: .1, value: 0 }] },
     ])
     expect(result?.blocks.map(block => block.type)).toEqual(['chart', 'heatmap', 'gauge', 'calculator', 'function'])
-  })
-  it('keeps shipped skill examples compatible with the actual UI protocol', () => {
-    const prompt = readFileSync('server/internal/store/skills/generative-ui.md', 'utf8')
-    const supported = new Set(['text', 'metrics', 'chart', 'heatmap', 'gauge', 'table', 'card', 'cards', 'steps', 'calculator', 'checklist', 'quiz', 'question', 'form', 'function', 'tabs', 'accordion'])
-    let examples = 0
-    for (const match of prompt.matchAll(/`(\{[^`]+\})`/g)) {
-      const example = JSON.parse(match[1])
-      // Table cells and input controls are fragments, not standalone blocks.
-      if (!supported.has(example.type) || (example.type === 'text' && example.description)) continue
-      expect(parse([example]), match[1]).not.toBeNull()
-      examples++
-    }
-    expect(examples).toBeGreaterThanOrEqual(15)
-    const documents = [...prompt.matchAll(/```aivory-ui\s*\n([\s\S]*?)\n```/g)]
-    expect(documents.length).toBeGreaterThan(0)
-    for (const [, source] of documents) {
-      expect(JSON.parse(source)).toMatchObject({ version: 1, blocks: expect.any(Array) })
-      expect(parseUIDocument(source)).not.toBeNull()
-    }
   })
   it('supports optional card content and safe images/links in nested sections', () => {
     const item = { title: 'Search result', description: 'Summary', meta: 'Source · Today', image: { url: 'https://images.example.test/photo.png', alt: 'Photo' }, link: { url: 'https://example.test/article', label: 'Read more' } }

@@ -3,6 +3,7 @@ import { marked, type Token, type Tokens } from 'marked'
 import { GenerativeUI } from './generative-ui'
 import { generativeLanguage } from '@/lib/generative-ui'
 import { CodeBlockFrame } from './code-block-frame'
+import { prepareGenerativeMarkup } from '@/lib/generative-markup'
 
 function renderTokens(tokens: Token[], allowGenerativeUI = false, live = false, depth = 0): ReactNode {
   if (depth > 24) return null
@@ -47,6 +48,6 @@ function renderTokens(tokens: Token[], allowGenerativeUI = false, live = false, 
 }
 
 export function PrivateMarkdown({ text, allowGenerativeUI = false, live = false }: { text: string; allowGenerativeUI?: boolean; live?: boolean }) {
-  const content = useMemo(() => renderTokens(marked.lexer(text), allowGenerativeUI, live), [text, allowGenerativeUI, live])
+  const content = useMemo(() => renderTokens(marked.lexer(allowGenerativeUI ? prepareGenerativeMarkup(text) : text), allowGenerativeUI, live), [text, allowGenerativeUI, live])
   return <div className="min-w-0 space-y-3 break-words text-[0.9375rem] [overflow-wrap:anywhere]">{content}</div>
 }

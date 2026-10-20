@@ -4,6 +4,7 @@ import { blockMarkdownToHtml, inlineMarkdownToHtml, type CiteRef, type MathCopyL
 import { GenerativeUI } from './generative-ui'
 import { generativeLanguage } from '@/lib/generative-ui'
 import { PlainCodeBlock } from './plain-code-block'
+import { prepareGenerativeMarkup } from '@/lib/generative-markup'
 
 interface NestedMarkdownProps {
   allowGenerativeUI?: boolean
@@ -21,7 +22,7 @@ function renderTokens(tokens: Token[], options: NestedMarkdownProps, path: strin
     const key = `${path}/${index}`
     switch (token.type) {
       case 'space': return null
-      case 'code': if (options.allowGenerativeUI && generativeLanguage(token.lang)) return <GenerativeUI key={key} code={token.text} lang={generativeLanguage(token.lang)!} live={options.live} />; return <PlainCodeBlock key={key} code={token.text} lang={token.lang?.split(/\s+/)[0]} />
+      case 'code': if (options.allowGenerativeUI && generativeLanguage(token.lang)) return <GenerativeUI key={key} code={token.text} lang={generativeLanguage(token.lang)!} live={options.live} cites={options.cites} />; return <PlainCodeBlock key={key} code={token.text} lang={token.lang?.split(/\s+/)[0]} />
       case 'list': {
         const list = token as Tokens.List
         const items = list.items.map((item, itemIndex) => (
@@ -47,6 +48,6 @@ function renderTokens(tokens: Token[], options: NestedMarkdownProps, path: strin
 }
 
 export function NestedMarkdown(options: NestedMarkdownProps) {
-  const tokens = useMemo(() => marked.lexer(options.content, { gfm: true, breaks: options.breaks }), [options.content, options.breaks])
+  const tokens = useMemo(() => marked.lexer(options.allowGenerativeUI ? prepareGenerativeMarkup(options.content) : options.content, { gfm: true, breaks: options.breaks }), [options.content, options.breaks, options.allowGenerativeUI])
   return <>{renderTokens(tokens, options, options.pathPrefix)}</>
 }

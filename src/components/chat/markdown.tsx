@@ -133,7 +133,7 @@ const MarkdownBlockView = memo(
           </div>
         )
       case 'code':
-        if (allowGenerativeUI && generativeLanguage(b.lang)) return <GenerativeUI code={b.content} lang={generativeLanguage(b.lang)!} live={live} />
+        if (allowGenerativeUI && generativeLanguage(b.lang)) return <GenerativeUI code={b.content} lang={generativeLanguage(b.lang)!} live={live} cites={cites} />
         if ((b.lang ?? '').toLowerCase() === 'mermaid') {
           return <MermaidDiagram code={b.content} live={live} className={blockAnim} />
         }
@@ -247,7 +247,7 @@ export const Markdown = memo(function Markdown({
     [content, artifacts],
   )
   const throttled = useThrottledContent(contentWithArtifactLinks)
-  const blocks = useMemo(() => tokenizeMarkdown(throttled, breaks), [throttled, breaks])
+  const blocks = useMemo(() => tokenizeMarkdown(throttled, breaks, allowGenerativeUI), [throttled, breaks, allowGenerativeUI])
   // Map citations to the lib's CiteRef shape once; `inline`/`block` helpers thread
   // them into the HTML so `[n]` markers become source links.
   const cites = useMemo<CiteRef[]>(

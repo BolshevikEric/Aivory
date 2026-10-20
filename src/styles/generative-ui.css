@@ -1,4 +1,153 @@
 /* Theme-aware, compact controls and visualizations inside chat responses. */
+[data-generative-markup] .gui-map {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+[data-generative-markup] .gui-map-title {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-generative-markup] :is(.gui-map-canvas, .gui-map-placeholder) {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  background: var(--color-bg-muted);
+}
+[data-generative-markup] .gui-map-surface { position: absolute; inset: 0; z-index: 0; font: inherit; }
+[data-generative-markup] .gui-map-placeholder,
+[data-generative-markup] .gui-map-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-fg-muted);
+}
+[data-generative-markup] .gui-map-placeholder { padding: 20px; text-align: center; }
+[data-generative-markup] .gui-map-notice { position: absolute; inset: 0; background: var(--color-bg-muted); }
+[data-generative-markup] .gui-map-controls {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+}
+[data-generative-markup] :is(.gui-map-controls, .gui-map-notice, .gui-map-placeholder, .gui-map-status) button,
+[data-generative-markup] .gui-map-external {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  cursor: pointer;
+}
+[data-generative-markup] .gui-map-controls button + button { border-top: 1px solid var(--color-border); }
+[data-generative-markup] .gui-map-controls button:disabled { opacity: .5; cursor: default; }
+[data-generative-markup] .gui-map :is(button, a):focus-visible { outline: 2px solid var(--color-ring); outline-offset: -2px; }
+[data-generative-markup] .gui-map :is(button, a):hover { background-color: var(--color-bg-muted); }
+[data-generative-markup] .gui-map-attribution {
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  right: 0;
+  max-width: 100%;
+  padding: 1px 5px;
+  background: var(--color-bg);
+  color: var(--color-fg-muted);
+  font-size: 10px;
+}
+[data-generative-markup] .gui-map :is(.gui-map-attribution, .gui-map-source) a { color: inherit; text-decoration: underline; }
+[data-generative-markup] .gui-map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-bg);
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 4px #0005;
+}
+[data-generative-markup] .gui-map-marker.is-selected { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+[data-generative-markup] button.gui-amap-marker { width: 28px; height: 28px; padding: 0; cursor: pointer; }
+[data-generative-markup] .gui-map button.gui-amap-marker:hover { background: var(--color-accent); }
+[data-generative-markup] .gui-map-status {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 12px;
+  border-block: 1px solid var(--color-border);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+[data-generative-markup] ol.gui-map-points {
+  display: block;
+  max-height: 250px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+[data-generative-markup] ol.gui-map-points > li { display: flex; align-items: center; margin: 0; padding: 0; }
+[data-generative-markup] ol.gui-map-points > li + li { border-top: 1px solid var(--color-border); }
+[data-generative-markup] .gui-map-point {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font: inherit;
+}
+[data-generative-markup] .gui-map-point[aria-pressed='true'] { background: var(--color-bg-muted); }
+[data-generative-markup] .gui-map-number {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-accent);
+  background: var(--color-bg-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+[data-generative-markup] .gui-map-point-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+[data-generative-markup] .gui-map-point-text strong { font-size: 13px; font-weight: 500; }
+[data-generative-markup] .gui-map-point-text small { font-size: 12px; color: var(--color-fg-muted); }
+[data-generative-markup] .gui-map-external { margin-inline-end: 6px; border-radius: 4px; color: var(--color-fg-muted); }
+[data-generative-markup] .gui-map-detail { padding: 12px; border-top: 1px solid var(--color-border); }
+[data-generative-markup] :is(.gui-map-match, .gui-map-source) { margin: 0; padding: 6px 12px; color: var(--color-fg-muted); font-size: 11px; overflow-wrap: anywhere; }
+[data-generative-markup] .gui-map-tile-error { position: absolute; z-index: 1; bottom: 24px; left: 8px; right: 8px; margin: 0; padding: 6px 8px; background: var(--color-bg); color: var(--color-fg); font-size: 12px; }
+
 [data-generative-ui] {
   color-scheme: light;
   --gui-violet: oklch(55% .13 300);
@@ -38,15 +187,65 @@
   background: var(--color-bg-muted);
 }
 
-[data-generative-ui] .gui-card-single { flex-direction: row; align-items: flex-start; }
-[data-generative-ui] .gui-card-content { display: flex; min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; gap: 6px; }
-[data-generative-ui] .gui-card p { margin: 0; white-space: pre-wrap; }
-[data-generative-ui] .gui-card h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
-[data-generative-ui] .gui-card-meta { font-size: 12px; line-height: 18px; color: var(--color-fg-muted); }
-[data-generative-ui] .gui-card-description { font-size: 13px; line-height: 21px; color: var(--color-fg); }
-[data-generative-ui] .gui-card-link { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; margin-top: 4px; border-radius: 3px; font-size: 12px; line-height: 20px; color: var(--color-accent); text-decoration: none; }
-[data-generative-ui] .gui-card-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-[data-generative-ui] .gui-card-link svg { flex-shrink: 0; }
+[data-generative-ui] .gui-card-single {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+[data-generative-ui] .gui-card-content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+[data-generative-ui] .gui-card p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+[data-generative-ui] .gui-card h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+[data-generative-ui] .gui-card-meta {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-ui] .gui-card-description {
+  font-size: 13px;
+  line-height: 21px;
+  color: var(--color-fg);
+}
+
+[data-generative-ui] .gui-card-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+[data-generative-ui] .gui-card-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-generative-ui] .gui-card-link svg {
+  flex-shrink: 0;
+}
 
 [data-generative-ui] .gui-card-image {
   position: relative;
@@ -61,10 +260,32 @@
   text-decoration: none;
 }
 
-[data-generative-ui] .gui-card-single .gui-card-image { width: 28%; max-width: 100px; height: auto; aspect-ratio: 1; flex-shrink: 0; }
-[data-generative-ui] .gui-card-image img { position: absolute; inset: 0; height: 100%; width: 100%; margin: 0; object-fit: contain; }
-[data-generative-ui] .gui-calculator { display: flex; flex-direction: column; gap: 16px; }
-[data-generative-ui] .gui-calculator > p { margin: 0; }
+[data-generative-ui] .gui-card-single .gui-card-image {
+  width: 28%;
+  max-width: 100px;
+  height: auto;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+[data-generative-ui] .gui-card-image img {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  object-fit: contain;
+}
+
+[data-generative-ui] .gui-calculator {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-generative-ui] .gui-calculator>p {
+  margin: 0;
+}
 
 /* Markdown typography must not override the preset's component layout. */
 .prose-aivory [data-generative-ui] h3 {
@@ -208,7 +429,7 @@
   gap: 4px;
 }
 
-[data-generative-ui] .gui-function-row > label {
+[data-generative-ui] .gui-function-row>label {
   max-width: 90px;
   overflow: hidden;
   white-space: nowrap;
@@ -243,13 +464,31 @@
   cursor: pointer;
 }
 
-[data-generative-ui] .gui-question-option .gui-check { margin-top: 3px; }
-[data-generative-ui] .gui-question-option.gui-selected { background: color-mix(in oklch, var(--color-accent) 12%, var(--color-bg-muted)); }
-[data-generative-ui] .gui-question-group:disabled .gui-question-option { cursor: default; }
-[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option:hover { background: color-mix(in oklch, var(--color-accent) 8%, var(--color-bg-muted)); }
-[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option.gui-selected:hover { background: color-mix(in oklch, var(--color-accent) 16%, var(--color-bg-muted)); }
+[data-generative-ui] .gui-question-option .gui-check {
+  margin-top: 3px;
+}
 
-[data-generative-ui] .gui-question-textarea { height: auto; min-height: 64px; max-height: 180px; }
+[data-generative-ui] .gui-question-option.gui-selected {
+  background: color-mix(in oklch, var(--color-accent) 12%, var(--color-bg-muted));
+}
+
+[data-generative-ui] .gui-question-group:disabled .gui-question-option {
+  cursor: default;
+}
+
+[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option:hover {
+  background: color-mix(in oklch, var(--color-accent) 8%, var(--color-bg-muted));
+}
+
+[data-generative-ui] .gui-question-group:not(:disabled) .gui-question-option.gui-selected:hover {
+  background: color-mix(in oklch, var(--color-accent) 16%, var(--color-bg-muted));
+}
+
+[data-generative-ui] .gui-question-textarea {
+  height: auto;
+  min-height: 64px;
+  max-height: 180px;
+}
 
 [data-generative-ui] .gui-question-submit {
   display: inline-flex;
@@ -267,9 +506,18 @@
   cursor: pointer;
 }
 
-[data-generative-ui] .gui-question-submit:hover:enabled { opacity: .9; }
-[data-generative-ui] .gui-question-submit:disabled { opacity: .5; cursor: default; }
-[data-generative-ui] p.gui-question-feedback { margin: 0; }
+[data-generative-ui] .gui-question-submit:hover:enabled {
+  opacity: .9;
+}
+
+[data-generative-ui] .gui-question-submit:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+[data-generative-ui] p.gui-question-feedback {
+  margin: 0;
+}
 
 [data-generative-ui] [data-generative-form] {
   display: flex;
@@ -277,16 +525,54 @@
   gap: 20px;
 }
 
-[data-generative-ui] .gui-form-heading { display: flex; flex-direction: column; gap: 6px; }
+[data-generative-ui] .gui-form-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 [data-generative-ui] .gui-form-heading p,
-[data-generative-ui] p.gui-form-feedback { margin: 0; }
-[data-generative-ui] .gui-form-wide { grid-column: 1 / -1; }
-[data-generative-ui] .gui-form-textarea { height: auto; min-height: 84px; max-height: 240px; }
-[data-generative-ui] .gui-form-options { display: flex; flex-wrap: wrap; gap: 8px 20px; }
-[data-generative-ui] .gui-form-option { display: inline-flex; min-height: 32px; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; cursor: pointer; }
-[data-generative-ui] .gui-form-option .gui-check { margin: 0; }
-[data-generative-ui] [data-generative-form] :disabled { cursor: default; }
-[data-generative-ui] [data-generative-form] .gui-input:disabled { opacity: .65; }
+[data-generative-ui] p.gui-form-feedback {
+  margin: 0;
+}
+
+[data-generative-ui] .gui-form-wide {
+  grid-column: 1 / -1;
+}
+
+[data-generative-ui] .gui-form-textarea {
+  height: auto;
+  min-height: 84px;
+  max-height: 240px;
+}
+
+[data-generative-ui] .gui-form-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+[data-generative-ui] .gui-form-option {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+[data-generative-ui] .gui-form-option .gui-check {
+  margin: 0;
+}
+
+[data-generative-ui] [data-generative-form] :disabled {
+  cursor: default;
+}
+
+[data-generative-ui] [data-generative-form] .gui-input:disabled {
+  opacity: .65;
+}
 
 [data-generative-ui] .gui-legend,
 [data-generative-ui] .gui-legend-row {
@@ -305,18 +591,63 @@
   cursor: pointer;
 }
 
-[data-generative-ui] .gui-legend-row { display: flex; width: 100%; }
-[data-generative-ui] .gui-legend[aria-pressed='false'] { text-decoration: line-through; }
+[data-generative-ui] .gui-legend-row {
+  display: flex;
+  width: 100%;
+}
+
+[data-generative-ui] .gui-legend[aria-pressed='false'] {
+  text-decoration: line-through;
+}
+
 [data-generative-ui] .gui-legend:hover:enabled,
 [data-generative-ui] .gui-legend-row:hover,
-[data-generative-ui] .gui-legend-row[aria-pressed='true'] { background: var(--color-bg-muted); }
-[data-generative-ui] .gui-legend:disabled { cursor: default; }
+[data-generative-ui] .gui-legend-row[aria-pressed='true'] {
+  background: var(--color-bg-muted);
+}
 
-[data-generative-ui] .gui-heatmap { border-collapse: separate; border-spacing: 4px; }
-[data-generative-ui] .gui-heatmap th { padding: 3px 8px; border: 0; font-size: 11px; font-weight: 400; text-align: center; color: var(--color-fg-muted); white-space: nowrap; }
-[data-generative-ui] .gui-heatmap th[scope='row'] { text-align: left; }
-[data-generative-ui] .gui-heatmap td { padding: 0; border: 0; }
-[data-generative-ui] .gui-heatmap-cell { display: block; min-height: 34px; width: 100%; padding: 6px 10px; border: 0; border-radius: 6px; font-size: 12px; color: var(--color-fg); white-space: nowrap; font-variant-numeric: tabular-nums; cursor: pointer; }
+[data-generative-ui] .gui-legend:disabled {
+  cursor: default;
+}
+
+[data-generative-ui] .gui-heatmap {
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+[data-generative-ui] .gui-heatmap th {
+  padding: 3px 8px;
+  border: 0;
+  font-size: 11px;
+  font-weight: 400;
+  text-align: center;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+[data-generative-ui] .gui-heatmap th[scope='row'] {
+  text-align: left;
+}
+
+[data-generative-ui] .gui-heatmap td {
+  padding: 0;
+  border: 0;
+}
+
+[data-generative-ui] .gui-heatmap-cell {
+  display: block;
+  min-height: 34px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--color-fg);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
 [data-generative-ui] [data-generative-table] th,
 [data-generative-ui] [data-generative-table] td {
   padding: 12px;
@@ -369,11 +700,783 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   [data-generative-ui] *,
   [data-generative-ui] *::before,
   [data-generative-ui] *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
+  }
+}
+
+/* Composable markup components inherit the conversation's theme and typography. */
+[data-generative-markup] {
+  container-type: inline-size;
+}
+
+[data-generative-markup] .gui-markup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+  font-size: .9375rem;
+  line-height: 1.6;
+}
+
+[data-generative-markup] :where(*, *::before, *::after) {
+  box-sizing: border-box;
+}
+
+[data-generative-markup] :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+
+[data-generative-markup] :where(button, input, select, textarea) {
+  font: inherit;
+}
+
+[data-generative-markup] :where(button:disabled, input:disabled, select:disabled, textarea:disabled) {
+  cursor: default;
+  opacity: .55;
+}
+
+[data-generative-markup] :where(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {
+  accent-color: var(--color-accent);
+}
+
+[data-generative-markup] :where(input[type='checkbox'], input[type='radio']) {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 3px 0 0;
+}
+
+[data-generative-markup] .gui-markup-layout {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-generative-markup] .gui-markup-svg {
+  display: inline-block;
+  flex-shrink: 1;
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+  color: inherit;
+}
+
+[data-generative-markup] :is(.gui-markup-row, .gui-markup-button-group, .gui-markup-stats) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+[data-generative-markup] .gui-markup-row> :where(.gui-markup-box, .gui-markup-column, .gui-markup-stack) {
+  flex: 1 1 180px;
+}
+
+[data-generative-markup] [data-wrap='false'] {
+  flex-wrap: nowrap;
+}
+
+[data-generative-markup] .gui-markup-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--gui-columns), minmax(0, 1fr));
+  align-items: start;
+}
+
+[data-generative-markup] [data-background='muted'] {
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] [data-background='surface'] {
+  background: var(--color-surface);
+}
+
+[data-generative-markup] [data-border] {
+  border: 1px solid var(--color-divider);
+}
+
+[data-generative-markup] .gui-markup-spacer {
+  min-height: 16px;
+  flex: 1;
+}
+
+[data-generative-markup] hr.gui-markup-divider {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+[data-generative-markup] :where(.gui-markup-heading) {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+[data-generative-markup] h1.gui-markup-heading {
+  font-size: 1.75rem;
+}
+
+[data-generative-markup] h2.gui-markup-heading {
+  font-size: 1.375rem;
+}
+
+[data-generative-markup] :is(h3, h4, h5, h6).gui-markup-heading {
+  font-size: 1rem;
+}
+
+[data-generative-markup] :where(p, ul, ol, dl, figure, blockquote) {
+  margin: 0;
+}
+
+[data-generative-markup] .gui-markup-prose> :first-child {
+  margin-top: 0;
+}
+
+[data-generative-markup] .gui-markup-prose> :last-child {
+  margin-bottom: 0;
+}
+
+[data-generative-markup] .gui-markup-prose :where(p + p, ul, ol) {
+  margin-top: .65em;
+}
+
+[data-generative-markup] .gui-markup-text {
+  min-width: 0;
+}
+
+[data-generative-markup] :where(ul, ol) {
+  padding-left: 1.3em;
+}
+
+[data-generative-markup] ul {
+  list-style: disc;
+}
+
+[data-generative-markup] ol {
+  list-style: decimal;
+}
+
+[data-generative-markup] .gui-markup-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+[data-generative-markup] :where(.gui-markup-card-header, .gui-markup-card-content, .gui-markup-card-footer) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-generative-markup] .gui-markup-card-footer {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+[data-generative-markup] .gui-markup-badge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  border-radius: 5px;
+  padding: 2px 8px;
+  background: var(--color-bg-muted);
+  font-size: .75rem;
+  line-height: 1.6;
+}
+
+[data-generative-markup] .gui-markup-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] [data-tone='secondary'],
+[data-generative-markup] [data-tone='muted'] {
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] [data-tone='accent'],
+[data-generative-markup] [data-tone='primary'] {
+  color: var(--color-accent);
+}
+
+[data-generative-markup] [data-tone='success'] {
+  color: var(--color-success);
+}
+
+[data-generative-markup] [data-tone='warning'] {
+  color: var(--gui-amber);
+}
+
+[data-generative-markup] [data-tone='danger'] {
+  color: var(--color-danger);
+}
+
+[data-generative-markup] [data-tone='info'] {
+  color: var(--gui-blue);
+}
+
+[data-generative-markup] .gui-markup-alert[data-tone] {
+  background: color-mix(in oklch, currentColor 7%, var(--color-bg));
+}
+
+[data-generative-markup] .gui-markup-image {
+  display: flex;
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+[data-generative-markup] .gui-markup-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  margin: 0;
+}
+
+[data-generative-markup] .gui-markup-image>span {
+  display: flex;
+  min-height: 88px;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  background: var(--color-bg-muted);
+  font-size: .75rem;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] .gui-markup-image figcaption {
+  font-size: .75rem;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] .gui-markup-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+[data-generative-markup] .gui-markup-avatar>span {
+  min-height: 40px;
+  padding: 4px;
+}
+
+[data-generative-markup] .gui-markup-avatar>span>span {
+  display: none;
+}
+
+[data-generative-markup] .gui-markup-avatar img {
+  object-fit: cover;
+}
+
+[data-generative-markup] .gui-markup-metric {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+[data-generative-markup] .gui-markup-metric dt,
+[data-generative-markup] .gui-markup-hint {
+  color: var(--color-fg-muted);
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-metric dd {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-generative-markup] .gui-markup-metric dd.gui-markup-hint {
+  font-size: .8125rem;
+  font-weight: 400;
+}
+
+[data-generative-markup] .gui-markup-table {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: 8px;
+}
+
+[data-generative-markup] .gui-markup-table>input {
+  margin: 8px;
+  max-width: calc(100% - 16px);
+}
+
+[data-generative-markup] .gui-markup-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-table :where(th, td) {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider);
+  vertical-align: top;
+  text-align: inherit;
+  min-width: 100px;
+}
+
+[data-generative-markup] .gui-markup-table th {
+  font-weight: 500;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] .gui-markup-table tbody:last-child>tr:last-child>td {
+  border-bottom: 0;
+}
+
+[data-generative-markup] .gui-markup-table table[data-layout='fixed']> :is(thead, tbody, tfoot)>tr> :where(th, td) {
+  min-width: 0;
+}
+
+[data-generative-markup] .gui-markup-table table[data-borders='all']> :is(thead, tbody, tfoot)>tr> :where(th, td) {
+  border: 1px solid var(--color-border);
+}
+
+[data-generative-markup] .gui-markup-table table[data-borders='none']> :is(thead, tbody, tfoot)>tr> :where(th, td) {
+  border: 0;
+}
+
+[data-generative-markup] .gui-markup-table tfoot {
+  font-weight: 500;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] .gui-markup-table-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+[data-generative-markup] .gui-markup-table-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+[data-generative-markup] .gui-markup-table-sort:hover {
+  background: var(--color-bg);
+}
+
+[data-generative-markup] .gui-markup-table caption {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 500;
+}
+
+[data-generative-markup] .gui-markup-button {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: .8125rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, opacity 160ms ease-out;
+}
+
+[data-generative-markup] .gui-markup-button-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+[data-generative-markup] .gui-markup-button-secondary {
+  background: var(--color-bg-muted);
+  color: var(--color-fg);
+}
+
+[data-generative-markup] .gui-markup-button-outline {
+  border-color: var(--color-divider);
+  color: var(--color-fg);
+  background: transparent;
+}
+
+[data-generative-markup] .gui-markup-button-ghost {
+  color: var(--color-fg);
+  background: transparent;
+}
+
+[data-generative-markup] .gui-markup-button:hover:not(:disabled) {
+  opacity: .85;
+}
+
+[data-generative-markup] .gui-markup-button[data-block] {
+  width: 100%;
+}
+
+[data-generative-markup] .gui-markup-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-generative-markup] :where(.gui-markup-field, .gui-markup-form) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-generative-markup] .gui-markup-form {
+  gap: 16px;
+}
+
+[data-generative-markup] .gui-markup-field {
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-field small {
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] .gui-markup-input {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--color-divider);
+}
+
+[data-generative-markup] textarea.gui-markup-input {
+  height: auto;
+  min-height: 80px;
+  resize: vertical;
+}
+
+[data-generative-markup] fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+[data-generative-markup] legend {
+  margin-bottom: 8px;
+  font-size: .8125rem;
+  font-weight: 500;
+}
+
+[data-generative-markup] .gui-markup-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-generative-markup] .gui-markup-radio-group[data-direction='row'] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+[data-generative-markup] .gui-markup-choice {
+  display: inline-flex;
+  min-height: 36px;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 0;
+  font-size: .8125rem;
+  cursor: pointer;
+}
+
+[data-generative-markup] .gui-markup-choice:has(input:disabled) {
+  cursor: default;
+}
+
+[data-generative-markup] .gui-markup-switch input {
+  appearance: none;
+  width: 32px;
+  height: 18px;
+  flex-basis: 32px;
+  margin-top: 2px;
+  border-radius: 10px;
+  background: var(--color-fg-muted);
+  transition: background-color 160ms ease-out;
+}
+
+[data-generative-markup] .gui-markup-switch input:checked {
+  background: var(--color-accent);
+}
+
+[data-generative-markup] .gui-markup-switch input::after {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  transition: transform 160ms ease-out;
+}
+
+[data-generative-markup] .gui-markup-switch input:checked::after {
+  transform: translateX(14px);
+}
+
+[data-generative-markup] .gui-markup-field:has(input[type='range'])>span {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+[data-generative-markup] input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+}
+
+[data-generative-markup] .gui-markup-rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+[data-generative-markup] .gui-markup-rating label {
+  position: relative;
+  display: flex;
+  padding: 6px;
+  color: var(--gui-amber);
+  cursor: pointer;
+}
+
+[data-generative-markup] .gui-markup-rating input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+[data-generative-markup] .gui-markup-rating label:has(:focus-visible) {
+  outline: 2px solid var(--color-ring);
+  border-radius: 4px;
+}
+
+[data-generative-markup] .gui-markup-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-progress>span {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+[data-generative-markup] .gui-markup-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+[data-generative-markup] .gui-markup-progress progress {
+  appearance: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] .gui-markup-progress progress::-webkit-progress-bar {
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] .gui-markup-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+[data-generative-markup] .gui-markup-progress progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+[data-generative-markup] .gui-markup-tabs {
+  min-width: 0;
+}
+
+[data-generative-markup] .gui-markup-tabs [role='tablist'] {
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+[data-generative-markup] .gui-markup-tabs [role='tab'] {
+  flex-shrink: 0;
+  border: 0;
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-tabs [role='tab'][aria-selected='true'] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+[data-generative-markup] .gui-markup-tabs [role='tabpanel']:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-generative-markup] :where(details) {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+[data-generative-markup] :where(summary) {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+[data-generative-markup] details>div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+[data-generative-markup] .gui-markup-sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+[data-generative-markup] .gui-markup-sequence>li {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+}
+
+[data-generative-markup] .gui-markup-step-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 50%;
+  background: var(--color-bg-muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-generative-markup] .gui-markup-sequence>li>div {
+  min-width: 0;
+}
+
+[data-generative-markup] .gui-markup-tooltip {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  border-bottom: 1px dotted var(--color-fg-muted);
+  cursor: help;
+}
+
+[data-generative-markup] .gui-markup-skeleton {
+  display: block;
+  width: 100%;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--color-bg-muted);
+}
+
+[data-generative-markup] .gui-markup-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-fg-muted);
+  font-size: .8125rem;
+}
+
+[data-generative-markup] .gui-markup-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] .gui-markup-feedback {
+  margin: 0;
+  font-size: .75rem;
+  color: var(--color-fg-muted);
+}
+
+[data-generative-markup] .gui-markup-feedback.gui-markup-error {
+  color: var(--color-danger);
+}
+
+@container (max-width: 520px) {
+  [data-generative-markup] .gui-markup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  [data-generative-markup] .gui-markup-grid {
+    grid-template-columns: 1fr;
   }
 }

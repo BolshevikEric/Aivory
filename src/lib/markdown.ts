@@ -1,5 +1,6 @@
-import { marked } from 'marked'
+import { marked, type Token } from 'marked'
 import katex from 'katex'
+import { prepareGenerativeMarkup } from './generative-markup'
 
 /**
  * Lightweight markdown configuration.
@@ -35,7 +36,23 @@ marked.setOptions({
 function stripRawHtml(md: string): string {
   // Replace any `<tag ...>` / `</tag>` with their escaped form. We escape
   // rather than delete so a literal `<3` or `<your-name>` survives as text.
-  return md.replace(/<[^>]+>/g, (m) => m.replace(/[<>]/g, (c) => (c === '<' ? '&lt;' : '&gt;')))
+  const escapeTags = (source: string) => source.replace(/<[^>]+>/g, tag => tag.replace(/[<>]/g, c => c === '<' ? '&lt;' : '&gt;'))
+  // Let Markdown escape its own code spans, including those inside emphasis.
+  // Escaping them here as well would show entity names in copyable source.
+  const stripTokens = (source: string, tokens: Token[], depth = 0): string => {
+    if (depth > 32) return escapeTags(source)
+    let result = '', offset = 0
+    for (const token of tokens) {
+      const start = source.indexOf(token.raw, offset)
+      if (start < 0) continue
+      result += escapeTags(source.slice(offset, start))
+      result += token.type === 'codespan' ? token.raw : 'tokens' in token && Array.isArray(token.tokens)
+        ? stripTokens(token.raw, token.tokens, depth + 1) : escapeTags(token.raw)
+      offset = start + token.raw.length
+    }
+    return result + escapeTags(source.slice(offset))
+  }
+  return stripTokens(md, marked.Lexer.lexInline(md))
 }
 
 /**
@@ -418,12 +435,24 @@ export function blockMarkdownToHtml(
  * `\[` → `[`), which left raw LaTeX like `[ \frac{…} ]` on screen. Inline math
  * (`$…$` / `\(…\)`) stays on the per-block path in inlineMarkdownToHtml.
  */
-export function tokenizeMarkdown(md: string, breaks = false): MarkdownBlock[] {
+export function tokenizeMarkdown(md: string, breaks = false, allowGenerativeUI = false): MarkdownBlock[] {
+  if (allowGenerativeUI) md = prepareGenerativeMarkup(md)
   const blocks: MarkdownBlock[] = []
   const displayMath = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]/g
+  // UI trees and ordinary code may themselves contain display-math examples.
+  // Extract only prose math; splitting a component fence would break its tree.
+  const codeRanges: [number, number][] = []
+  if (md.includes('$$') || md.includes('\\[')) {
+    let offset = 0
+    for (const token of marked.lexer(md, { gfm: true, breaks })) {
+      if (token.type === 'code') codeRanges.push([offset, offset + token.raw.length])
+      offset += token.raw.length
+    }
+  }
   let lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = displayMath.exec(md)) !== null) {
+    if (codeRanges.some(([start, end]) => m!.index >= start && m!.index < end)) continue
     lexInto(blocks, md.slice(lastIndex, m.index), breaks)
     const tex = (m[1] ?? m[2] ?? '').trim()
     if (tex) blocks.push({ type: 'math', content: tex })

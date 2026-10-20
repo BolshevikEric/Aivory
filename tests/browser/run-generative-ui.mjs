@@ -52,6 +52,127 @@ try {
   page.on('pageerror', e => errors.push(String(e)))
   await page.setViewport({ width: 1024, height: 900 })
   await page.goto(`${origin}/tests/browser/generative-ui-harness.html`)
+  await page.waitForSelector('[data-case="markup-library"] [role="tab"]')
+
+  for (const scope of ['[data-case="nested-components"]', '[data-case="nested-private"]']) {
+    assert.equal(await page.$$eval(`${scope} [data-generative-markup]`, nodes => nodes.length), 1)
+    assert.equal(await page.$eval(`${scope} td article table td:last-child`, node => node.textContent), '12')
+    assert.equal(await page.$eval(`${scope} button svg path`, node => node.namespaceURI), 'http://www.w3.org/2000/svg')
+    assert.equal(await page.$$eval(`${scope} svg.gui-markup-svg`, nodes => nodes.length), 4)
+    assert.equal(await page.$eval(`${scope} svg`, node => node.getAttribute('viewBox')), '0 0 240 120')
+    assert.equal(await page.$eval(`${scope} article table td`, node => getComputedStyle(node).borderTopWidth), '1px', 'Nested tables retain their own borders')
+    assert.notEqual(await page.$eval(`${scope} th .gui-markup-button`, node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)', 'Nested buttons retain their own style')
+    assert.equal(await page.$eval(`${scope} .gui-markup-sequence ul li`, node => getComputedStyle(node).display), 'list-item', 'Nested lists retain their own layout')
+    await page.click(`${scope} [role="tab"]:nth-child(2)`)
+    assert.equal(await page.$eval(`${scope} [role="tabpanel"]:last-child`, node => node.hidden), false)
+    await page.click(`${scope} [role="tab"]:first-child`)
+    await page.click(`${scope} summary`)
+    assert.equal(await page.$eval(`${scope} details`, node => node.open), false)
+    await page.click(`${scope} summary`)
+  }
+  assert(await page.evaluate(() => {
+    const ids = [...document.querySelectorAll('.gui-markup-svg [id]')].map(node => node.id)
+    return new Set(ids).size === ids.length
+  }), 'Repeated SVG definitions must have unique IDs across normal/private replies')
+  await page.type('[data-case="nested-private"] form input', '请增加图表')
+  await page.click('[data-case="nested-private"] form button')
+  await page.waitForFunction(() => window.__NESTED_FORM__)
+  assert.match(await page.evaluate(() => window.__NESTED_FORM__.text), /备注: 请增加图表/)
+  await page.click('[data-case="nested-components"] .gui-markup-card-footer button')
+  await page.waitForFunction(() => window.__NESTED_REPLY__)
+  assert.deepEqual(await page.evaluate(() => window.__NESTED_REPLY__), { messageId: 'nested-components', text: '请分析四月报告' })
+  const stateSVGID = await page.$eval('[data-case="svg-state"] svg', node => node.outerHTML)
+  assert.match(stateSVGID, /width="50"/)
+  await page.focus('[data-case="svg-state"] input[type="range"]')
+  await page.keyboard.press('End')
+  await page.waitForFunction(() => document.querySelector('[data-case="svg-state"] rect')?.getAttribute('width') === '200')
+  assert.equal(await page.$eval('[data-case="svg-state"] svg text', node => node.textContent), '100%')
+
+  for (const scope of ['[data-case="complex-table"]', '[data-case="complex-table-private"]']) {
+    const geometry = await page.$eval(`${scope} table`, table => ({
+      headerRows: table.tHead.rows.length,
+      bodyGroups: table.tBodies.length,
+      headingSpan: table.tBodies[0].rows[0].cells[0].colSpan,
+      categorySpan: table.tBodies[0].rows[1].cells[1].rowSpan,
+      nameWidth: table.tHead.rows[0].cells[0].getBoundingClientRect().width,
+      scoreWidth: table.tHead.rows[1].cells[0].getBoundingClientRect().width,
+      width: table.getBoundingClientRect().width,
+      regionWidth: table.parentElement.getBoundingClientRect().width,
+      total: table.tFoot.textContent,
+    }))
+    assert.equal(geometry.headerRows, 2)
+    assert.equal(geometry.bodyGroups, 2)
+    assert.equal(geometry.headingSpan, 6)
+    assert.equal(geometry.categorySpan, 2)
+    assert(geometry.nameWidth > geometry.scoreWidth * 3.5, JSON.stringify(geometry))
+    assert(geometry.width >= 640 && geometry.width <= Math.max(640, geometry.regionWidth) + 2, JSON.stringify(geometry))
+    assert.match(geometry.total, /全部通过/)
+    assert.equal(await page.$$eval(`${scope} table button, ${scope} .gui-markup-table > input`, nodes => nodes.length), 0)
+  }
+
+  for (const name of ['markup-library', 'markup-private']) {
+    const scope = `[data-case="${name}"]`
+    assert.equal(await page.$$eval(`${scope} [data-generative-markup]`, nodes => nodes.length), 1)
+    assert.equal(await page.$$eval(`${scope} .gui-markup-card`, nodes => nodes.length), 1)
+    assert.equal(await page.$eval(`${scope} .gui-markup-row`, node => getComputedStyle(node).flexDirection), 'row')
+    assert.equal(await page.$eval(`${scope} .gui-markup-stats`, node => getComputedStyle(node).flexDirection), 'row')
+    assert.equal(await page.$$eval(`${scope} .gui-markup-table tbody tr`, nodes => nodes.length), 2)
+    await page.click(`${scope} .gui-markup-table th button`)
+    assert.match(await page.$eval(`${scope} .gui-markup-table tbody tr`, node => node.textContent), /Basic/)
+    await page.type(`${scope} .gui-markup-table > input`, 'Pro')
+    assert.equal(await page.$$eval(`${scope} .gui-markup-table tbody tr`, nodes => nodes.length), 1)
+    await page.$eval(`${scope} .gui-markup-table > input`, node => { node.focus(); node.select() })
+    await page.keyboard.press('Backspace')
+    await page.focus(`${scope} input[type="range"]`)
+    await page.keyboard.press('End')
+    await page.waitForFunction(scope => document.querySelector(scope)?.textContent.includes('Total: 240 USD'), {}, scope)
+    await page.click(`${scope} input[role="switch"]`)
+    assert(await page.$eval(`${scope} input[role="switch"]`, node => node.checked))
+    await page.click(`${scope} .gui-markup-rating input[value="4"]`)
+    assert(await page.$eval(`${scope} .gui-markup-rating input[value="4"]`, node => node.checked))
+    await page.focus(`${scope} [role="tab"]`)
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await page.$eval(`${scope} [role="tab"][aria-selected="true"]`, node => node.textContent), 'Details')
+    await page.click(`${scope} summary`)
+    assert(await page.$eval(`${scope} details`, node => node.open))
+    await page.keyboard.press('Tab')
+    await page.$$eval(`${scope} [role="tab"]`, nodes => nodes[2].click())
+    await page.waitForSelector(`${scope} [data-generative-function]`)
+    assert.equal(await page.$$eval(`${scope} [data-function-path]`, nodes => nodes.filter(node => node.getAttribute('d')?.length > 20).length), 1)
+    assert.equal(await page.$$eval(`${scope} [data-generative-calculator]`, nodes => nodes.length), 1)
+    await page.$$eval(`${scope} [role="tab"]`, nodes => nodes[0].click())
+  }
+  const markupReply = '[data-case="markup-reply"]'
+  await page.click(`${markupReply} input[value="美食旅游"]`)
+  await page.select(`${markupReply} select`, '热门视频')
+  assert.match(await page.$eval(markupReply, node => node.textContent), /已选择：美食旅游 \/ 热门视频/)
+  await page.$eval(`${markupReply} button`, node => { node.click(); node.click() })
+  await page.waitForFunction(() => document.querySelector('[data-case="markup-reply"] [role="status"]')?.textContent.includes('Could not send'))
+  assert.equal(await page.evaluate(() => window.__MARKUP_ATTEMPTS__), 1)
+  assert(await page.$eval(`${markupReply} input[value="美食旅游"]`, node => node.checked))
+  await page.click(`${markupReply} button`)
+  await page.waitForFunction(() => document.querySelector('[data-case="markup-reply"] [role="status"]')?.textContent.includes('sent'))
+  assert.deepEqual(await page.evaluate(() => window.__MARKUP_REPLY__), { messageId: 'markup-message', text: '寻找台湾博主；类型：美食旅游；时间：热门视频' })
+  assert.equal(await page.evaluate(() => window.__MARKUP_ATTEMPTS__), 2)
+  for (const name of ['markup-readonly', 'markup-streaming', 'markup-answered']) assert(await page.$eval(`[data-case="${name}"] button`, node => node.disabled))
+  assert.equal(await page.$$eval('[data-case="markup-user"] [data-generative-ui]', nodes => nodes.length), 0)
+  const markupForm = '[data-case="markup-form"]'
+  await page.click(`${markupForm} button`)
+  assert.equal(await page.evaluate(() => window.__MARKUP_FORM__), undefined)
+  await page.type(`${markupForm} input[name="destination"]`, '   ')
+  await page.type(`${markupForm} input[name="email"]`, 'invalid-email')
+  await page.select(`${markupForm} select`, 'relaxed')
+  await page.click(`${markupForm} button`)
+  assert.equal(await page.evaluate(() => window.__MARKUP_FORM__), undefined)
+  for (const [name, value] of [['destination', 'Kyoto'], ['email', 'traveler@example.test']]) {
+    await page.$eval(`${markupForm} input[name="${name}"]`, node => { node.focus(); node.select() })
+    await page.keyboard.type(value)
+  }
+  await page.click(`${markupForm} button`)
+  await page.waitForFunction(() => window.__MARKUP_FORM__)
+  assert.match(await page.evaluate(() => window.__MARKUP_FORM__.text), /Destination: Kyoto/)
+  assert.match(await page.evaluate(() => window.__MARKUP_FORM__.text), /Pace: Relaxed/)
+  assert(await page.$eval(`${markupForm} button`, node => node.disabled))
   await page.waitForSelector('[data-case="presets"] [role="tab"]')
   await page.waitForSelector('[data-case="quoted-news"] [role="tab"]')
   assert.match(await page.$eval('[data-case="quoted-news"]', e => e.textContent), /新增"学校食品安全""网络食品经营"专节/)
@@ -112,7 +233,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-case="advanced"] [data-function-row] input')?.getAttribute('aria-invalid') === 'true')
   await page.waitForFunction(() => document.querySelector('[data-case="advanced"] [data-function-path]')?.getAttribute('d') === '')
   await page.click('[data-case="advanced"] [data-generative-function] button:has(svg.lucide-rotate-ccw)')
-  const functionRegion = '[data-case="advanced"] [data-generative-function] [role="group"]'
+  const functionRegion = '[data-case="advanced"] [data-generative-function] [role="group"][tabindex="0"]'
   await page.focus(functionRegion)
   await page.keyboard.press('End')
   assert.match(await page.$eval('[data-case="advanced"] [data-generative-function] .gui-inspection', e => e.textContent), /6\.28/)
@@ -443,6 +564,48 @@ try {
         return box.width > 0 && box.left >= container.left - 1 && box.right <= container.right + 1
       })), 'form controls must fit the response')
       await page.screenshot({ path: `/tmp/aivory-generative-ui/form-${width}-${theme}.png` })
+      await page.$eval('[data-case="complex-table"]', node => node.scrollIntoView({ block: 'start' }))
+      for (const selector of ['[data-case="complex-table"]', '[data-case="complex-table-private"]']) {
+        assert(await page.$eval(`${selector} .gui-markup-table`, region => region.getBoundingClientRect().width <= innerWidth), 'Complex tables must stay within the reply')
+        if (width === 360) {
+          assert(await page.$eval(`${selector} .gui-markup-table`, region => region.scrollWidth > region.clientWidth), 'Narrow screens scroll complex tables internally')
+          await page.$eval(`${selector} .gui-markup-table`, region => { region.scrollLeft = region.scrollWidth })
+          assert(await page.$eval(`${selector} .gui-markup-table`, region => region.scrollLeft > 200), 'Merged table columns must remain reachable')
+          await page.$eval(`${selector} .gui-markup-table`, region => { region.scrollLeft = 0 })
+        }
+      }
+      await page.screenshot({ path: `/tmp/aivory-generative-ui/complex-table-${width}-${theme}.png` })
+      await page.$eval('[data-case="markup-library"]', node => node.scrollIntoView({ block: 'start' }))
+      assert(await page.$$eval('[data-case="markup-library"] .gui-markup-grid', grids => grids.every(grid => {
+        const box = grid.getBoundingClientRect(), container = grid.closest('[data-generative-markup]').getBoundingClientRect()
+        return box.width > 0 && box.left >= container.left - 1 && box.right <= container.right + 1
+      })), 'composed grids must fit the response')
+      await page.screenshot({ path: `/tmp/aivory-generative-ui/markup-${width}-${theme}.png` })
+      for (const name of ['nested-components', 'nested-private']) {
+        const selector = `[data-case="${name}"]`
+        await page.$eval(selector, node => node.scrollIntoView({ block: 'start' }))
+        await page.waitForFunction(sel => [...document.querySelectorAll(`${sel} img`)].every(image => image.complete && image.naturalWidth > 0), {}, selector)
+        assert(await page.$$eval(`${selector} svg.gui-markup-svg`, nodes => nodes.every(svg => {
+          if (svg.closest('[hidden]')) return true
+          const box = svg.getBoundingClientRect(), cell = svg.closest('td').getBoundingClientRect()
+          return box.width > 0 && box.height > 0 && box.width <= cell.width + 1
+        })), 'Nested SVG drawings must fit their table cells')
+        assert(await page.$eval(`${selector} td article .gui-markup-table`, table => table.getBoundingClientRect().width <= table.closest('article').getBoundingClientRect().width), 'Nested table scroll regions must fit the card')
+      }
+      await page.$eval('[data-case="nested-components"]', node => node.scrollIntoView({ block: 'start' }))
+      await page.screenshot({ path: `/tmp/aivory-generative-ui/nested-${width}-${theme}.png` })
+      const diagram = await page.$('[data-case="nested-components"] svg.gui-markup-svg')
+      const bitmap = await diagram.screenshot()
+      const coloredPixels = await page.evaluate(async bytes => {
+        const image = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }))
+        const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height
+        const context = canvas.getContext('2d'); context.drawImage(image, 0, 0)
+        const data = context.getImageData(0, 0, canvas.width, canvas.height).data
+        let colored = 0
+        for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 0 && Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) colored++
+        return colored
+      }, Array.from(bitmap))
+      assert(coloredPixels > 50, `The SVG gradient/path must visibly render: ${width}/${theme}/${coloredPixels}`)
       await new Promise(r => setTimeout(r, 400))
       const themedFrame = await inner('#n')
       assert(await themedFrame.$eval('#n', e => e.getBoundingClientRect().width > 0))
@@ -454,7 +617,7 @@ try {
   assert(imageRequests.some(req => req.url.endsWith('/app.png')), 'External table image was never requested')
   assert(imageRequests.every(req => !req.headers.referer), 'External table images must not receive the conversation referrer')
   assert.deepEqual(errors, [])
-  console.log('PASS: cards/images/safe links/normal and private replies, calculator validation/recalculation/reset, native forms/validation/label serialization/retry/double-submit guards, clarification single/multi/custom answers, streaming/read-only/history states, private-chat question and form continuation, charts/scatter, table filtering/sorting, editable functions, checklist/quiz, keyboard interaction, HTML recovery/isolation, slash command, 30 responsive/theme/language combinations')
+  console.log('PASS: recursive table/card/tab/accordion/form/list/button/image composition, native SVG/gradients/clip paths/markers/local references and visible pixels, nested follow-ups and forms, composable markup library/Markdown/normal and private replies, merged cells/multi-level headers/column widths/body groups, table sorting/filtering, controls/rating/tabs/accordion, DIL state and GenUI follow-ups/retry/double-submit guards, markup form validation/label serialization, streaming/read-only/history guards, legacy presets/cards/calculator/charts/function plots, HTML isolation, slash command, 30 responsive/theme/language combinations')
 } finally {
   await browser?.close()
   server.httpServer?.closeAllConnections()

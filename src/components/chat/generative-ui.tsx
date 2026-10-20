@@ -9,6 +9,9 @@ import { QuestionSelector } from './generative-question'
 import { GenerativeForm } from './generative-form'
 import { parseUIDocument, type UIBlock, type UITableCell, type UITableColumn } from '@/lib/generative-ui'
 import { InlineHTML } from './inline-html'
+import { GenerativeMarkup } from './generative-markup'
+import { parseUIMarkup } from '@/lib/generative-markup'
+import type { CiteRef } from '@/lib/markdown'
 import '@/styles/generative-ui.css'
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]'
@@ -140,12 +143,13 @@ function Block({ block, live }: { block: UIBlock; live: boolean }) {
 }
 function Blocks({ blocks, live }: { blocks: UIBlock[]; live: boolean }) { return <div className="gui-blocks min-w-0">{blocks.map((block, i) => <Block key={i} block={block} live={live} />)}</div> }
 
-export function GenerativeUI({ code, lang, live = false }: { code: string; lang: 'aivory-ui' | 'aivory-html'; live?: boolean }) {
+export function GenerativeUI({ code, lang, live = false, cites }: { code: string; lang: 'aivory-ui' | 'aivory-html'; live?: boolean; cites?: CiteRef[] }) {
   const { t } = useTranslation('chat')
-  const doc = useMemo(() => lang === 'aivory-ui' ? parseUIDocument(code) : null, [code, lang])
-  const invalid = lang === 'aivory-ui' && !doc
-  return <section data-generative-ui={lang} className="my-4 min-w-0 max-w-full rounded-xl bg-[var(--color-surface)] p-4 text-[var(--color-fg)] sm:p-5 [overflow-wrap:anywhere]">
-    {invalid ? <p role="status" className="m-0 text-sm text-[var(--color-fg-muted)]">{t(live ? 'generative.generating' : 'generative.invalid')}</p> : lang === 'aivory-html' ? <InlineHTML code={code} live={live} /> : doc && <>
+  const doc = useMemo(() => lang === 'aivory-ui' && /^\s*\{(?!@body)/.test(code) ? parseUIDocument(code) : null, [code, lang])
+  const markup = useMemo(() => lang === 'aivory-ui' && !doc ? parseUIMarkup(code, live) : null, [code, doc, lang, live])
+  const invalid = lang === 'aivory-ui' && !doc && !markup
+  return <section data-generative-ui={lang} data-generative-markup={markup ? '' : undefined} className={markup ? 'my-4 min-w-0 max-w-full text-[var(--color-fg)] [overflow-wrap:anywhere]' : 'my-4 min-w-0 max-w-full rounded-xl bg-[var(--color-surface)] p-4 text-[var(--color-fg)] sm:p-5 [overflow-wrap:anywhere]'}>
+    {invalid ? <p role="status" className="m-0 text-sm text-[var(--color-fg-muted)]">{t(live ? 'generative.generating' : 'generative.invalid')}</p> : lang === 'aivory-html' ? <InlineHTML code={code} live={live} /> : markup ? <GenerativeMarkup document={markup} live={live} cites={cites} renderBlock={block => <Block block={block} live={live} />} /> : doc && <>
       {(doc.title || doc.description) && <div className="mb-5 space-y-1"><div className="text-base font-semibold">{doc.title}</div>{doc.description && <p className="m-0 text-sm text-[var(--color-fg-muted)]">{doc.description}</p>}</div>}
       <Blocks blocks={doc.blocks} live={live} />
     </>}

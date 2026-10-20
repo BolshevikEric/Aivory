@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import i18n from '@/i18n'
 import '@/styles/globals.css'
+import 'katex/dist/katex.min.css'
 import { Markdown } from '@/components/chat/markdown'
 import { PrivateMarkdown } from '@/components/chat/private-markdown'
 import { Composer } from '@/components/chat/composer'
@@ -11,10 +12,16 @@ import { useAuth } from '@/store/auth'
 import { useModels } from '@/store/models'
 import { GenerativeReplyProvider } from '@/components/chat/generative-reply'
 import PrivateChat from '@/pages/chat/PrivateChat'
+import { proportionalComplexTable as complexTable } from '../frontend/fixtures/generative-table'
+import { nestedComponents } from '../frontend/fixtures/generative-nesting'
+import { sampleMap, nestedMap } from '../frontend/fixtures/generative-map'
+import { interleavedComponents } from '../frontend/fixtures/generative-inline'
 
 const fence = (lang: string, code: string) => `\`\`\`${lang}\n${code}\n\`\`\``
 const quotedNews = `{"version":1,"title":"News","blocks":[{"type":"tabs","items":[{"title":"Domestic","blocks":[{"type":"text","text":"新增"学校食品安全""网络食品经营"专节。"}]},{"title":"International","blocks":[{"type":"text","text":"美国表示"强烈谴责"。"}]}]}]}`
 const preview = new URLSearchParams(globalThis.location.search).has('preview')
+const maps = new URLSearchParams(globalThis.location.search).has('maps')
+const interleaved = new URLSearchParams(globalThis.location.search).has('interleaved')
 const tableImageURL = (file: string) => preview
   ? new URL(file === 'missing.png' ? '/missing-table-image.png' : '/icon-512.png', globalThis.location.href).href
   : `https://images.example.test/${file}`
@@ -77,6 +84,28 @@ const nativeForm = JSON.stringify({ version: 1, blocks: [{ type: 'form', title: 
   { id: 'time', type: 'time', label: 'Time', value: '09:30' }, { id: 'datetime', type: 'datetime-local', label: 'Date and time', value: '2026-10-11T09:30' },
   { id: 'confirmation', type: 'checkbox', label: 'Confirm these preferences', required: true },
 ] }] })
+const markupLibrary = `<box gap={4}>
+  <row justify="between"><heading level={2}>Composable UI library</heading><badge tone="success">Ready</badge></row>
+  **Markdown and components** can share the same layout.
+  <stats><metric label="Components" value="Composable" hint="Layout belongs to the model"/><metric label="Progress" value={72} unit="%"/></stats>
+  <grid columns={2} gap={4}>
+    <card title="Content and feedback"><row align="start"><avatar src="https://images.example.test/avatar.png" alt="Avatar"/><box flex={1}><text weight="medium">Flexible content</text><text color="secondary" size="sm">Readable in light and dark mode.</text></box></row><alert tone="info" title="A helpful note">Only add the controls the answer needs.</alert><progress label="Completion" value={72}/><link href="https://example.test/guide">Read the guide</link></card>
+    <box gap={3}><image src="https://images.example.test/library.png" alt="Component library" aspectRatio="3:2" width="180px"/><steps><step title="Compose">Choose the right components.</step><step title="Explore">Adjust values locally.</step></steps></box>
+  </grid>
+  <table searchable sortable label="Markup plans"><thead><tr><th>Plan</th><th align="right">Price</th><th>Status</th></tr></thead><tbody><tr><td>Pro</td><td align="right">24</td><td><badge tone="success">Available</badge></td></tr><tr><td>Basic</td><td align="right">12</td><td><badge>Starter</badge></td></tr></tbody></table>
+  <tabs label="Explore"><tab title="Controls"><grid columns={2}><box><input name="name" label="Name" value="Alex"/><select name="pace" label="Pace" value="relaxed"><option value="relaxed">Relaxed</option><option value="packed">Packed</option></select><textarea name="notes" label="Notes"></textarea></box><box><slider name="quantity" label="Quantity" min={1} max={20} value={3}/><text>Total: {quantity * 12} USD</text><checkbox name="flexible" label="Flexible dates"/><switch name="tax" label="Include tax"/><rating name="rating" label="Rating" max={5}/></box></grid></tab><tab title="Details"><accordion><item title="More details"><timeline><item title="Today">Choose a direction.</item><item title="Tomorrow">Explore the result.</item></timeline></item></accordion><tooltip content="Available on keyboard focus too">More context</tooltip><empty title="No extra tasks">Everything is ready.</empty></tab><tab title="Charts"><chart kind="bar" title="Usage"><series name="Requests"><point label="Jan" value={120}/><point label="Feb" value={180}/></series></chart><function expression="sin(x)" min={-5} max={5}/><calculator title="Budget"><parameter id="quantity" label="Quantity" min={1} max={20} step={1} value={3}/><output label="Total" expression="quantity*12" unit="USD"/></calculator></tab></tabs>
+</box>`
+const markupReplyExample = `{@body const [kind,setKind] = DIL.useState("生活 vlog")}
+{@body const [fresh,setFresh] = DIL.useState("最新发布")}
+<box border padding={4} radius="xl" gap={3}>
+  <radio-group value={kind} onChange={setKind} label="内容类型"><radio value="生活 vlog">生活 Vlog</radio><radio value="美食旅游">美食与旅游</radio></radio-group>
+  <select value={fresh} onChange={setFresh} label="视频时间"><option value="最新发布">最新发布</option><option value="热门视频">热门视频</option></select>
+  <text>已选择：{kind} / {fresh}</text>
+  <button block onClick={() => GenUI.issueNewTurn("寻找台湾博主；类型：" + kind + "；时间：" + fresh)}>帮我找台湾博主</button>
+</box>`
+const markupForm = '<form title="Markup trip"><input name="destination" label="Destination" required/><input type="email" name="email" label="Email" required/><select name="pace" label="Pace" required><option value="relaxed">Relaxed</option><option value="packed">Packed</option></select><button type="submit">Send markup form</button></form>'
+const stateDiagram = '<box><slider name="amount" label="Progress" min={0} max={100} value={25}/><svg viewBox="0 0 240 60" aria-label="Live progress"><rect width={amount * 2} height="20" fill="var(--color-accent)"/><text y="50">{amount}%</text></svg></box>'
+let markupAttempts = 0
 const functionFragment = JSON.stringify({ type: 'function', title: 'Discontinuity examples', functions: [
   { expression: '2/(1+exp(-50*x))-1', label: 'Smooth step' },
   { expression: 'sin(x)/x', label: 'Removable discontinuity' },
@@ -86,14 +115,36 @@ let formAttempts = 0
 function Harness() {
   const [html, setHTML] = useState('<button id="action" onclick="this.textContent=\'Updated\'">Calculate</button>')
   const [live, setLive] = useState(false)
+  const [markup, setMarkup] = useState(maps ? sampleMap : interleaved ? interleavedComponents : markupLibrary)
   useEffect(() => {
-    Reflect.set(window, '__GUI__', { setHTML, setLive, setLanguage: (locale: string) => i18n.changeLanguage(locale) })
+    Reflect.set(window, '__GUI__', { setHTML, setLive, setMarkup, setLanguage: (locale: string) => i18n.changeLanguage(locale) })
   }, [])
+  if (interleaved) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
+    <section data-case="interleaved"><GenerativeReplyProvider messageId="interleaved-message" status="ready" onReply={async (_id, text) => { Reflect.set(window, '__INTERLEAVED_REPLY__', text); return true }}><Markdown allowGenerativeUI content={markup} live={live} /></GenerativeReplyProvider></section>
+    <section data-case="interleaved-private"><PrivateMarkdown allowGenerativeUI text={interleavedComponents} /></section>
+  </main>
+  if (maps) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
+    <section data-case="map"><GenerativeReplyProvider messageId="map-message" status="ready" onReply={async (_messageId, text) => { Reflect.set(window, '__MAP_REPLY__', text); return true }}><Markdown allowGenerativeUI content={markup} live={live} /></GenerativeReplyProvider></section>
+    <section data-case="map-private"><PrivateMarkdown allowGenerativeUI text={nestedMap} /></section>
+  </main>
   if (preview) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
     <Markdown allowGenerativeUI content={fence('aivory-ui', richTable)} />
     <Markdown allowGenerativeUI content={'| Name | Value |\n| --- | --- |\n| Plain Markdown | 12 |'} />
   </main>
   return <TooltipProvider><MemoryRouter><main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
+    <section data-case="nested-components"><GenerativeReplyProvider messageId="nested-components" status="ready" onReply={async (messageId, text) => { Reflect.set(window, '__NESTED_REPLY__', { messageId, text }); return true }}><Markdown allowGenerativeUI content={nestedComponents} /></GenerativeReplyProvider></section>
+    <section data-case="nested-private"><GenerativeReplyProvider messageId="nested-private" status="ready" onReply={async (messageId, text) => { Reflect.set(window, '__NESTED_FORM__', { messageId, text }); return true }}><PrivateMarkdown allowGenerativeUI text={fence('aivory-ui', nestedComponents)} /></GenerativeReplyProvider></section>
+    <section data-case="svg-state"><Markdown allowGenerativeUI content={stateDiagram} /></section>
+    <section data-case="complex-table"><Markdown allowGenerativeUI content={complexTable} /></section>
+    <section data-case="complex-table-private"><PrivateMarkdown allowGenerativeUI text={complexTable} /></section>
+    <section data-case="markup-library"><Markdown allowGenerativeUI content={markup} /></section>
+    <section data-case="markup-private"><PrivateMarkdown allowGenerativeUI text={markupLibrary} /></section>
+    <section data-case="markup-reply"><GenerativeReplyProvider messageId="markup-message" status="ready" onReply={async (messageId, text) => { Reflect.set(window, '__MARKUP_REPLY__', { messageId, text }); Reflect.set(window, '__MARKUP_ATTEMPTS__', ++markupAttempts); await new Promise(resolve => setTimeout(resolve, 150)); return markupAttempts > 1 }}><Markdown allowGenerativeUI content={markupReplyExample} /></GenerativeReplyProvider></section>
+    <section data-case="markup-form"><GenerativeReplyProvider messageId="markup-form-message" status="ready" onReply={async (messageId, text) => { Reflect.set(window, '__MARKUP_FORM__', { messageId, text }); return true }}><Markdown allowGenerativeUI content={fence('aivory-ui', markupForm)} /></GenerativeReplyProvider></section>
+    <section data-case="markup-readonly"><Markdown allowGenerativeUI content={markupReplyExample} /></section>
+    <section data-case="markup-streaming"><GenerativeReplyProvider messageId="markup-streaming" status="ready" onReply={async () => { throw new Error('Streaming markup cannot send') }}><Markdown allowGenerativeUI live content={markupReplyExample} /></GenerativeReplyProvider></section>
+    <section data-case="markup-answered"><GenerativeReplyProvider messageId="markup-answered" status="answered" onReply={async () => { throw new Error('Historical markup cannot send') }}><Markdown allowGenerativeUI content={markupReplyExample} /></GenerativeReplyProvider></section>
+    <section data-case="markup-user"><Markdown content={fence('aivory-ui', markupLibrary)} /></section>
     <section data-case="rich-table"><Markdown allowGenerativeUI content={fence('aivory-ui', richTable)} /></section>
     <section data-case="cards"><Markdown allowGenerativeUI content={fence('aivory-ui', cards)} /></section>
     <section data-case="advanced"><Markdown allowGenerativeUI content={fence('aivory-ui', advanced)} /></section>
