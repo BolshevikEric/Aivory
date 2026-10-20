@@ -11,6 +11,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, logL
 let browser
 try {
   await server.listen()
+  await mkdir(outputDirectory, { recursive: true })
   browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox'] })
   const page = await browser.newPage()
   const errors = []
@@ -22,10 +23,12 @@ try {
   let printedHTML = ''
   let pdfRequests = 0
   const exportMetrics = []
+  const nestedImage = await readFile(new URL('../../public/icon-512.png', import.meta.url))
   await page.exposeFunction('recordExportMetric', value => exportMetrics.push(value))
   await page.evaluateOnNewDocument(() => window.addEventListener('aivory:conversation-export', event => window.recordExportMetric(event.detail)))
   page.on('request', request => {
     const url = new URL(request.url())
+    if (url.hostname === 'images.example.test') return request.respond({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: nestedImage })
     if (!url.pathname.startsWith('/api/')) return request.continue()
     if (url.pathname.endsWith('/export/pdf')) {
       void (async () => {
@@ -62,11 +65,19 @@ try {
     assert(handle.asElement(), `Missing action ${label}`)
     return handle.asElement()
   }
+  const chooseShareOption = async (label, text) => {
+    await page.click(`[data-image-share-toolbar] button[role="combobox"][aria-label="${label}"]`)
+    await page.waitForSelector('[role="listbox"]')
+    assert.equal(await page.$$eval('[role="option"]', options => options.filter(option => option.textContent.trim() === 'JSON').length), 0)
+    await (await item(text, '[role="option"]')).click()
+    await page.waitForFunction(() => !document.querySelector('[role="listbox"]'))
+  }
   const openDesktopShare = async label => {
     await page.click('header button[aria-label="Conversation actions"]')
     await (await item('Share')).hover()
     await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="menuitem"]')).some(e => e.textContent.trim() === 'Share as image'))
-    for (const format of ['PDF', 'JSON', 'TXT']) assert(await item(`Share as ${format}`))
+    for (const format of ['PDF', 'TXT']) assert(await item(`Share as ${format}`))
+    assert.equal(await page.$$eval('[role="menuitem"]', nodes => nodes.filter(node => node.textContent.trim() === 'Share as JSON').length), 0)
     await (await item(label)).click()
   }
   await openDesktopShare('Share as link')
@@ -78,6 +89,13 @@ try {
   await page.type(composer, 'Keep this composer draft')
   await openDesktopShare('Share as image')
   await page.waitForSelector('[data-image-share-toolbar]')
+  assert.equal(await page.$$eval('[data-image-share-toolbar] select', nodes => nodes.length), 0, 'sharing uses custom controls')
+  await page.click('[data-image-share-toolbar] button[aria-label="File format"]')
+  await page.waitForSelector('[role="listbox"]')
+  await page.screenshot({ path: `${outputDirectory}/format-menu-desktop.png` })
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('[role="listbox"]'))
+  assert(await page.$('[data-image-share-toolbar]'), 'Escape closes the select before leaving selection mode')
   assert.equal(await page.$$eval('[data-image-share-row] > input[type="checkbox"]', nodes => nodes.length), 5)
   assert.equal(await page.$$eval('[data-image-share-row] > input:checked', nodes => nodes.length), 0)
   await page.click('[data-image-share-row="first-user"] > input')
@@ -113,7 +131,6 @@ try {
   assert(pixels.height > 600 && pixels.height < 11000)
   assert(pixels.content > 1000, JSON.stringify(pixels))
   assert(pixels.logo > 50, 'Logo and wordmark must appear in the actual PNG')
-  await mkdir(outputDirectory, { recursive: true })
   await page.screenshot({ path: `${outputDirectory}/preview-light.png` })
   const downloadDir = `${outputDirectory}/download-${Date.now()}`
   await mkdir(downloadDir, { recursive: true })
@@ -138,7 +155,8 @@ try {
   await page.waitForSelector('[role="dialog"]')
   await page.$eval('[role="dialog"]', async node => { await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {}))) })
   await (await item('Share', '[role="dialog"] button')).click()
-  for (const format of ['PDF', 'JSON', 'TXT']) assert(await item(`Share as ${format}`, '[role="dialog"] button'))
+  for (const format of ['PDF', 'TXT']) assert(await item(`Share as ${format}`, '[role="dialog"] button'))
+  assert.equal(await page.$$eval('[role="dialog"] button', nodes => nodes.filter(node => node.textContent.trim() === 'Share as JSON').length), 0)
   await (await item('Share as image', '[role="dialog"] button')).click()
   await page.waitForSelector('[data-image-share-toolbar]')
   for (const theme of ['light', 'dark']) for (const language of ['en', 'zh', 'zh-Hant', 'ja', 'fr']) {
@@ -149,10 +167,33 @@ try {
   await page.evaluate(() => window.__IMAGE_SHARE__.setLanguage('en'))
   await page.screenshot({ path: `${outputDirectory}/select-mobile-dark.png` })
   await page.click('[data-image-share-row="visual-assistant"] > input')
-  await page.select('[data-image-share-toolbar] select[aria-label="Image quality"]', 'high')
+  await chooseShareOption('Image quality', 'High definition')
   await (await item('Generate image', '[data-image-share-toolbar] button')).click()
   await page.waitForSelector('[data-image-share-preview] img')
   await page.waitForFunction(() => document.querySelector('[data-image-share-preview] img')?.naturalWidth === 1520)
+  const exportedTable = await page.evaluate(() => window.__TABLE_EXPORT__)
+  assert(exportedTable, 'The shared PNG must include the complex table')
+  assert(exportedTable.tableWidth <= exportedTable.parentWidth + 1, JSON.stringify(exportedTable))
+  assert(exportedTable.nameWidth > exportedTable.scoreWidth * 3.5, JSON.stringify(exportedTable))
+  assert.equal(exportedTable.columnSpan, 6)
+  assert.equal(exportedTable.rowSpan, 2)
+  assert.equal(exportedTable.columns, 6)
+  assert.equal(exportedTable.expanded, true)
+  assert.match(exportedTable.total, /全部通过/)
+  const exportedSVG = await page.evaluate(() => window.__SVG_EXPORT__)
+  assert(exportedSVG?.width > 0 && exportedSVG?.height > 0, 'The exported tree must include nested SVG drawings')
+  const svgColorPixels = await page.$eval('[data-image-share-preview] img', (image, bounds) => {
+    const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d'); context.drawImage(image, 0, 0)
+    const scale = canvas.width / bounds.rootWidth
+    const data = context.getImageData(Math.floor(bounds.x * scale), Math.floor(bounds.y * scale), Math.ceil(bounds.width * scale), Math.ceil(bounds.height * scale)).data
+    let green = 0
+    for (let i = 0; i < data.length; i += 4) if (data[i + 1] > data[i] + 10 && data[i + 1] > data[i + 2] + 5) green++
+    return green
+  }, exportedSVG)
+  assert(svgColorPixels > 20, 'Nested SVG gradients and local references must survive actual PNG export')
+  const complexPNG = await page.$eval('[data-image-share-preview] img', async image => Array.from(new Uint8Array(await (await fetch(image.src)).arrayBuffer())))
+  await writeFile(`${outputDirectory}/export-complex-table.png`, Buffer.from(complexPNG))
   const chartColorPixels = await page.$eval('[data-image-share-preview] img', image => {
     const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight
     const context = canvas.getContext('2d'); context.drawImage(image, 0, 0)
@@ -194,14 +235,6 @@ try {
   await (await item('Clear', '[data-image-share-toolbar] button')).click()
   await page.click('[data-image-share-row="first-user"] > input')
   await page.click('[data-image-share-row="first-assistant"] > input')
-  await page.select('[data-image-share-toolbar] select[aria-label="File format"]', 'json')
-  await (await item('Generate file', '[data-image-share-toolbar] button')).click()
-  await page.waitForSelector('[data-share-format="json"] [data-share-text-preview]')
-  await page.waitForFunction(() => document.querySelector('[data-share-text-preview]')?.textContent.includes('aivory-conversation-share'))
-  const sharedJSON = await page.$eval('[data-share-text-preview]', node => JSON.parse(node.textContent))
-  assert.deepEqual(sharedJSON.messages.map(message => message.id), ['first-user', 'first-assistant'])
-  assert.doesNotMatch(JSON.stringify(sharedJSON), /EXCLUDED PRIVATE|long-answer|reasoning|cost/)
-  await (await item('Save file', '[data-image-share-preview] button')).click()
   const waitForDownload = async extension => {
     for (let attempt = 0; attempt < 100; attempt++) {
       const filename = (await readdir(downloadDir)).find(name => name.endsWith(extension))
@@ -210,9 +243,7 @@ try {
     }
     assert.fail(`Missing ${extension} download`)
   }
-  assert.deepEqual(JSON.parse(await readFile(`${downloadDir}/${await waitForDownload('.json')}`, 'utf8')).messages.map(message => message.id), ['first-user', 'first-assistant'])
-  await (await item('Change selection', '[data-image-share-preview] button')).click()
-  await page.select('[data-image-share-toolbar] select[aria-label="File format"]', 'txt')
+  await chooseShareOption('File format', 'TXT')
   await (await item('Generate file', '[data-image-share-toolbar] button')).click()
   await page.waitForFunction(() => document.querySelector('[data-share-text-preview]')?.textContent.includes('Selected answer'))
   const plainText = await page.$eval('[data-share-text-preview]', node => node.textContent)
@@ -222,12 +253,23 @@ try {
   await (await item('Save file', '[data-image-share-preview] button')).click()
   assert.match(await readFile(`${downloadDir}/${await waitForDownload('.txt')}`, 'utf8'), /帮我比较/)
   await (await item('Change selection', '[data-image-share-preview] button')).click()
-  await page.select('[data-image-share-toolbar] select[aria-label="File format"]', 'pdf')
+  await page.click('[data-image-share-row="visual-assistant"] > input')
+  await chooseShareOption('File format', 'PDF')
   await (await item('Generate file', '[data-image-share-toolbar] button')).click()
   await page.waitForSelector('[data-share-format="pdf"] canvas')
   assert.equal(pdfRequests, 1)
   assert.match(printedHTML, /帮我比较/)
   assert.match(printedHTML, /Selected answer/)
+  assert.match(printedHTML, /colspan="6"/)
+  assert.match(printedHTML, /rowspan="2"/)
+  assert.match(printedHTML, /课程成绩单/)
+  const printedTable = await page.evaluate(html => {
+    const table = new DOMParser().parseFromString(html, 'text/html').querySelector('.gui-markup-table > table')
+    return { width: table.style.width, priority: table.style.getPropertyPriority('width'), firstColumnWidth: table.querySelector('col').style.width }
+  }, printedHTML)
+  assert.equal(printedTable.width, '100%')
+  assert.equal(printedTable.priority, 'important')
+  assert.match(printedTable.firstColumnWidth, /%$/)
   assert.doesNotMatch(printedHTML, /EXCLUDED PRIVATE|FINAL PARAGRAPH/)
   await (await item('Save file', '[data-image-share-preview] button')).click()
   const pdfFile = await waitForDownload('.pdf')
@@ -260,7 +302,7 @@ try {
   await page.screenshot({ path: `${outputDirectory}/preview-pdf-mobile.png` })
   assert(exportMetrics.some(metric => metric.format === 'image' && metric.timings.total > 0))
   await (await item('Change selection', '[data-image-share-preview] button')).click()
-  await page.select('[data-image-share-toolbar] select[aria-label="File format"]', 'image')
+  await chooseShareOption('File format', 'Image')
   await (await item('Generate image', '[data-image-share-toolbar] button')).click()
   await page.waitForSelector('[data-image-share-preview] img')
   const capturesBefore = exportMetrics.filter(metric => metric.format === 'image').length
@@ -272,7 +314,7 @@ try {
   await page.evaluate(() => window.__IMAGE_SHARE__.changeAccount())
   await page.waitForFunction(() => !document.querySelector('[data-image-share-preview]') && !document.querySelector('[data-image-share-toolbar]'))
   assert.deepEqual(errors, [])
-  console.log('PASS: nested link/image menus, message selection/order/exclusion, failed encoding/retry, real PNG/logo/download, composer draft retention, charts/forms, complete single long image, JSON/TXT/PDF files and downloads, searchable Chinese PDF text, cached PNG, mobile and 10 theme/language combinations, account isolation')
+  console.log('PASS: nested link/image menus, message selection/order/exclusion, failed encoding/retry, real PNG/logo/download, composer draft retention, charts/forms, complete single long image, custom format/quality selects, no JSON share option, TXT/PDF files and downloads, searchable Chinese PDF text, cached PNG, mobile and 10 theme/language combinations, account isolation')
 } finally {
   await browser?.close()
   server.httpServer?.closeAllConnections()

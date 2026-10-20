@@ -15,7 +15,7 @@ export function renderConversationShareMessages(snapshot: ConversationShareSnaps
     const body = document.createElement('div')
     body.className = 'conversation-share-content'
     const content = document.createElement('div')
-    content.innerHTML = tokenizeMarkdown(message.content, message.role === 'user').map((block, index) => {
+    content.innerHTML = tokenizeMarkdown(message.content, message.role === 'user', message.role === 'assistant').map((block, index) => {
       if (block.type === 'math') return renderMathToHtml(block.content, true) ?? escapeText(block.content)
       if (block.type === 'code' && (block.lang === 'aivory-ui' || block.lang === 'aivory-html')) {
         return block.lang === 'aivory-ui' ? renderToStaticMarkup(<GenerativeUI code={block.content} lang="aivory-ui" />, { identifierPrefix: `share-${message.id}-${index}-` }) : `<p>${escapeText(labels.interactive)}</p>`
@@ -27,6 +27,10 @@ export function renderConversationShareMessages(snapshot: ConversationShareSnaps
       return blockMarkdownToHtml(block.content, undefined, message.role === 'user')
     }).join('')
     content.querySelectorAll('[data-math-copy] > button, .katex-mathml, [data-generative-table-controls], .gui-question-submit, .gui-button, button[aria-expanded]').forEach(node => node.remove())
+    // Static exports preserve place names and links without a never-mounted map loader.
+    content.querySelectorAll('[data-generative-map]').forEach(map => {
+      if (map.querySelector('.gui-map-points')) map.querySelectorAll('[data-generative-map-canvas], .gui-map-status').forEach(node => node.remove())
+    })
     // Static React markup cannot advance image loading state after decode.
     content.querySelectorAll('[data-generative-ui] img.invisible').forEach(image => {
       image.classList.remove('invisible')
@@ -35,6 +39,7 @@ export function renderConversationShareMessages(snapshot: ConversationShareSnaps
     // Turn remaining interactive labels into static content without losing legends or table headers.
     content.querySelectorAll('button,input,select,textarea').forEach(node => {
       const text = document.createElement('span')
+      if (node.classList.contains('gui-map-point')) text.className = 'gui-map-point'
       if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) text.textContent = node.value
       else text.append(...Array.from(node.childNodes))
       node.replaceWith(text)

@@ -3,6 +3,7 @@ import wordmarkSource from '@/assets/brand/aivory-wordmark.svg?raw'
 import '@/styles/conversation-image.css'
 import { CAPTURE_STYLE_PROPERTIES, withCaptureAbort, embedConversationImages, conversationFontCSS, freezeConversationSVGs } from './conversation-capture'
 import { conversationShareFilename, saveConversationShareFile, type ConversationShareQuality } from './conversation-share'
+import { fitConversationShareTables } from './conversation-share-table'
 
 const IMAGE_WIDTH = 760
 const MAX_IMAGE_EDGE = 16384
@@ -137,6 +138,7 @@ export async function createConversationImages(input: {
     const fetchRequestInit: RequestInit = { credentials: 'same-origin', referrerPolicy: 'no-referrer', signal: input.signal }
     const fontStarted = performance.now()
     const fontEmbedCSS = await conversationFontCSS(root, input.signal)
+    fitConversationShareTables(root)
     freezeConversationSVGs(root)
     timings.fonts = performance.now() - fontStarted
     input.assertActive()

@@ -1,7 +1,7 @@
 import { marked, type Token, type Tokens } from 'marked'
 import type { Conversation, Message } from '@/types/chat'
 
-export type ConversationShareFormat = 'image' | 'pdf' | 'json' | 'txt'
+export type ConversationShareFormat = 'image' | 'pdf' | 'txt'
 export type ConversationShareQuality = 'standard' | 'high'
 export interface ConversationShareFile { blob: Blob; filename: string }
 export interface ConversationShareSnapshot {

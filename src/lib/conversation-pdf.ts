@@ -2,6 +2,7 @@ import { api } from '@/api/client'
 import { conversationFontCSS, embedConversationImages } from './conversation-capture'
 import { conversationShareBrand } from './conversation-image'
 import { renderConversationShareMessages } from './conversation-share-document'
+import { fitConversationShareTables } from './conversation-share-table'
 import { conversationShareFilename, type ConversationShareFile, type ConversationShareSnapshot, type ConversationShareLabels } from './conversation-share'
 import type { Message } from '@/types/chat'
 
@@ -26,6 +27,7 @@ export async function createConversationPDF(input: {
   try {
     await embedConversationImages(root, input.labels.resourceFailed, input.signal)
     const fonts = await conversationFontCSS(root, input.signal)
+    fitConversationShareTables(root)
     input.assertActive()
     // Carry local styles, including KaTeX and static charts. Fonts/images are
     // already inlined; the server renderer has scripting and network disabled.

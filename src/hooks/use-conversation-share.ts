@@ -84,7 +84,7 @@ export function useConversationShare(conversation: Conversation | undefined, all
   }, [conversation?.messages, phase])
   useEffect(() => {
     if (phase !== 'selecting') return
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); cancel() } }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); cancel() } }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [phase, cancel])
@@ -142,7 +142,7 @@ export function useConversationShare(conversation: Conversation | undefined, all
       abort.current = controller
       let file = cache.current.get(cacheKey)
       if (!file) {
-        if (format === 'json' || format === 'txt') file = createConversationTextFile(snapshot, format, labels)
+        if (format === 'txt') file = createConversationTextFile(snapshot, format, labels)
         else if (format === 'pdf') {
           setStage('rendering')
           const { createConversationPDF } = await import('@/lib/conversation-pdf')

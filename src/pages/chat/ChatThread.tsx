@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal, Link2, Image, FileText, FileJson, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MoreHorizontal, Pencil, Share2, Star, Trash2, Archive, ArrowDown, FolderKanban, Loader2, Menu, Files, GitBranch, Globe2, LockKeyhole, SquareTerminal, Link2, Image, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Composer } from '@/components/chat/composer'
 import { MessageList } from '@/components/chat/message-list'
 import { UserMenu } from '@/components/sidebar/sidebar'
@@ -641,7 +641,7 @@ export default function ChatThread() {
                     <DropdownMenuItem onSelect={() => { fileShare.cancel(); setShareOpen(true) }}><Link2 size={13} aria-hidden />{t('chat:shareImage.asLink')}</DropdownMenuItem>
                     {canShareFiles && <>
                     <DropdownMenuItem onSelect={() => { setShareOpen(false); fileShare.begin('image') }}><Image size={13} aria-hidden />{t('chat:shareImage.asImage')}</DropdownMenuItem>
-                    {(['pdf', 'json', 'txt'] as const).map(format => <DropdownMenuItem key={format} onSelect={() => { setShareOpen(false); fileShare.begin(format) }}>{format === 'json' ? <FileJson size={13} aria-hidden /> : <FileText size={13} aria-hidden />}{t(`chat:shareFile.as${format.toUpperCase()}`)}</DropdownMenuItem>)}
+                    {(['pdf', 'txt'] as const).map(format => <DropdownMenuItem key={format} onSelect={() => { setShareOpen(false); fileShare.begin(format) }}><FileText size={13} aria-hidden />{t(`chat:shareFile.as${format.toUpperCase()}`)}</DropdownMenuItem>)}
                     </>}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
@@ -892,7 +892,7 @@ export default function ChatThread() {
             <ThreadActionRow icon={<Link2 size={18} aria-hidden />} label={t('chat:shareImage.asLink')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); fileShare.cancel(); setShareOpen(true) }} />
             {canShareFiles && <>
             <ThreadActionRow icon={<Image size={18} aria-hidden />} label={t('chat:shareImage.asImage')} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); fileShare.begin('image') }} />
-            {(['pdf', 'json', 'txt'] as const).map(format => <ThreadActionRow key={format} icon={format === 'json' ? <FileJson size={18} aria-hidden /> : <FileText size={18} aria-hidden />} label={t(`chat:shareFile.as${format.toUpperCase()}`)} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); fileShare.begin(format) }} />)}
+            {(['pdf', 'txt'] as const).map(format => <ThreadActionRow key={format} icon={<FileText size={18} aria-hidden />} label={t(`chat:shareFile.as${format.toUpperCase()}`)} onClick={() => { setActionsOpen(false); setMobileShareOptions(false); setShareOpen(false); fileShare.begin(format) }} />)}
             </>}
           </div> : <div className="flex flex-col px-2 py-2">
             {!isWorkspaceGuest ? (

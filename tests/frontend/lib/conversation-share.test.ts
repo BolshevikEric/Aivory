@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createConversationShareSnapshot, createConversationTextFile, conversationShareFilename, markdownToShareText } from '@/lib/conversation-share'
 import { renderConversationShareMessages } from '@/lib/conversation-share-document'
 import type { Conversation, Message } from '@/types/chat'
+import { complexTable } from '../fixtures/generative-table'
+import { nestedComponents } from '../fixtures/generative-nesting'
+import { sampleMap, samplePlaces } from '../fixtures/generative-map'
+
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 
 const message = (id: string, content: string, extra: Partial<Message> = {}): Message => ({ id, content, role: 'assistant', createdAt: 1, ...extra })
 const conversation: Conversation = { id: 'conversation', title: '中文 / Share', createdAt: 1, updatedAt: 1, modelId: 'private-model', messages: [
@@ -52,5 +57,52 @@ describe('selected conversation file sharing', () => {
     expect(rows[0].querySelector('pre code')?.textContent).toBe('<script>literal()</script>')
     expect(rows[0].querySelector('script,button,iframe,.katex-mathml')).toBeNull()
     expect(rows[0].querySelector('.katex-html')).not.toBeNull()
+  })
+  it('exports composed markup as readable components with no live actions', () => {
+    const rich = { ...conversation, messages: [message('markup', '<box gap={3}><heading level={2}>Options</heading><table><tbody><tr><td>Basic</td><td>12</td></tr></tbody></table><text><strong>Inline</strong> <em>spacing</em></text><button prompt="Choose Basic">Choose</button></box>')] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['markup']))
+    const [row] = renderConversationShareMessages(snapshot, rich.messages, labels)
+    expect(row.querySelector('h2')?.textContent).toBe('Options')
+    expect(row.querySelector('td')?.textContent).toBe('Basic')
+    expect(row.querySelector('button,iframe,script')).toBeNull()
+    expect(row.textContent).toContain('Choose')
+    expect(row.textContent).toContain('Inline spacing')
+  })
+  it('retains complex table columns and spans in the static image/PDF tree', () => {
+    const rich = { ...conversation, messages: [message('transcript', complexTable)] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['transcript']))
+    const [row] = renderConversationShareMessages(snapshot, rich.messages, labels)
+    const table = row.querySelector('table')!
+    expect(table.tHead?.rows.length).toBe(2)
+    expect(table.tBodies.length).toBe(2)
+    expect(table.querySelectorAll('col')[1].span).toBe(5)
+    expect(table.tBodies[0].rows[0].cells[0].colSpan).toBe(6)
+    expect(table.tBodies[0].rows[1].cells[1].rowSpan).toBe(2)
+    expect(table.tFoot?.textContent).toContain('全部通过')
+    expect(row.querySelector('input,button')).toBeNull()
+  })
+  it('exports place names and links without a never-mounted map loading area', () => {
+    const rich = { ...conversation, messages: [message('map', sampleMap)] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['map']))
+    const [row] = renderConversationShareMessages(snapshot, rich.messages, labels)
+    expect(row.querySelectorAll('.gui-map-external')).toHaveLength(8)
+    expect(row.querySelectorAll('.gui-map-point')).toHaveLength(8)
+    expect(row.querySelector('[data-generative-map-canvas],button')).toBeNull()
+    for (const point of samplePlaces) expect(row.textContent).toContain(point.name)
+  })
+  it('keeps nested components and isolated SVG definitions in the static export tree', () => {
+    const rich = { ...conversation, messages: [message('nested', nestedComponents), message('repeated', nestedComponents)] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['nested', 'repeated']))
+    const rows = renderConversationShareMessages(snapshot, rich.messages, labels)
+    const ids = rows.flatMap(row => Array.from(row.querySelectorAll('svg [id]'), node => node.id))
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const row of rows) {
+      expect(row.querySelector('td article table td:last-child')?.textContent).toBe('12')
+      expect(row.querySelector('td .gui-markup-image img')).not.toBeNull()
+      expect(row.querySelector('td svg linearGradient')).not.toBeNull()
+      expect(row.querySelector('td svg path[stroke]')?.getAttribute('stroke')).toMatch(/^url\(#gui-svg-/)
+      expect(row.querySelector('button,input,script,iframe')).toBeNull()
+      expect(row.textContent).toContain('分析报告')
+    }
   })
 })

@@ -2,13 +2,14 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Download, Image, FileText, Share2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import type { ConversationSharePreview } from '@/hooks/use-conversation-share'
 import { saveConversationShareFile, type ConversationShareFormat, type ConversationShareQuality } from '@/lib/conversation-share'
 
 const PdfPreview = lazy(() => import('@/components/files/pdf-native-preview').then(module => ({ default: module.PdfNativePreview })))
-const formats: ConversationShareFormat[] = ['image', 'pdf', 'json', 'txt']
+const formats: ConversationShareFormat[] = ['image', 'pdf', 'txt']
 
 export function ImageShareToolbar({ count, busy, error, format, quality, stage, onFormat, onQuality, onSelectAll, onClear, onCancel, onGenerate }: {
   count: number; busy: boolean; error?: string; format: ConversationShareFormat; quality: ConversationShareQuality; stage: string
@@ -16,15 +17,24 @@ export function ImageShareToolbar({ count, busy, error, format, quality, stage, 
   onSelectAll: () => void; onClear: () => void; onCancel: () => void; onGenerate: () => void
 }) {
   const { t } = useTranslation(['chat', 'common'])
-  const selectClass = 'h-8 max-w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-fg)]'
+  const selectClass = 'h-8 w-auto max-w-full gap-2 px-2.5 text-xs'
   return <div data-image-share-toolbar className="mx-auto flex w-full max-w-[var(--layout-message-max-w)] flex-col gap-3 px-3 py-3 sm:px-6 lg:px-8" aria-busy={busy}>
     <div className="flex items-start gap-3">
       <div className="flex min-w-0 flex-1 flex-col gap-1"><span className="text-sm font-medium">{t('chat:shareImage.selected', { count })}</span><span role={error ? 'alert' : 'status'} className={`text-xs ${error ? 'text-[var(--color-danger)]' : 'text-[var(--color-fg-muted)]'}`}>{error || t(busy ? `chat:shareFile.${stage}` : 'chat:shareImage.selectHint')}</span></div>
       <Button variant="ghost" size="sm" onClick={onCancel} leadingIcon={<X size={14} />}>{t('common:actions.cancel')}</Button>
     </div>
     <div className="flex flex-wrap items-center gap-2">
-      <select aria-label={t('chat:shareFile.format')} className={selectClass} disabled={busy} value={format} onChange={event => onFormat(event.target.value as ConversationShareFormat)}>{formats.map(value => <option key={value} value={value}>{t(`chat:shareFile.${value}`)}</option>)}</select>
-      {format === 'image' && <select aria-label={t('chat:shareFile.quality')} className={selectClass} disabled={busy} value={quality} onChange={event => onQuality(event.target.value as ConversationShareQuality)}><option value="standard">{t('chat:shareFile.standard')}</option><option value="high">{t('chat:shareFile.high')}</option></select>}
+      <Select disabled={busy} value={format} onValueChange={value => onFormat(value as ConversationShareFormat)}>
+        <SelectTrigger aria-label={t('chat:shareFile.format')} className={selectClass}><SelectValue /></SelectTrigger>
+        <SelectContent onEscapeKeyDown={event => event.stopPropagation()}>{formats.map(value => <SelectItem key={value} value={value}>{t(`chat:shareFile.${value}`)}</SelectItem>)}</SelectContent>
+      </Select>
+      {format === 'image' && <Select disabled={busy} value={quality} onValueChange={value => onQuality(value as ConversationShareQuality)}>
+        <SelectTrigger aria-label={t('chat:shareFile.quality')} className={selectClass}><SelectValue /></SelectTrigger>
+        <SelectContent onEscapeKeyDown={event => event.stopPropagation()}>
+          <SelectItem value="standard">{t('chat:shareFile.standard')}</SelectItem>
+          <SelectItem value="high">{t('chat:shareFile.high')}</SelectItem>
+        </SelectContent>
+      </Select>}
       <Button variant="ghost" size="sm" disabled={busy} onClick={onSelectAll}>{t('chat:shareImage.selectAll')}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !count} onClick={onClear}>{t('chat:shareImage.clear')}</Button>
       <span className="flex-1" />
@@ -43,7 +53,7 @@ export function ConversationImagePreviewDialog({ pages, format, onClose, onBack 
     let active = true
     setData(null); setText('')
     if (current && format === 'pdf') void current.blob.arrayBuffer().then(value => { if (active) setData(value) })
-    if (current && (format === 'json' || format === 'txt')) void current.blob.slice(0, 200_000).text().then(value => { if (active) setText(value + (current.blob.size > 200_000 ? `\n\n${t('shareFile.previewTruncated')}` : '')) })
+    if (current && format === 'txt') void current.blob.slice(0, 200_000).text().then(value => { if (active) setText(value + (current.blob.size > 200_000 ? `\n\n${t('shareFile.previewTruncated')}` : '')) })
     return () => { active = false }
   }, [current, format, t])
   const file = current && typeof File !== 'undefined' ? new File([current.blob], current.filename, { type: current.blob.type }) : null
@@ -61,7 +71,7 @@ export function ConversationImagePreviewDialog({ pages, format, onClose, onBack 
       <DialogBody className="bg-[var(--color-bg-muted)] px-4 py-4">
         {current && format === 'image' && <img src={current.url} alt={t('shareImage.previewAlt')} className="mx-auto block h-auto w-full max-w-[760px] rounded-lg" />}
         {current && format === 'pdf' && data && <Suspense fallback={<p role="status">{t('shareFile.preparing')}</p>}><PdfPreview data={data} name={current.filename} className="h-[60dvh] min-h-64" labels={{ loading: t('shareFile.preparing'), previousPage: t('shareFile.previousPage'), nextPage: t('shareFile.nextPage'), page: page => String(page), of: total => `/ ${total}`, zoomOut: t('shareFile.zoomOut'), zoomIn: t('shareFile.zoomIn'), fitWidth: t('shareFile.fitWidth'), renderFailed: t('shareFile.previewFailed') }} /></Suspense>}
-        {(format === 'json' || format === 'txt') && <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed" data-share-text-preview>{text}</pre>}
+        {format === 'txt' && <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed" data-share-text-preview>{text}</pre>}
       </DialogBody>
       <DialogFooter className="flex-wrap border-0">
         <Button variant="ghost" size="sm" onClick={onBack}>{t('shareImage.reselect')}</Button>

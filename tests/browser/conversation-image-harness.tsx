@@ -10,6 +10,8 @@ import { useAuth } from '@/store/auth'
 import { useConversations } from '@/store/conversations'
 import { useModels } from '@/store/models'
 import type { Conversation, Message } from '@/types/chat'
+import { complexTable } from '../frontend/fixtures/generative-table'
+import { nestedComponents } from '../frontend/fixtures/generative-nesting'
 
 const now = Date.now()
 const message = (id: string, role: Message['role'], content: string): Message => ({ id, role, content, createdAt: now })
@@ -24,7 +26,7 @@ const fixture: Conversation = {
     message('first-assistant', 'assistant', '## Selected answer\n\nThe answer contains **bold text**, $x^2 + y^2$, and a table.\n\n| Option | Details |\n| --- | --- |\n| Browser | No installation required |\n| Desktop | macOS, Windows and Linux |\n\n```js\nconst example = "This is a deliberately long line that should wrap in the exported image rather than disappear beyond the right edge."\n```\n\n![Aivory icon](/icon-512.png)'),
     message('excluded-user', 'user', 'EXCLUDED PRIVATE MESSAGE'),
     message('excluded-assistant', 'assistant', 'EXCLUDED PRIVATE ANSWER'),
-    message('visual-assistant', 'assistant', '```aivory-ui\n' + gui + '\n```'),
+    message('visual-assistant', 'assistant', '```aivory-ui\n' + gui + '\n```\n\n' + complexTable + '\n\n' + nestedComponents),
   ],
 }
 useAuth.setState({ user: { id: 'test-user', role: 'admin', email: 'test@example.test', displayName: 'Test' } as never, status: 'authenticated' })
@@ -39,6 +41,27 @@ Reflect.set(window, '__IMAGE_SHARE__', {
     const original = HTMLCanvasElement.prototype.toBlob
     HTMLCanvasElement.prototype.toBlob = function (callback) { HTMLCanvasElement.prototype.toBlob = original; callback(null) }
   },
+})
+window.addEventListener('aivory:conversation-export', () => {
+  const root = document.querySelector<HTMLElement>('[data-image-export-root]')
+  const svg = root?.querySelector<SVGSVGElement>('.gui-markup-svg[aria-label="季度趋势"]')
+  if (root && svg) {
+    const parent = root.getBoundingClientRect(), drawing = svg.getBoundingClientRect()
+    Reflect.set(window, '__SVG_EXPORT__', { x: drawing.x - parent.x, y: drawing.y - parent.y, width: drawing.width, height: drawing.height, rootWidth: parent.width })
+  }
+  const table = document.querySelector<HTMLTableElement>('.conversation-image-document .gui-markup-table > table')
+  if (!table?.tHead) return
+  Reflect.set(window, '__TABLE_EXPORT__', {
+    tableWidth: table.getBoundingClientRect().width,
+    parentWidth: table.parentElement!.getBoundingClientRect().width,
+    nameWidth: table.tHead.rows[0].cells[0].getBoundingClientRect().width,
+    scoreWidth: table.tHead.rows[1].cells[0].getBoundingClientRect().width,
+    columnSpan: table.tBodies[0].rows[0].cells[0].colSpan,
+    rowSpan: table.tBodies[0].rows[1].cells[1].rowSpan,
+    total: table.tFoot?.textContent,
+    columns: table.querySelectorAll('col').length,
+    expanded: Array.from(table.querySelectorAll('col')).every(col => col.span === 1),
+  })
 })
 new MutationObserver(records => {
   for (const record of records) for (const node of record.addedNodes) {
