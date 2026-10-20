@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import i18n from '@/i18n'
 import '@/styles/globals.css'
+import 'katex/dist/katex.min.css'
 import { Composer } from '@/components/chat/composer'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAuth } from '@/store/auth'
@@ -23,7 +24,7 @@ function Harness() {
   }, [])
   return <MemoryRouter initialEntries={['/chat/composer-test']}><TooltipProvider><main style={{ display: 'flex', height: '100dvh', padding: 24, flexDirection: 'column', justifyContent: layout === 'home' ? 'center' : 'flex-end', alignItems: 'center' }}>
     <div style={{ width: '100%', maxWidth: 720 }}>
-      <Composer modelId="composer-model" onModelChange={() => {}} onSubmit={(_text, _attachments, options) => Reflect.set(window, '__COMPOSER_SUBMIT__', options)} kbIds={kbIds} onKBChange={setKBIds} fillRequest={fillRequest} menuSide={layout === 'home' ? 'bottom' : 'top'} />
+      <Composer modelId="composer-model" onModelChange={() => {}} onSubmit={(text, attachments, options) => { Reflect.set(window, '__COMPOSER_MESSAGE__', { text, attachments }); Reflect.set(window, '__COMPOSER_SUBMIT__', options) }} kbIds={kbIds} onKBChange={setKBIds} fillRequest={fillRequest} menuSide={layout === 'home' ? 'bottom' : 'top'} />
     </div>
   </main></TooltipProvider></MemoryRouter>
 }

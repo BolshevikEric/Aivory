@@ -1840,7 +1840,6 @@ export function Composer({
 
   const handleFormulaOpenChange = (open: boolean) => {
     setFormulaOpen(open)
-    if (!open) requestAnimationFrame(() => ref.current?.focus())
   }
 
   const uploading = useMemo(() => attachments.some((a) => a.uploading), [attachments])
@@ -4048,6 +4047,7 @@ export function Composer({
               align="start"
               sideOffset={10}
               collisionPadding={12}
+              onCloseAutoFocus={event => { if (formulaOpen) event.preventDefault() }}
               className="min-w-0 overflow-y-auto overscroll-contain p-1.5 scrollbar-thin"
               style={{
                 width: 'min(20rem, calc(100vw - var(--safe-left) - var(--safe-right) - 1.5rem))',
@@ -4338,6 +4338,7 @@ export function Composer({
         initialLatex={formulaTarget?.latex ?? ''}
         editing={Boolean(formulaTarget)}
         onOpenChange={handleFormulaOpenChange}
+        onAfterClose={() => ref.current?.focus()}
         onConfirm={(latex) => {
           ref.current?.setFormula(latex, formulaTarget, formulaSelectionRef.current)
           formulaSelectionRef.current = null

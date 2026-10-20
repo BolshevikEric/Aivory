@@ -160,6 +160,7 @@ interface FormulaEditorDialogProps {
   initialLatex?: string
   editing?: boolean
   onOpenChange: (open: boolean) => void
+  onAfterClose?: () => void
   onConfirm: (latex: string) => void
 }
 
@@ -168,6 +169,7 @@ export function FormulaEditorDialog({
   initialLatex = '',
   editing = false,
   onOpenChange,
+  onAfterClose,
   onConfirm,
 }: FormulaEditorDialogProps) {
   const { t, i18n } = useTranslation('chat')
@@ -274,6 +276,7 @@ export function FormulaEditorDialog({
     const host = hostElement
     if (!host) return
     let cancelled = false
+    let focusFrame = 0
     let mountedMathfield: MathfieldElement | null = null
     let accessibilityController: ReturnType<typeof installFormulaMathfieldAccessibility> | null = null
     let virtualKeyboard: typeof window.mathVirtualKeyboard | undefined
@@ -313,6 +316,11 @@ export function FormulaEditorDialog({
           accessibilityController?.sync()
         }
         mathfield.addEventListener('input', onInput)
+        mathfield.addEventListener('focusin', () => {
+          if (cancelled || !mathfield.shadowRoot?.activeElement) return
+          setLoading(false)
+          accessibilityController?.sync()
+        }, { once: true })
         host.replaceChildren(mathfield)
         mathfieldRef.current = mathfield
         accessibilityController = installFormulaMathfieldAccessibility(mathfield, () => ({
@@ -357,19 +365,26 @@ export function FormulaEditorDialog({
           // footer remains above both the first frame and later layout changes.
           scheduleKeyboardInset()
         }
-        setLoading(false)
-        requestAnimationFrame(() => mathfield.focus())
+        // MathLive defers focus to its internal input. Keep loading until its
+        // focusin event, otherwise early keystrokes go to the previous surface.
+        focusFrame = requestAnimationFrame(() => {
+          if (cancelled) return
+          mathfield.focus()
+        })
       })
       .catch(() => {
         if (cancelled) return
         setLoading(false)
         setLoadFailed(true)
         setErrorKey('loadFailed')
-        requestAnimationFrame(() => fallbackFocusRef.current?.focus())
+        focusFrame = requestAnimationFrame(() => {
+          if (!cancelled) fallbackFocusRef.current?.focus()
+        })
       })
 
     return () => {
       cancelled = true
+      cancelAnimationFrame(focusFrame)
       accessibilityController?.dispose()
       if (mathfieldAccessibilityRef.current === accessibilityController) {
         mathfieldAccessibilityRef.current = null
@@ -461,8 +476,12 @@ export function FormulaEditorDialog({
         } as CSSProperties}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
-          requestAnimationFrame(() => fallbackFocusRef.current?.focus())
+          if (!mathfieldRef.current) fallbackFocusRef.current?.focus()
         }}
+        onCloseAutoFocus={onAfterClose ? (event) => {
+          event.preventDefault()
+          onAfterClose()
+        } : undefined}
         onPointerDownOutside={(event) => {
           if (isMathLiveOverlay(event.target)) event.preventDefault()
         }}

@@ -114,8 +114,11 @@
   bottom: calc(100dvh - var(--surface-viewport-top) - var(--surface-viewport-height));
 }
 
-@media (max-width: 639px), (max-height: 520px), (pointer: coarse) {
-  .viewport-dialog > button[aria-label],
+@media (max-width: 639px),
+(max-height: 520px),
+(pointer: coarse) {
+
+  .viewport-dialog>button[aria-label],
   .viewport-dialog [data-slot='dialog-footer'] button {
     min-width: 2.75rem;
     min-height: 2.75rem;
