@@ -270,6 +270,11 @@ SSE 心跳、流恢复窗口、生成时长上限、分页与搜索上限、消�
 | 环境变量 | 类型 | 默认值 | 位置 | 说明 |
 | --- | --- | --- | --- | --- |
 | `AIVORY_API_LIMIT_2` | `int` | `20` | `api/conversations_handlers.go:26` | list-conversations 接口在请求未提供 limit 参数时的默认分页大小。 |
+| `AIVORY_MAP_GEOCODER_URL` | `string` | `https://photon.komoot.io/api/` | `api/router.go` | 内联地图的 Photon 兼容地址查询接口；持续高流量请改用自建 Photon。每进程最多每秒查询一次未缓存地址，成功缓存 7 天、无结果缓存 15 分钟，最多保留 2048 项。公开接口每 IP 每分钟最多 60 次请求。默认服务无需 API Key。 |
+| `VITE_MAP_TILE_URL` | `string` | `https://tile.openstreetmap.de/{z}/{x}/{y}.png` | `src/components/chat/generative-map.tsx` | 构建时的 Leaflet 底图模板，可替换为适合部署环境的地图服务或自建瓦片服务；默认使用 FOSSGIS 托管的 OpenStreetMap 德国社区瓦片。 |
+| `VITE_MAP_TILE_ATTRIBUTION` | `string` | `© OpenStreetMap · FOSSGIS` | `src/components/chat/generative-map.tsx` | 自定义瓦片服务的纯文本署名，构建时生效；留空时显示默认服务的署名链接。 |
+
+地图服务在 **管理员后台 → 工具 → 地图服务** 中设置。`map_provider` 默认 `osm`（Leaflet/OpenStreetMap 底图和 Photon 地址查询，无需 Key）。选择 `amap` 后，填写 `map_amap_web_api_key`（Web 服务）、`map_amap_js_api_key`（Web 端 JS API）和 `map_amap_security_secret`（JS Key 配套的 `securityJsCode`），地址解析、地点搜索和 JS API 2.0 地图渲染均使用高德。请在高德控制台为 JS Key 配置网站域名白名单。Web 服务 Key 与安全密钥保留在服务端；浏览器只获取公开的 JS Key，使用 `/api/public/maps` 下内置的 `/_AMapService` 代理，无需额外配置 Nginx。上面的 Photon 和瓦片环境变量仅作用于 `osm`。高德出错时不会切换到 Photon。标签坐标默认 WGS84，高德原生坐标使用 `map-point coordinate-system="gcj02"`；渲染边界负责坐标转换，地址缓存按服务商和 Web 服务 Key 隔离。
 | `AIVORY_API_LIMIT_3` | `int` | `500` | `api/conversations_handlers.go:32` | 会话列表接口 ?limit 查询参数的硬性上限，超出即钳制到此值。 |
 | `AIVORY_API_SEARCH_MESSAGE_HIT_LIMIT` | `int` | `40` | `api/conversations_handlers.go:99` | 会话搜索接口返回的消息正文命中数上限（标题命中另有单独上限）。 |
 | `AIVORY_API_IMPORT_MAX_CONVERSATIONS` | `int` | `1000` | `api/conversations_handlers.go:164` | 单次导入请求可创建的会话数上限，超出则拒绝导入。 |

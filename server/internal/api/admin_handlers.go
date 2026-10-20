@@ -1588,6 +1588,7 @@ var settingsKeys = []string{
 	// search_engines is a comma-separated list of SearXNG engine names or
 	// shortcuts. Empty means that SearXNG chooses its enabled defaults.
 	"search_provider", "search_base_url", "search_api_key", "search_engines", "search_result_count",
+	"map_provider", "map_amap_web_api_key", "map_amap_js_api_key", "map_amap_security_secret",
 	// §4.6 upload safety — extension allowlist. Stored as a single
 	// comma-separated string (e.g. "pdf,docx,txt,png,jpg"). Empty string means
 	// "use the safe default allowlist" (see api.defaultUploadExtensions).
@@ -1787,6 +1788,7 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 	}
 	writes := make([]settingWrite, 0, len(body))
 	rerankWrites := make(map[string]json.RawMessage, 4)
+	mapWrites := make(map[string]json.RawMessage, 4)
 	for _, k := range settingsKeys {
 		if v, ok := body[k]; ok {
 			if skipNull && strings.TrimSpace(string(v)) == "null" {
@@ -2063,6 +2065,26 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 					return 0, errInvalidInput
 				}
 				v, _ = json.Marshal(enabled)
+			case "map_provider":
+				var provider string
+				if json.Unmarshal(v, &provider) != nil {
+					return 0, errInvalidInput
+				}
+				provider = strings.TrimSpace(provider)
+				if provider != "osm" && provider != "amap" {
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(provider)
+			case "map_amap_web_api_key", "map_amap_js_api_key", "map_amap_security_secret":
+				var value string
+				if json.Unmarshal(v, &value) != nil {
+					return 0, errInvalidInput
+				}
+				value = strings.TrimSpace(value)
+				if value != "" && !amapCredential.MatchString(value) {
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(value)
 			case "search_result_count":
 				var count int
 				if json.Unmarshal(v, &count) != nil || count < 1 || count > 50 {
@@ -2118,7 +2140,21 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 			if strings.HasPrefix(k, "rag_rerank_") {
 				rerankWrites[k] = append(json.RawMessage(nil), v...)
 			}
+			if strings.HasPrefix(k, "map_") {
+				mapWrites[k] = v
+			}
 			writes = append(writes, settingWrite{key: k, value: append(json.RawMessage(nil), v...)})
+		}
+	}
+	if len(mapWrites) > 0 {
+		cfg := mapConfigFor(d)
+		for key, dst := range map[string]*string{"map_provider": &cfg.Provider, "map_amap_web_api_key": &cfg.WebKey, "map_amap_js_api_key": &cfg.JSKey, "map_amap_security_secret": &cfg.SecurityCode} {
+			if value, ok := mapWrites[key]; ok {
+				_ = json.Unmarshal(value, dst)
+			}
+		}
+		if !cfg.configured() {
+			return 0, errInvalidInput
 		}
 	}
 	if len(rerankWrites) > 0 {

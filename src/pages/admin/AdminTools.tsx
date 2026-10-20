@@ -33,6 +33,10 @@ const OWNED_KEYS = [
   'search_api_key',
   'search_engines',
   'search_result_count',
+  'map_provider',
+  'map_amap_web_api_key',
+  'map_amap_js_api_key',
+  'map_amap_security_secret',
   'sandbox_base_url',
   'sandbox_api_key',
   'sandbox_exec_timeout_sec',
@@ -143,6 +147,10 @@ export default function AdminTools() {
 
   async function save() {
     if (savingRef.current) return
+    if (readString('map_provider') === 'amap' && ['map_amap_web_api_key', 'map_amap_js_api_key', 'map_amap_security_secret'].some(key => !readString(key).trim())) {
+      toast.error(t('admin:tools.mapCredentialsRequired'))
+      return
+    }
     const searchResultCount = draft.search_result_count ?? 5
     if (readString('search_provider') === 'searxng' && (
       typeof searchResultCount !== 'number' || !Number.isInteger(searchResultCount) ||
@@ -466,6 +474,63 @@ export default function AdminTools() {
                     />
                   </Field>
                 )}
+              </div>
+            </SettingsBlock>
+          </SettingsSection>
+
+          <SettingsSection title={t('admin:tools.mapSection')} className="mb-0" bodyClassName="divide-y-0">
+            <SettingsBlock>
+              <div className="admin-form-grid admin-form-grid--pair">
+                <Field label={t('admin:tools.mapProvider')} htmlFor="map-provider">
+                  <Select value={readString('map_provider') || 'osm'} disabled={saving} onValueChange={value => setDraft(current => ({ ...current, map_provider: value }))}>
+                    <SelectTrigger id="map-provider"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="osm">{t('admin:tools.mapOSM')}</SelectItem>
+                      <SelectItem value="amap">{t('admin:tools.mapAMap')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {readString('map_provider') === 'amap' && <>
+                  <Field label={t('admin:tools.mapWebKey')} htmlFor="map-amap-web-key" hint={t('admin:tools.mapWebKeyHint')}>
+                    <Input
+                      id="map-amap-web-key"
+                      type="password"
+                      autoComplete="new-password"
+                      value={readString('map_amap_web_api_key')}
+                      disabled={saving}
+                      onChange={event => {
+                        const value = event.target.value
+                        setDraft(current => ({ ...current, map_amap_web_api_key: value }))
+                      }}
+                    />
+                  </Field>
+                  <Field label={t('admin:tools.mapJSKey')} htmlFor="map-amap-js-key" hint={t('admin:tools.mapJSKeyHint')}>
+                    <Input
+                      id="map-amap-js-key"
+                      type="password"
+                      autoComplete="new-password"
+                      value={readString('map_amap_js_api_key')}
+                      disabled={saving}
+                      onChange={event => {
+                        const value = event.target.value
+                        setDraft(current => ({ ...current, map_amap_js_api_key: value }))
+                      }}
+                    />
+                  </Field>
+                  <Field label={t('admin:tools.mapSecurityCode')} htmlFor="map-amap-security-code" hint={t('admin:tools.mapSecurityCodeHint')}>
+                    <Input
+                      id="map-amap-security-code"
+                      type="password"
+                      autoComplete="new-password"
+                      value={readString('map_amap_security_secret')}
+                      disabled={saving}
+                      onChange={event => {
+                        const value = event.target.value
+                        setDraft(current => ({ ...current, map_amap_security_secret: value }))
+                      }}
+                    />
+                  </Field>
+                </>}
               </div>
             </SettingsBlock>
           </SettingsSection>

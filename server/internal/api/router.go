@@ -209,6 +209,12 @@ func NewRouter(d Deps) http.Handler {
 	// Public operator contact + optional policy overrides. The handler exposes a
 	// strict three-field DTO rather than the administrator settings map.
 	mux.handle("GET", "/api/public/legal-config", wrap(d, legalConfigPublicHandler))
+	maps := newMapService(envcfg.Str("AIVORY_MAP_GEOCODER_URL", "https://photon.komoot.io/api/"))
+	mux.handle("GET", "/api/public/maps/config", wrap(d, publicMapConfig))
+	mux.handle("GET", "/api/public/maps/geocode", rateLimitedIP(d, "map_geocode", 60, time.Minute, wrap(d, maps.geocode)))
+	for _, suffix := range []string{"/v4/:service", "/v4/:service/:action", "/v3/:service/:action"} {
+		mux.handle("GET", "/api/public/maps/_AMapService"+suffix, rateLimitedIP(d, "map_sdk", 300, time.Minute, wrap(d, maps.proxy)))
+	}
 	mux.handle("GET", "/api/public/desktop-update", wrap(d, desktopUpdatePublicHandler))
 	mux.handle("GET", "/api/public/desktop-download", wrap(d, desktopDownloadPublicHandler))
 	mux.handle("GET", "/api/notifications", requireAuth(d, listSiteNotifications))

@@ -127,3 +127,32 @@ describe('AnySearch administrator configuration', () => {
     expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('search_base_url')
   })
 })
+
+describe('Administrator map provider configuration', () => {
+  it('defaults to the keyless provider with no credential fields', async () => {
+    await mount()
+    expect(container.querySelector('#map-provider')?.textContent).toBe('admin:tools.mapOSM')
+    expect(container.querySelector('#map-amap-web-key')).toBeNull()
+  })
+
+  it('loads masked AMap credentials and saves only the tools settings', async () => {
+    settings.mockResolvedValue({ map_provider: 'amap', map_amap_web_api_key: '••••••', map_amap_js_api_key: '••••••', map_amap_security_secret: '••••••', site_name: 'Other settings' })
+    await mount()
+    for (const id of ['map-amap-web-key', 'map-amap-js-key', 'map-amap-security-code']) expect(container.querySelector<HTMLInputElement>(`#${id}`)?.type).toBe('password')
+    const input = container.querySelector<HTMLInputElement>('#map-amap-web-key')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'replacement-key')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith({ map_provider: 'amap', map_amap_web_api_key: 'replacement-key', map_amap_js_api_key: '••••••', map_amap_security_secret: '••••••' })
+  })
+
+  it('validates all three required AMap credentials', async () => {
+    settings.mockResolvedValue({ map_provider: 'amap', map_amap_web_api_key: 'web-test', map_amap_js_api_key: '', map_amap_security_secret: '' })
+    await mount()
+    await save()
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(errorToast).toHaveBeenCalledWith('admin:tools.mapCredentialsRequired')
+  })
+})
