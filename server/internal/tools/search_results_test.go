@@ -153,7 +153,7 @@ func TestSearchBodyKeepsFormattingWithoutDuplicatingFallbackExcerpt(t *testing.T
 func TestWebSearchBatchWithoutConfiguredBackendKeepsPlaceholder(t *testing.T) {
 	tool := &webSearchTool{}
 	out, citations, err := tool.Execute(context.Background(), []byte(`{"queries":["alpha","beta"]}`), nil)
-	if err != nil || len(citations) != 1 || !strings.Contains(out, "Aivory local-only mode") {
+	if err != nil || len(citations) != 0 || !strings.Contains(out, "Search not yet configured") {
 		t.Fatalf("batch fallback failed: out=%q citations=%+v err=%v", out, citations, err)
 	}
 }

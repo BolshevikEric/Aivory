@@ -200,6 +200,106 @@ func TestSearchEngineSettingNormalizesAndRejectsUnsafeNames(t *testing.T) {
 	}
 }
 
+func TestSearchProviderSettingAcceptsKnownProvidersAndRejectsUnknown(t *testing.T) {
+	db := openMigrated(t, filepath.Join(t.TempDir(), "search-provider-settings.db"))
+	defer db.Close()
+	d := Deps{DB: db}
+	patch := func(provider string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPatch, "/api/admin/settings", strings.NewReader(`{"search_provider":"`+provider+`"}`))
+		req.Header.Set("content-type", "application/json")
+		rec := httptest.NewRecorder()
+		adminSettingsSet(d, rec, req)
+		return rec
+	}
+	readStored := func() string {
+		t.Helper()
+		var stored string
+		if err := db.QueryRow(`SELECT value FROM settings WHERE key=?`, "search_provider").Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		return stored
+	}
+	for _, provider := range []string{"serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo", "ddg", "yuanbao", "auto", ""} {
+		if rec := patch(provider); rec.Code != http.StatusOK {
+			t.Fatalf("valid provider %q: status=%d body=%s", provider, rec.Code, rec.Body.String())
+		}
+	}
+	// A typo must be rejected at write time; otherwise search silently degrades
+	// to the "not configured" placeholder with no diagnostic anywhere.
+	for _, provider := range []string{"searxngg", "google", "https://search.example.test", "SERPER KEY"} {
+		if rec := patch(provider); rec.Code != http.StatusBadRequest {
+			t.Fatalf("invalid provider %q: status=%d body=%s", provider, rec.Code, rec.Body.String())
+		}
+		if stored := readStored(); stored != `""` {
+			t.Fatalf("invalid provider %q changed the setting to %q", provider, stored)
+		}
+	}
+	// Known values are normalized to lower case before they are stored.
+	if rec := patch(" Brave "); rec.Code != http.StatusOK {
+		t.Fatalf("mixed-case provider status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if stored := readStored(); stored != `"brave"` {
+		t.Fatalf("provider was not normalized: %q", stored)
+	}
+}
+
+func TestSearchSecretSettingsAreMaskedAndTrimmed(t *testing.T) {
+	db := openMigrated(t, filepath.Join(t.TempDir(), "search-secret-settings.db"))
+	defer db.Close()
+	d := Deps{DB: db}
+	patch := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPatch, "/api/admin/settings", strings.NewReader(body))
+		req.Header.Set("content-type", "application/json")
+		rec := httptest.NewRecorder()
+		adminSettingsSet(d, rec, req)
+		return rec
+	}
+	readStored := func(key string) string {
+		t.Helper()
+		var stored string
+		if err := db.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		return stored
+	}
+
+	if rec := patch(`{"search_secret_id":"  AKIDexample  ","search_secret_key":"  secret-value  "}`); rec.Code != http.StatusOK {
+		t.Fatalf("valid credentials status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for key, want := range map[string]string{
+		"search_secret_id":  `"AKIDexample"`,
+		"search_secret_key": `"secret-value"`,
+	} {
+		if got := readStored(key); got != want {
+			t.Fatalf("%s = %q, want %q", key, got, want)
+		}
+	}
+
+	// GET must never return either credential in plaintext.
+	get := httptest.NewRecorder()
+	adminSettingsGet(d, get, httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil))
+	var listed map[string]json.RawMessage
+	if err := json.Unmarshal(get.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"search_secret_id", "search_secret_key"} {
+		var masked string
+		if err := json.Unmarshal(listed[key], &masked); err != nil || masked != "••••••" {
+			t.Fatalf("%s was not masked: %q err=%v", key, masked, err)
+		}
+	}
+
+	// Echoing the mask back (an untouched form field) is a no-op.
+	if rec := patch(`{"search_secret_id":"••••••","search_secret_key":"••••••"}`); rec.Code != http.StatusOK {
+		t.Fatalf("mask echo status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := readStored("search_secret_key"); got != `"secret-value"` {
+		t.Fatalf("mask echo overwrote the stored secret: %q", got)
+	}
+}
+
 func TestSearchResultCountSettingPersistsAndRejectsInvalidValues(t *testing.T) {
 	db := openMigrated(t, filepath.Join(t.TempDir(), "search-result-count-settings.db"))
 	defer db.Close()

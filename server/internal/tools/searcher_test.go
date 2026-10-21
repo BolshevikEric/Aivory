@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"aivory/server/internal/llm"
 	"aivory/server/internal/store"
 )
 
@@ -210,10 +211,10 @@ func TestSearxngGenuineEmptyIsNotAnError(t *testing.T) {
 }
 
 func TestNewSearcherTavilyRequiresAPIKey(t *testing.T) {
-	if got := newSearcher("tavily", "", ""); got != nil {
+	if got := newSearcher("tavily", "", "", "", ""); got != nil {
 		t.Fatalf("tavily without key should be nil, got %#v", got)
 	}
-	if _, ok := newSearcher("tavily", "tvly-test", "").(*tavilySearcher); !ok {
+	if _, ok := newSearcher("tavily", "tvly-test", "", "", "").(*tavilySearcher); !ok {
 		t.Fatal("tavily with key should build a tavilySearcher")
 	}
 }
@@ -341,13 +342,13 @@ func ddgHTMLResponse(body string) *http.Response {
 
 func TestNewSearcherDuckDuckGoNeedsNoConfig(t *testing.T) {
 	for _, name := range []string{"duckduckgo", "ddg", "DuckDuckGo"} {
-		if _, ok := newSearcher(name, "", "").(*duckduckgoSearcher); !ok {
+		if _, ok := newSearcher(name, "", "", "", "").(*duckduckgoSearcher); !ok {
 			t.Fatalf("provider %q should build a keyless duckduckgoSearcher", name)
 		}
 	}
 	// auto must NOT silently fall through to DuckDuckGo — sending user queries
 	// to a scraper target has to stay an explicit admin opt-in.
-	if got := newSearcher("auto", "", ""); got != nil {
+	if got := newSearcher("auto", "", "", "", ""); got != nil {
 		t.Fatalf(`auto with no key/url must stay nil (placeholder), got %#v`, got)
 	}
 }
@@ -587,7 +588,31 @@ func TestSettingsSearcherResolvesDuckDuckGoFromAdminSetting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search returned error: %v", err)
 	}
-	if len(citations) != 1 || !strings.Contains(text, "Search not yet configured") {
-		t.Fatalf("cleared provider must keep the placeholder, got %d citations: %q", len(citations), text)
+	// The placeholder must stay a plain notice: a fabricated citation would be
+	// rendered as a clickable source in the transcript.
+	if len(citations) != 0 || !llm.IsSearchNotConfiguredNotice(text) {
+		t.Fatalf("cleared provider must keep the notice and no citations, got %d citations: %q", len(citations), text)
+	}
+}
+
+func TestSerperErrorBodyIsBounded(t *testing.T) {
+	previous := toolHTTPClient
+	t.Cleanup(func() { toolHTTPClient = previous })
+	toolHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Header:     http.Header{"Content-Type": []string{"text/html"}},
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("upstream failure page ", 2048))),
+			Request:    req,
+		}, nil
+	})}
+
+	_, _, err := (&serperSearcher{apiKey: "test"}).Search(context.Background(), "q", 5)
+	if err == nil || !strings.Contains(err.Error(), "HTTP 500") {
+		t.Fatalf("serper error lost the status: %v", err)
+	}
+	// A provider error page must not be copied into the model context whole.
+	if len(err.Error()) > 4200 {
+		t.Fatalf("serper error body was not bounded: %d bytes", len(err.Error()))
 	}
 }

@@ -218,11 +218,8 @@ func (t *webSearchTool) Execute(ctx context.Context, input []byte, _ *llm.ToolCo
 
 func (t *webSearchTool) searchOne(ctx context.Context, query string, topK int, options webSearchOptions) (string, []llm.Citation, error) {
 	if t.searcher == nil {
-		// Fallback "result" so the model can still respond gracefully.
-		fake := []llm.Citation{
-			{ID: "w1", Index: 1, Title: "Aivory local-only mode", URL: "https://example.com/aivory-local-mode", Snippet: "No SEARCH_API_KEY configured. Configure one to enable real aivory_web_search results.", Source: "web"},
-		}
-		return "Search not yet configured. Reply based on training knowledge or ask the user to configure SEARCH_API_KEY.", fake, nil
+		// No citation here: a placeholder source would render as a real link.
+		return llm.SearchNotConfiguredNotice, nil, nil
 	}
 	return searchWithOptions(ctx, t.searcher, query, topK, options)
 }

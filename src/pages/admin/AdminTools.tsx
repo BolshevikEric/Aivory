@@ -31,6 +31,8 @@ const OWNED_KEYS = [
   'search_provider',
   'search_base_url',
   'search_api_key',
+  'search_secret_id',
+  'search_secret_key',
   'search_engines',
   'search_result_count',
   'map_provider',
@@ -399,6 +401,7 @@ export default function AdminTools() {
                       <SelectItem value="brave">{t('admin:settings.fields.searchBrave')}</SelectItem>
                       <SelectItem value="tavily">{t('admin:settings.fields.searchTavily')}</SelectItem>
                       <SelectItem value="anysearch">{t('admin:settings.fields.searchAnysearch')}</SelectItem>
+                      <SelectItem value="yuanbao">{t('admin:settings.fields.searchYuanbao')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
@@ -449,6 +452,38 @@ export default function AdminTools() {
                           ...draft,
                           search_result_count: e.target.value === '' ? '' : Number(e.target.value),
                         })}
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {searchProvider === 'yuanbao' && (
+                  <>
+                    <Field
+                      label={t('admin:settings.fields.searchSecretId')}
+                      htmlFor="search-secret-id"
+                      hint={t('admin:settings.fields.searchSecretHint')}
+                    >
+                      <Input
+                        id="search-secret-id"
+                        type="password"
+                        autoComplete="off"
+                        value={readString('search_secret_id')}
+                        disabled={saving}
+                        onChange={(e) => setDraft((current) => ({ ...current, search_secret_id: e.target.value }))}
+                      />
+                    </Field>
+                    <Field
+                      label={t('admin:settings.fields.searchSecretKey')}
+                      htmlFor="search-secret-key"
+                    >
+                      <Input
+                        id="search-secret-key"
+                        type="password"
+                        autoComplete="new-password"
+                        value={readString('search_secret_key')}
+                        disabled={saving}
+                        onChange={(e) => setDraft((current) => ({ ...current, search_secret_key: e.target.value }))}
                       />
                     </Field>
                   </>

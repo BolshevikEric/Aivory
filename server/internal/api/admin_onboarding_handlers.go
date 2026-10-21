@@ -331,7 +331,8 @@ func onboardingSettingString(db *sql.DB, key string) (string, error) {
 // onboardingSearchReady mirrors the provider requirements in settingsSearcher:
 // Serper, Brave, and Tavily need a key; SearXNG needs an endpoint; DuckDuckGo
 // is the free keyless channel; AnySearch supports anonymous calls at its default
-// endpoint; auto can use either key or endpoint.
+// endpoint; Yuanbao needs the Tencent Cloud SecretId/SecretKey pair; auto can use
+// either key or endpoint.
 // A present admin setting deliberately overrides its environment fallback,
 // including an empty value, just as the live tool resolver does.
 func onboardingSearchReady(d Deps) (bool, error) {
@@ -347,11 +348,21 @@ func onboardingSearchReady(d Deps) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	secretID, err := onboardingSettingStringWithFallback(d.DB, "search_secret_id", d.Config.SearchSecretID)
+	if err != nil {
+		return false, err
+	}
+	secretKey, err := onboardingSettingStringWithFallback(d.DB, "search_secret_key", d.Config.SearchSecretKey)
+	if err != nil {
+		return false, err
+	}
 	switch strings.ToLower(provider) {
 	case "serper", "brave", "tavily":
 		return apiKey != "", nil
 	case "searxng":
 		return baseURL != "", nil
+	case "yuanbao":
+		return secretID != "" && secretKey != "", nil
 	case "duckduckgo", "ddg", "anysearch":
 		return true, nil
 	case "", "auto":

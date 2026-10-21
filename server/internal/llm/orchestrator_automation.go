@@ -472,10 +472,10 @@ func (o *Orchestrator) forcedWebSearch(ctx context.Context, req RunRequest, conv
 			onEvent(SseEvent{Type: "tool_result", Name: toolnames.AivoryWebSearch, ID: id, Summary: "search failed", Status: "error"})
 			continue
 		}
-		// The searcher returns this exact sentence when no backend is configured
+		// The searcher returns this exact notice when no backend is configured
 		// (settings + env both empty). Injecting that placeholder would only add
 		// noise — stop and let the model answer from training knowledge.
-		if strings.HasPrefix(out, "Search not yet configured") {
+		if IsSearchNotConfiguredNotice(out) {
 			onEvent(SseEvent{Type: "tool_result", Name: toolnames.AivoryWebSearch, ID: id, Summary: "search not configured", Status: "error"})
 			return "", nil
 		}

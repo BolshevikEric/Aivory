@@ -11,23 +11,30 @@ import (
 )
 
 // settingsSearcher is a thin Searcher that re-resolves provider + base URL +
-// api key + optional SearXNG engine selection from admin settings on every call (§4.4). Mirrors settingsSandbox:
-// admin edits take effect on the very next aivory_web_search invocation, no restart.
+// credentials + optional SearXNG engine selection from admin settings on every
+// call (§4.4). Mirrors settingsSandbox: admin edits take effect on the very next
+// aivory_web_search invocation, no restart.
 //
 // Resolution priority:
-//  1. admin settings (`search_provider` / `search_base_url` / `search_api_key`)
+//  1. admin settings (`search_provider` / `search_base_url` / `search_api_key` /
+//     `search_secret_id` / `search_secret_key`)
 //  2. env-derived fallback values supplied to the constructor
 //  3. nil — webSearchTool then returns its polite no-op placeholder
 //
 // DuckDuckGo is the free channel and needs nothing. SearXNG (self-hosted)
 // needs only `search_base_url`; `search_api_key` is optional. Serper / Brave
-// both require an API key. AnySearch also supports anonymous calls. `newSearcher` enforces those
-// provider-specific requirements so we don't duplicate the rules here.
+// both require an API key. AnySearch also supports anonymous calls. Yuanbao
+// requires the Tencent Cloud SecretId/SecretKey pair. `newSearcher` enforces
+// those provider-specific requirements so we don't duplicate the rules here.
 type settingsSearcher struct {
 	db          *sql.DB
 	fallbackPv  string
 	fallbackKey string
 	fallbackURL string
+	// Yuanbao credentials. Registry-supplied env values remain the fallback when
+	// the settings row has never been written, like every other search field.
+	fallbackSecretID  string
+	fallbackSecretKey string
 }
 
 func newSettingsSearcher(db *sql.DB, provider, apiKey, baseURL string) *settingsSearcher {
@@ -50,8 +57,10 @@ func (s *settingsSearcher) backend() Searcher {
 	provider := s.settingString("search_provider", s.fallbackPv)
 	baseURL := s.settingString("search_base_url", s.fallbackURL)
 	apiKey := s.settingString("search_api_key", s.fallbackKey)
+	secretID := s.settingString("search_secret_id", s.fallbackSecretID)
+	secretKey := s.settingString("search_secret_key", s.fallbackSecretKey)
 	engines := parseSearchEngines(s.settingString("search_engines", ""))
-	backend := newSearcher(provider, apiKey, baseURL, engines)
+	backend := newSearcher(provider, apiKey, baseURL, secretID, secretKey, engines)
 	if searxng, ok := backend.(*searxngSearcher); ok && s.db != nil {
 		if raw, err := store.GetSetting(s.db, "search_result_count"); err == nil {
 			var count int
@@ -73,16 +82,9 @@ func (s *settingsSearcher) searchOptionsProperties() map[string]any {
 func (s *settingsSearcher) SearchWithOptions(ctx context.Context, query string, topK int, options webSearchOptions) (string, []llm.Citation, error) {
 	b := s.backend()
 	if b == nil {
-		// Mirror the original webSearchTool fallback so the model sees a
-		// consistent "search not configured" reply regardless of which leg of
-		// the resolver ran out of values.
-		return "Search not yet configured. Reply based on training knowledge or ask the admin to configure search in the admin panel.",
-			[]llm.Citation{{
-				ID: "w1", Index: 1, Title: "Aivory local-only mode",
-				URL:     "https://example.com/aivory-local-mode",
-				Snippet: "No search backend configured. Set provider + base URL / api key in admin settings to enable real aivory_web_search results.",
-				Source:  "web",
-			}}, nil
+		// Same notice the tool returns when its searcher is nil, so the model
+		// sees one consistent reply no matter which leg of the resolver gave up.
+		return llm.SearchNotConfiguredNotice, nil, nil
 	}
 	return searchWithOptions(ctx, b, query, topK, options)
 }
