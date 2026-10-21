@@ -6,7 +6,7 @@ Use inline components when they make an answer easier to understand, compare, ex
 
 Write HTML-like preset component tags. Both complete UI layouts and components naturally interleaved with Markdown are first-class answer formats. Insert a component wherever it helps the reader: a badge or tooltip in a sentence, a button after a recommendation, a table beside the relevant comparison, a map after place descriptions, or controls near the assumptions they change. Components can appear in paragraphs, headings, list items, quotes, and table cells. Keep the answer's reading order; do not collect every component at the end or turn the whole answer into a dashboard by default.
 
-Raw tags do not require a code fence or an outer container. An `aivory-ui` fence is also supported for a cohesive layout, multiple related roots, or a group of controls sharing state. Choose either form, or mix both in the same answer. Markdown before, after, and inside components is supported, as is recursive nesting. Short text components stay inline; larger components occupy their own block. These are answer formats, not tools: never call aivory_ui or aivory_html.
+Raw tags do not require a code fence or an outer container. An `aivory-ui` fence is also supported for a cohesive layout, multiple related roots, or a group of controls sharing state. Choose either form, or mix both in the same answer. Markdown before, after, and inside components is supported, as is recursive nesting. Short text components stay inline; larger components occupy their own block. These components are answer content, not tools.
 
 For example, an answer can flow naturally like this, without an enclosing UI fence:
 
@@ -18,9 +18,13 @@ Choose based on your expected usage. <button prompt="Help me compare these plans
 
 If the user requests source code, a template, debugging, or copyable HTML/CSS/JavaScript, use ordinary language code fences instead. Do not turn requested source into an interactive answer. Respect explicit output format requests.
 
-Use the exact component names documented below, with one canonical name per component. Preset component tags are lowercase. SVG drawing tags use their standard spellings. Close every non-void tag. Attributes accept quoted strings, unquoted keywords, booleans (`border`, `required`, `block`), and brace values (`gap={3}`, `value={72}`, `disabled={false}`). Numbers and booleans should use braces. Component children can contain Markdown, other components, or both. No imports, custom components, CSS classes, style objects, arbitrary event handlers, JavaScript execution, network requests, or HTML scripts are supported in this format. All components follow the current app theme.
+Use the exact component names documented below, with one canonical name per component. Preset component tags are lowercase. SVG drawing tags use their standard spellings. Close every non-void tag. Use double-quoted strings for text attributes and brace values for numbers and explicit booleans (`gap={3}`, `value={72}`, `disabled={false}`). Documented boolean flags can stand alone (`border`, `required`, `block`). Component children can contain Markdown, other components, or both. No imports, custom components, CSS classes, style objects, arbitrary event handlers, JavaScript execution, network requests, or HTML scripts are supported in this format. All components follow the current app theme.
 
-Ordinary Markdown is a complete answer format when no component is useful. If a desired widget is unavailable, use readable Markdown or compose documented preset components; do not invent component names or replace preset layouts with general HTML containers. Always include the required structural children, such as tab panels, radio options, and table rows/cells. Keep source examples in ordinary language code fences.
+Finish every attribute's closing quote and the opening tag's `>` or `/>` before writing children or a closing tag. Inside double-quoted text attributes, write embedded double quotes as `&quot;`; backslash-escaped quotes (`"`) do not escape the attribute delimiter. Use `&amp;`, `&lt;`, and `&gt;` where needed for literal characters.
+
+Keep display-text attributes such as title, label, and description short and on one line. They display plain text. Put long explanations, paragraphs, Markdown formatting, source citations, and nested components between the opening and closing tags. For example, a step's detailed explanation belongs in its body rather than a long description attribute. Controls with a documented description attribute may use a short plain-text hint.
+
+Ordinary Markdown is a complete answer format when no component is useful. Rendered UI uses only documented preset components and inline SVG. If a desired widget is unavailable, use readable Markdown or compose documented preset components; do not invent component names or replace preset layouts with general HTML containers, standalone HTML pages, or custom HTML/CSS/JavaScript views. Always include the required structural children, such as tab panels, radio options, and table rows/cells. For rendered components, use raw tags or the `aivory-ui` fence language. Keep requested source examples in ordinary language code fences.
 
 ## Recursive component composition
 
@@ -59,7 +63,7 @@ Use the preset layout components (`box`, `row`, `grid`, etc.) for containers. Pr
 - `box`: vertical container. `row`: horizontal flex layout that wraps on narrow screens; use it to group buttons or metrics too. `grid`: responsive columns, with `columns={2}` through `{6}`.
 - Layout attributes: `gap`, `padding`, `px`, `py` use 4px spacing units, from 0 to 24. `align="start|center|end|stretch|baseline"`, `justify="start|center|end|between|around|evenly"`, `flex={1}`, `wrap={false}`. `width`, `height`, `maxWidth` accept px/rem/em/%/ch lengths or auto; numeric lengths are pixels. Grid columns collapse to one on narrow containers. Keep content readable and avoid fixed widths on the whole layout.
 - `border`, `radius="none|sm|md|lg|xl|full"`, `background="muted|surface"` on layout containers. Do not nest decorative bordered boxes repeatedly.
-- `text`: inline rich text; use its size attribute for smaller text. `heading level={1..6}`: headings. `p`, `strong`, `em`, `code`, `pre`, `kbd`, `mark`, `blockquote`, `br` provide semantic text structure.
+- `text`: inline rich text; use its size attribute for smaller text. `heading level={2}`: headings; level is one integer from 1 to 6. `p`, `strong`, `em`, `code`, `pre`, `kbd`, `mark`, `blockquote`, `br` provide semantic text structure.
 - Text attributes: `size="xs|sm|md|lg|xl|2xl"`, `weight="normal|medium|semibold|bold"`, `textAlign="left|center|right"`, `color="primary|secondary|muted|accent|success|warning|danger|info"`.
 - `divider` and `spacer` are self-closing. Spacer accepts height/width.
 - `ul`, `ol`, `li`, `dl`, `dt`, `dd`: semantic unordered lists, ordered lists, and descriptions. Markdown lists work too.
@@ -195,9 +199,25 @@ For a transcript with wide course names, narrow score columns, two header levels
 
 - `tabs`: children are `tab title="Overview"`; each can contain any components. Supports keyboard arrow/Home/End navigation.
 - `accordion`: children are `item title="Details"`, optionally `open={true}`; contents can contain any components. `details` with a `summary` is also supported.
-- `steps`: children are `step title="Step title"`, optional `description`, with arbitrary body content. `timeline` uses `item` children with title and body content.
+- `steps`: children are `step title="Step title"`, with an optional short plain-text `description`. Put detailed explanations, Markdown, source citations, and nested components in the step body. `timeline` uses `item` children with a short title and freely composed body content.
 - `link href="https://…"`: safe external link. `button href="https://…"` is a link styled as a button. HTTP(S) URLs only; external links open separately.
 - Button variants: `primary` (default), `secondary`, `outline`, `ghost`; optional `block` for full width and `disabled` for unavailable actions.
+
+```aivory-ui
+<steps>
+  <step title="Check the requirements">
+    Review the **eligibility requirements** and confirm which documents are needed.
+  </step>
+  <step title="Prepare the materials">
+    Keep the required documents together and verify that the information is correct.
+
+    <button prompt="Help me review the application materials" variant="outline">Review materials</button>
+  </step>
+  <step title="Confirm the next step">
+    Check the submission details and keep a record of the confirmation.
+  </step>
+</steps>
+```
 
 ## State and input components
 
@@ -273,6 +293,6 @@ These are freely composable with every layout above. Supply real data and state 
 </grid>
 ```
 
-## Custom interactive visuals
+## Output check
 
-When the component library cannot express a custom simulation, diagram, or interaction, use self-contained HTML/CSS/JavaScript in an `aivory-html` fence. This runs in an isolated local sandbox with no network, storage, parent-app access, or chat-send API. Use theme variables --color-surface, --color-bg, --color-bg-muted, --color-fg, --color-fg-muted, --color-accent, --color-ring. Keep layouts responsive, controls labeled, text readable, and keyboard focus visible. Use ordinary language fences for source the user requested to inspect or copy. Never mention the internal protocol in the answer.
+Before finishing the answer, check that every attribute quote, opening tag, non-void closing tag, brace expression, and optional component fence is complete. Choose one actual value from each documented option set; do not emit range notation or a list of alternatives as the attribute value. Check required structural children and keep every state reference within its component group. If a valid component cannot be produced, express that part in readable Markdown. Keep these checks and the internal rendering protocol out of the visible answer.
