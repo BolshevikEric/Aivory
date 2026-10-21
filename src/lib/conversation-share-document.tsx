@@ -3,6 +3,7 @@ import { GenerativeUI } from '@/components/chat/generative-ui'
 import { blockMarkdownToHtml, tokenizeMarkdown, renderMathToHtml } from '@/lib/markdown'
 import type { ConversationShareLabels, ConversationShareSnapshot } from './conversation-share'
 import type { Message } from '@/types/chat'
+import { rewriteSandboxArtifactLinks } from './artifact-links'
 
 /** Small, data-driven export tree. No message actions, reasoning panels or chat layout. */
 export function renderConversationShareMessages(snapshot: ConversationShareSnapshot, originals: Message[], labels: ConversationShareLabels): HTMLElement[] {
@@ -15,7 +16,8 @@ export function renderConversationShareMessages(snapshot: ConversationShareSnaps
     const body = document.createElement('div')
     body.className = 'conversation-share-content'
     const content = document.createElement('div')
-    content.innerHTML = tokenizeMarkdown(message.content, message.role === 'user', message.role === 'assistant').map((block, index) => {
+    const source = rewriteSandboxArtifactLinks(message.content, message.artifacts)
+    content.innerHTML = tokenizeMarkdown(source, message.role === 'user', message.role === 'assistant').map((block, index) => {
       if (block.type === 'math') return renderMathToHtml(block.content, true) ?? escapeText(block.content)
       if (block.type === 'code' && (block.lang === 'aivory-ui' || block.lang === 'aivory-html')) {
         return block.lang === 'aivory-ui' ? renderToStaticMarkup(<GenerativeUI code={block.content} lang="aivory-ui" />, { identifierPrefix: `share-${message.id}-${index}-` }) : `<p>${escapeText(labels.interactive)}</p>`

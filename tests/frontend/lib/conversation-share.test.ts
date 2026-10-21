@@ -6,6 +6,7 @@ import type { Conversation, Message } from '@/types/chat'
 import { complexTable } from '../fixtures/generative-table'
 import { nestedComponents } from '../fixtures/generative-nesting'
 import { sampleMap, samplePlaces } from '../fixtures/generative-map'
+import { recoveredComponents, evolvingState } from '../fixtures/generative-robustness'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 
@@ -67,6 +68,27 @@ describe('selected conversation file sharing', () => {
     expect(row.querySelector('button,iframe,script')).toBeNull()
     expect(row.textContent).toContain('Choose')
     expect(row.textContent).toContain('Inline spacing')
+  })
+  it('resolves generated image and document references in the static export tree', () => {
+    const rich = { ...conversation, messages: [message('artifacts', '[Download](attachment://report.docx)\n\n<card><image src="attachment://diagram.png"/></card>', { artifacts: [
+      { id: 'report', filename: 'report.docx', url: '/api/artifacts/report', mimeType: 'application/octet-stream' },
+      { id: 'diagram', filename: 'diagram.png', url: '/api/artifacts/diagram', mimeType: 'image/png' },
+    ] })] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['artifacts']))
+    rich.messages[0].artifacts![0].url = '/api/artifacts/changed-after-snapshot'
+    const [row] = renderConversationShareMessages(snapshot, rich.messages, labels)
+    expect(row.querySelector('a')?.getAttribute('href')).toBe('/api/artifacts/report')
+    expect(row.querySelector('article img')?.getAttribute('src')).toBe('/api/artifacts/diagram')
+  })
+  it('preserves recovered components and literal expressions in static exports', () => {
+    const rich = { ...conversation, messages: [message('recovered', recoveredComponents), message('state', evolvingState)] }
+    const snapshot = createConversationShareSnapshot(rich, new Set(['recovered', 'state']))
+    const rows = renderConversationShareMessages(snapshot, rich.messages, labels)
+    expect(rows[0].textContent).toContain('Result: Pending')
+    expect(rows[0].querySelector('.gui-markup-badge')?.textContent).toBe('Available')
+    expect(rows[1].querySelector('code')?.textContent).toBe('{done}')
+    expect(rows[1].textContent).toContain('Notes: Draft')
+    for (const row of rows) expect(row.querySelector('script,style,iframe,button,input,foreignObject')).toBeNull()
   })
   it('retains complex table columns and spans in the static image/PDF tree', () => {
     const rich = { ...conversation, messages: [message('transcript', complexTable)] }

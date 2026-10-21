@@ -239,7 +239,7 @@ export default function SharedConversation() {
                         <>
                           {text ? (
                             <div className="w-full text-[length:var(--text-chat-body)] leading-relaxed text-[var(--color-fg)]">
-                              <Markdown allowGenerativeUI content={text} blockKeyPrefix={`share-${i}`} className="prose-full" />
+                              <Markdown allowGenerativeUI content={text} artifacts={artifacts.map(block => ({ id: block.file_ref ?? '', filename: block.title ?? '', mimeType: block.summary ?? '', url: shareAssetUrl(token, block.url ?? '') }))} blockKeyPrefix={`share-${i}`} className="prose-full" />
                             </div>
                           ) : null}
                           {artifacts.length > 0 ? (
