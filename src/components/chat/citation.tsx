@@ -35,8 +35,8 @@ export function CitationChip({ citation, className, onOpenDocument }: CitationCh
             'inline-flex items-center justify-center align-text-top',
             'h-[18px] min-w-[18px] px-1 mx-0.5',
             'text-[10px] font-medium rounded-[5px]',
-            'bg-[var(--color-secondary-soft)] text-[var(--color-secondary)]',
-            'hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]',
+            'bg-[var(--color-bg-muted)] text-[var(--color-fg-muted)]',
+            'hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-fg)]',
             'interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
             className,
           )}

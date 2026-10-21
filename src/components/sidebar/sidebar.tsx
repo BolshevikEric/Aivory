@@ -507,15 +507,13 @@ export function Sidebar({ variant = 'desktop', onClose }: SidebarProps) {
                 <WorkspaceIcon icon={activeWorkspace.icon_url} size={20} />
                 <span className="truncate font-sans text-[15px] font-semibold text-[var(--color-fg)]">{activeWorkspace.name}</span>
               </Link>
-              {/* Prominent escape hatch back to the personal space, right next to
-                  the workspace name (§workspaces: 标题旁显著切换按钮). Sage =
-                  the AI/workspace status accent; always visible, not hover-only. */}
+              {/* Keep the switch back to personal space visible beside the workspace name. */}
               <Tooltip content={t('workspace.backToPersonal', { defaultValue: 'Switch to personal space' })}>
                 <button
                   type="button"
                   onClick={() => void useWorkspaces.getState().switchTo(null)}
                   aria-label={t('workspace.backToPersonal', { defaultValue: 'Switch to personal space' })}
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-[var(--color-secondary-soft)] text-[var(--color-secondary)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-fg-inverted)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-[var(--color-bg-muted)] text-[var(--color-fg-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                 >
                   <ArrowLeftRight size={13} aria-hidden />
                 </button>
