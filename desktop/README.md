@@ -123,8 +123,9 @@ when the administrator publishes, so ordinary client checks never call GitHub.
 The app checks its configured server's `/api/public/desktop-update` 15 seconds
 after startup and every four hours. Manual checks are available in the icon menu,
 Help menu, and Settings → About. Only operator-published newer versions with a
-matching OS/architecture URL prompt users. Stable apps ignore prereleases;
-beta apps also accept newer betas. The simple confirmation opens the configured
+matching OS/architecture URL prompt users. The administrator selects the channel:
+both stable and beta apps accept a newer published beta. A stable version never
+downgrades to a prerelease of that same version. The simple confirmation opens the configured
 installer URL in the system browser. Quit and install it to update. Desktop
 checks use only the packages published by the administrator.
 Deploy the matching backend; older servers without this endpoint do not provide

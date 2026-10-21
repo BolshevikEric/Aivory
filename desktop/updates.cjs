@@ -4,7 +4,9 @@ function selectUpdate(manifest, { version, platform, arch }) {
   const next = semver.valid(manifest?.version)
   const os = { darwin: 'macos', win32: 'windows', linux: 'linux' }[platform]
   if (manifest?.enabled !== true || !semver.valid(version) || !next || !os || !['x64', 'arm64'].includes(arch)) return null
-  if (!semver.gt(next, version) || (semver.prerelease(version) === null && semver.prerelease(next) !== null)) return null
+  // The deployment administrator chooses the release channel by publishing
+  // this manifest. A published beta must remain visible to stable clients.
+  if (!semver.gt(next, version)) return null
   const address = manifest.downloads?.[`${os}_${arch}`]
   if (typeof address !== 'string' || address.length > 2048) return null
   try {

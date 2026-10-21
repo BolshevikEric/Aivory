@@ -14,11 +14,24 @@ test('desktop updates require operator publication and a matching installer', ()
   assert.equal(updates.selectUpdate(manifest('2.5.1-beta.5'), options), null)
 })
 
-test('beta versions compare correctly and stable apps ignore prereleases', () => {
+test('operator-published beta versions are offered to both stable and beta apps', () => {
   assert.equal(updates.selectUpdate(manifest('2.5.1-beta.10'), { ...options, version: '2.5.1-beta.9' })?.version, '2.5.1-beta.10')
-  assert.equal(updates.selectUpdate(manifest('2.6.0-beta.1'), { ...options, version: '2.5.1' }), null)
+  assert.equal(updates.selectUpdate(manifest('2.6.0-beta.1'), { ...options, version: '2.5.1' })?.version, '2.6.0-beta.1')
+  assert.equal(updates.selectUpdate(manifest('2.5.1-beta.10'), { ...options, version: '2.5.1' }), null)
+  assert.equal(updates.selectUpdate(manifest('2.5.1-beta.10'), { ...options, version: '2.5.2' }), null)
   assert.equal(updates.selectUpdate(manifest('2.5.1'), options)?.version, '2.5.1')
   assert.equal(updates.selectUpdate(manifest('not-a-version'), options), null)
+})
+
+test('manual and automatic stable-client checks both see an administrator-published beta', async () => {
+  const prompts = []
+  const checker = new updates.UpdateChecker({ ...options, version: '2.5.1', fetch: async () => ({
+    ok: true, json: async () => manifest('2.5.2-beta.2'),
+  }), showResult: async (result, manual) => { prompts.push({ result, manual }) } })
+  assert.deepEqual(await checker.check(), { status: 'available', version: '2.5.2-beta.2' })
+  assert.deepEqual(await checker.check(true), { status: 'available', version: '2.5.2-beta.2' })
+  assert.equal(prompts.length, 2)
+  assert.deepEqual(prompts.map(prompt => prompt.manual), [false, true])
 })
 
 test('operator installer URLs support custom hosts and signed links but reject unsafe schemes', () => {
