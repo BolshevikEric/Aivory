@@ -20,7 +20,7 @@ const pageName = {
   credits: 'AdminCreditSettings', redeem: 'AdminRedeemCodes', mcp: 'AdminMCP',
   feedback: 'AdminFeedback', 'model-feedback': 'AdminModelFeedback', resources: 'AdminResources',
   workspaces: 'AdminWorkspaces', domains: 'AdminDomains', orders: 'AdminPaymentOrders',
-  previews: 'AdminHTMLPreviews', logins: 'AdminUserLoginHistory', memories: 'AdminUserMemories', tools: 'AdminTools',
+  previews: 'AdminHTMLPreviews', shares: 'AdminConversationShares', logins: 'AdminUserLoginHistory', memories: 'AdminUserMemories', tools: 'AdminTools',
   conversations: 'AdminUserConversations', library: 'AdminUserLibrary', files: 'AdminFiles', usage: 'AdminUsage', audit: 'AdminAuditLogs', analytics: 'AdminAnalytics',
   documents: 'AdminDocuments', storage: 'AdminSystemStorage', audio: 'AdminAudio',
 }[view]

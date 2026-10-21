@@ -670,6 +670,8 @@
     "lead": "作成・役割変更・パスワード再設定・凍結。",
     "you": "あなた",
     "searchPlaceholder": "名前またはメールで検索",
+    "filterGroup": "ユーザーグループで絞り込み",
+    "allGroups": "すべてのユーザーグループ",
     "online": "オンライン",
     "offline": "オフライン",
     "lastSeen": "最終アクティブ {{when}}",
@@ -3011,6 +3013,24 @@
       "size": "サイズ",
       "uploaded": "アップロード日時",
       "actions": "操作"
+    }
+  },
+  "conversationShares": {
+    "title": "共有された会話",
+    "searchPlaceholder": "会話のタイトル・共有 ID・会話 ID で検索",
+    "total": "共有 {{count}} 件",
+    "loadFailed": "共有された会話を読み込めませんでした。",
+    "copyFailed": "リンクをコピーできませんでした。",
+    "copyLink": "共有リンクをコピー",
+    "open": "共有を開く",
+    "viewConversation": "元の会話を表示",
+    "empty": "共有された会話はありません",
+    "emptyFiltered": "条件に一致する共有はありません",
+    "table": {
+      "title": "会話",
+      "user": "共有したユーザー",
+      "link": "共有リンク",
+      "created": "共有日時"
     }
   },
   "htmlPreviews": {

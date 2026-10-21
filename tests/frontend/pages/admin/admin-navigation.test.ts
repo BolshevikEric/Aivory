@@ -40,6 +40,7 @@ describe('administrator navigation', () => {
     ['/admin/payment-methods', 'billing'],
     ['/admin/payment-orders', 'billing'],
     ['/admin/files', 'operations'],
+    ['/admin/conversation-shares', 'operations'],
     ['/admin/logs/usage', 'logs'],
     ['/admin/logs/audit', 'logs'],
     ['/admin/settings/email', 'platform'],

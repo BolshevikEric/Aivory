@@ -670,6 +670,8 @@
     "lead": "Créer, changer de rôle, réinitialiser, bannir.",
     "you": "vous",
     "searchPlaceholder": "Rechercher par nom ou e-mail",
+    "filterGroup": "Filtrer par groupe d'utilisateurs",
+    "allGroups": "Tous les groupes d'utilisateurs",
     "online": "En ligne",
     "offline": "Hors ligne",
     "lastSeen": "Vu {{when}}",
@@ -3013,6 +3015,24 @@
       "size": "Taille",
       "uploaded": "Téléversé",
       "actions": "Actions"
+    }
+  },
+  "conversationShares": {
+    "title": "Conversations partagées",
+    "searchPlaceholder": "Titre, identifiant de partage ou de conversation",
+    "total": "{{count}} partages",
+    "loadFailed": "Impossible de charger les conversations partagées.",
+    "copyFailed": "Impossible de copier le lien.",
+    "copyLink": "Copier le lien de partage",
+    "open": "Ouvrir le partage",
+    "viewConversation": "Voir la conversation d'origine",
+    "empty": "Aucune conversation partagée",
+    "emptyFiltered": "Aucun partage ne correspond aux filtres",
+    "table": {
+      "title": "Conversation",
+      "user": "Partagé par",
+      "link": "Lien de partage",
+      "created": "Date de partage"
     }
   },
   "htmlPreviews": {

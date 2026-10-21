@@ -670,6 +670,8 @@
     "lead": "Create accounts, change roles, reset passwords, ban.",
     "you": "you",
     "searchPlaceholder": "Search by name or email",
+    "filterGroup": "Filter by user group",
+    "allGroups": "All user groups",
     "online": "Online",
     "offline": "Offline",
     "lastSeen": "Last seen {{when}}",
@@ -3013,6 +3015,24 @@
       "size": "Size",
       "uploaded": "Uploaded",
       "actions": "Actions"
+    }
+  },
+  "conversationShares": {
+    "title": "Shared conversations",
+    "searchPlaceholder": "Search title, share or conversation ID",
+    "total": "{{count}} shares",
+    "loadFailed": "Could not load shared conversations.",
+    "copyFailed": "Could not copy the link.",
+    "copyLink": "Copy share link",
+    "open": "Open share",
+    "viewConversation": "View original conversation",
+    "empty": "No shared conversations",
+    "emptyFiltered": "No shares match these filters",
+    "table": {
+      "title": "Conversation",
+      "user": "Shared by",
+      "link": "Share link",
+      "created": "Shared at"
     }
   },
   "htmlPreviews": {

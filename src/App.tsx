@@ -79,6 +79,7 @@ const AdminNotifications = lazy(() => import('@/pages/admin/AdminNotifications')
 const AdminDocuments = lazy(() => import('@/pages/admin/AdminDocuments'))
 const AdminFiles = lazy(() => import('@/pages/admin/AdminFiles'))
 const AdminHTMLPreviews = lazy(() => import('@/pages/admin/AdminHTMLPreviews'))
+const AdminConversationShares = lazy(() => import('@/pages/admin/AdminConversationShares'))
 const AdminResources = lazy(() => import('@/pages/admin/AdminResources'))
 const AdminFeedback = lazy(() => import('@/pages/admin/AdminFeedback'))
 const UserFiles = lazy(() => import('@/pages/files/UserFiles'))
@@ -298,6 +299,7 @@ export default function App() {
               <Route path="resources" element={<AdminResources />} />
               <Route path="files" element={<AdminFiles />} />
               <Route path="html-previews" element={<AdminHTMLPreviews />} />
+              <Route path="conversation-shares" element={<AdminConversationShares />} />
               <Route path="feedback" element={<AdminFeedback />} />
               <Route path="tools" element={<AdminTools />} />
               <Route path="mcp" element={<AdminMCP />} />

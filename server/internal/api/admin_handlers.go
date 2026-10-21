@@ -863,6 +863,7 @@ func deleteSkillAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 func listUsersAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	search := strings.TrimSpace(q.Get("search"))
+	groupID := strings.TrimSpace(q.Get("group_id"))
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	if limit <= 0 {
@@ -871,12 +872,30 @@ func listUsersAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	if limit > 200 {
 		limit = 200
 	}
-	total, err := store.CountUsersBySearch(r.Context(), d.DB, search)
+	if offset < 0 {
+		offset = 0
+	}
+	var total int
+	var rows []store.User
+	var err error
+	if groupID != "" {
+		if err := store.ExpireDueUserGroups(r.Context(), d.DB); err != nil {
+			writeError(w, 500, err)
+			return
+		}
+		total, err = store.CountUsersByGroup(r.Context(), d.DB, groupID, search)
+	} else {
+		total, err = store.CountUsersBySearch(r.Context(), d.DB, search)
+	}
 	if err != nil {
 		writeError(w, 500, err)
 		return
 	}
-	rows, err := store.ListUsersBySearch(r.Context(), d.DB, search, limit, offset)
+	if groupID != "" {
+		rows, err = store.ListUsersByGroup(r.Context(), d.DB, groupID, search, limit, offset)
+	} else {
+		rows, err = store.ListUsersBySearch(r.Context(), d.DB, search, limit, offset)
+	}
 	if err != nil {
 		writeError(w, 500, err)
 		return

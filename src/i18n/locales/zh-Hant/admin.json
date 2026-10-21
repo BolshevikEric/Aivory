@@ -670,6 +670,8 @@
     "lead": "新建、改角色、重設密碼、封禁帳號。",
     "you": "你",
     "searchPlaceholder": "按名稱或郵箱搜尋",
+    "filterGroup": "依使用者組篩選",
+    "allGroups": "全部使用者組",
     "online": "在線",
     "offline": "離線",
     "lastSeen": "上次在線 {{when}}",
@@ -3011,6 +3013,24 @@
       "size": "大小",
       "uploaded": "上傳時間",
       "actions": "操作"
+    }
+  },
+  "conversationShares": {
+    "title": "分享對話",
+    "searchPlaceholder": "搜尋對話標題、分享或對話 ID",
+    "total": "共 {{count}} 則分享",
+    "loadFailed": "無法載入分享對話。",
+    "copyFailed": "複製連結失敗。",
+    "copyLink": "複製分享連結",
+    "open": "開啟分享",
+    "viewConversation": "檢視原對話",
+    "empty": "尚無分享對話",
+    "emptyFiltered": "沒有符合篩選條件的分享",
+    "table": {
+      "title": "對話標題",
+      "user": "分享使用者",
+      "link": "分享連結",
+      "created": "分享時間"
     }
   },
   "htmlPreviews": {

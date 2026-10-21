@@ -115,6 +115,7 @@ export default function AdminUsers() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [committedQuery, setCommittedQuery] = useState('')
+  const [groupFilter, setGroupFilter] = useState('all')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = envNum('VITE_AIVORY_PAGE_SIZE_3', 20)
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -132,37 +133,43 @@ export default function AdminUsers() {
   }
 
   const groupsLoadedRef = useRef(false)
+  const loadRequestRef = useRef(0)
 
   const load = useCallback(async (search: string, p: number, opts?: { silent?: boolean }) => {
+    const request = ++loadRequestRef.current
     if (!opts?.silent) setLoading(true)
     try {
       const offset = (p - 1) * PAGE_SIZE
       const activity = opts?.silent ? 'background' : 'foreground'
-      if (!groupsLoadedRef.current) {
-        const [resp, gs] = await Promise.all([adminApi.users(search, PAGE_SIZE, offset, activity), adminApi.userGroups()])
-        setRows(resp.users)
-        setTotal(resp.total)
+      const [resp, gs] = await Promise.all([
+        adminApi.users(search, PAGE_SIZE, offset, activity, groupFilter === 'all' ? '' : groupFilter),
+        groupsLoadedRef.current ? Promise.resolve(null) : adminApi.userGroups(),
+      ])
+      if (request !== loadRequestRef.current) return
+      setRows(resp.users)
+      setTotal(resp.total)
+      if (gs) {
         setGroups(gs)
         groupsLoadedRef.current = true
-      } else {
-        const resp = await adminApi.users(search, PAGE_SIZE, offset, activity)
-        setRows(resp.users)
-        setTotal(resp.total)
       }
+      const lastPage = Math.max(1, Math.ceil(resp.total / PAGE_SIZE))
+      if (p > lastPage) setPage(lastPage)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      if (request === loadRequestRef.current) toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
     } finally {
-      setLoading(false)
+      if (request === loadRequestRef.current) setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [groupFilter])
 
   useEffect(() => {
     void load(committedQuery, page)
+    return () => { loadRequestRef.current += 1 }
   }, [committedQuery, page, load])
 
   useEffect(() => () => {
     infoRequestRef.current += 1
+    if (debounceRef.current) clearTimeout(debounceRef.current)
   }, [])
 
   // While any account is being purged in the background, refresh periodically
@@ -438,14 +445,24 @@ export default function AdminUsers() {
         )}
       />
 
-      <div className="mt-5 sm:mt-6">
+      <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center">
         <Input
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           leadingIcon={<Search size={16} aria-hidden />}
           placeholder={t('admin:users.searchPlaceholder')}
+          aria-label={t('admin:users.searchPlaceholder')}
           wrapperClassName="h-11 w-full sm:h-10 sm:max-w-sm"
         />
+        <Select value={groupFilter} onValueChange={(value) => { setGroupFilter(value); setPage(1) }}>
+          <SelectTrigger className="h-11 w-full sm:h-10 sm:w-52" aria-label={t('admin:users.filterGroup')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('admin:users.allGroups')}</SelectItem>
+            {groups.map((group) => <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <section className="mt-4 sm:mt-5">

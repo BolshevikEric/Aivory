@@ -1946,6 +1946,23 @@ export interface ApiAdminFile {
   rel_path?: string
 }
 
+export interface ApiAdminConversationShare {
+  id: string
+  conversation_id: string
+  title: string
+  user_id: string
+  user_email: string
+  user_name: string
+  created_at: number
+}
+
+export interface ApiAdminConversationSharePage {
+  items: ApiAdminConversationShare[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** Metadata-only administrator inventory row for a public HTML preview link. */
 export interface ApiAdminHTMLPreviewShare {
   id: string

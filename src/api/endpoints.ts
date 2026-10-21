@@ -22,6 +22,7 @@ import type {
   ApiAdminGeneratedImagePage,
   ApiAdminGeneratedImageResource,
   ApiAdminHTMLPreviewSharePage,
+  ApiAdminConversationSharePage,
   ApiAdminKnowledgeBaseResource,
   ApiAdminKnowledgeBaseResourceDetail,
   ApiAdminLoginHistoryPage,
@@ -1465,9 +1466,10 @@ export const adminApi = {
     limit = envNum('VITE_AIVORY_ADMIN_API_USERS_LIMIT', 50),
     offset = 0,
     activity: RequestActivityMode = 'foreground',
+    groupId = '',
   ) =>
     api<{ users: ApiUser[]; total: number; limit: number; offset: number }>(
-      `/admin/users?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}`,
+      `/admin/users?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}${groupId ? `&group_id=${encodeURIComponent(groupId)}` : ''}`,
       { activity },
     ),
   user: (id: string, activity: RequestActivityMode = 'foreground') =>
@@ -1677,6 +1679,15 @@ export const adminApi = {
   },
   deleteFiles: (items: Array<{ source: 'file' | 'document'; id: string }>) =>
     api<{ deleted: number }>('/admin/files/delete', { method: 'POST', body: { items } }),
+  conversationShares: (params: { search?: string; user?: string; userId?: string; limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams()
+    if (params.search) qs.set('search', params.search)
+    if (params.user) qs.set('user', params.user)
+    if (params.userId) qs.set('user_id', params.userId)
+    if (params.limit) qs.set('limit', String(params.limit))
+    if (params.offset) qs.set('offset', String(params.offset))
+    return api<ApiAdminConversationSharePage>(`/admin/conversation-shares${qs.toString() ? `?${qs}` : ''}`)
+  },
   htmlPreviewShares: (params: { q?: string; limit?: number; offset?: number } = {}) => {
     const qs = new URLSearchParams()
     if (params.q) qs.set('q', params.q)

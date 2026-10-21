@@ -674,6 +674,8 @@
     "lead": "新建、改角色、重置密码、封禁账户。",
     "you": "你",
     "searchPlaceholder": "按名称或邮箱搜索",
+    "filterGroup": "按用户组筛选",
+    "allGroups": "全部用户组",
     "online": "在线",
     "offline": "离线",
     "lastSeen": "上次在线 {{when}}",
@@ -3015,6 +3017,24 @@
       "size": "大小",
       "uploaded": "上传时间",
       "actions": "操作"
+    }
+  },
+  "conversationShares": {
+    "title": "分享对话",
+    "searchPlaceholder": "搜索对话标题、分享或对话 ID",
+    "total": "共 {{count}} 条分享",
+    "loadFailed": "无法加载分享对话。",
+    "copyFailed": "复制链接失败。",
+    "copyLink": "复制分享链接",
+    "open": "打开分享",
+    "viewConversation": "查看原对话",
+    "empty": "暂无分享对话",
+    "emptyFiltered": "没有符合筛选条件的分享",
+    "table": {
+      "title": "对话标题",
+      "user": "分享用户",
+      "link": "分享链接",
+      "created": "分享时间"
     }
   },
   "htmlPreviews": {

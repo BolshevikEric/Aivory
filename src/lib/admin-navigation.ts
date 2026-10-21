@@ -119,6 +119,7 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     defaultLabel: 'Data & operations',
     items: [
       { to: '/admin/analytics', labelKey: 'admin:analytics.title', defaultLabel: 'Analytics' },
+      { to: '/admin/conversation-shares', labelKey: 'admin:conversationShares.title', defaultLabel: 'Shared conversations' },
       { to: '/admin/resources', labelKey: 'admin:resources.title', defaultLabel: 'Content resources' },
       { to: '/admin/files', labelKey: 'admin:files.title', defaultLabel: 'Files' },
       { to: '/admin/html-previews', labelKey: 'admin:htmlPreviews.title', defaultLabel: 'HTML previews' },
