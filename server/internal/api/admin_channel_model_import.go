@@ -651,7 +651,22 @@ func fetchChannelModelJSON(ctx context.Context, endpoint string, channel *store.
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("model discovery returned HTTP %d", response.StatusCode)
+		// An opaque "HTTP 403" is undebuggable from the admin UI: include the
+		// endpoint (minus any query values) and a bounded body snippet so the
+		// log shows whether the upstream, a proxy or a WAF rejected the call.
+		snippet := ""
+		if body, readErr := io.ReadAll(io.LimitReader(response.Body, 512)); readErr == nil {
+			snippet = strings.TrimSpace(strings.ToValidUTF8(string(body), ""))
+		}
+		target := endpoint
+		if parsed, parseErr := url.Parse(endpoint); parseErr == nil {
+			parsed.RawQuery = ""
+			target = parsed.String()
+		}
+		if snippet != "" {
+			return fmt.Errorf("model discovery returned HTTP %d from %s: %s", response.StatusCode, target, snippet)
+		}
+		return fmt.Errorf("model discovery returned HTTP %d from %s (empty response body)", response.StatusCode, target)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, channelModelDiscoveryResponseSize+1))
 	if err != nil {
