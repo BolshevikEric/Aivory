@@ -36,6 +36,8 @@ var retiredGenerativeUIInstructionHashes = []string{
 	"127ca0b430f1a786f2115c3a30978c781191aa8b268a5ed6c772ff2eab970bad",
 	"85244ec4dbebcf3badd65881f6c07bcda89672830127d16cea6705e3b2565930",
 	"2bb004ec29fa4fa750ddce1dc94167110568739ba977a1932642e5403c2fa8c1",
+	"3939ad12efe7f54cfd83a45d3c92aaf8f9481229bbd1a7a895cd593641f1507d",
+	"6bc4a585aea3b846b84fa24f09ac0427465af2097583d7d760afc1340ee5d1f0",
 }
 
 var retiredGenerativeUIDescriptionHashes = []string{

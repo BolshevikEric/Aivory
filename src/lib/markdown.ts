@@ -103,7 +103,7 @@ const urlAttrs = new Set(['href', 'src'])
 export function isSafeMarkdownUrl(url: string): boolean {
   const trimmed = url.trim().toLowerCase()
   if (!trimmed) return false
-  if (trimmed.startsWith('sandbox:') || trimmed.startsWith('/workspace/outputs/')) return false
+  if (trimmed.startsWith('attachment:') || trimmed.startsWith('sandbox:') || trimmed.startsWith('/workspace/outputs/')) return false
   if (trimmed.startsWith('javascript:') || trimmed.startsWith('vbscript:') || trimmed.startsWith('data:text/html')) return false
   return true
 }

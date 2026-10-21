@@ -2,9 +2,10 @@ import { createElement, Fragment, useId, useMemo, useRef, useState, type CSSProp
 import { ArrowUpDown, ImageOff, Loader2, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { blockMarkdownToHtml, inlineMarkdownToHtml, type CiteRef } from '@/lib/markdown'
-import { evaluateMarkupExpression, markupAttribute, markupBinding, markupElements, markupReply, markupText, type MarkupDocument, type MarkupElement, type MarkupNode, type MarkupValue } from '@/lib/generative-markup'
+import { evaluateMarkupExpression, mapMarkupExpressions, markupAttribute, markupBinding, markupElements, markupReply, markupText, type MarkupDocument, type MarkupElement, type MarkupNode, type MarkupValue } from '@/lib/generative-markup'
 import { markupPreset } from '@/lib/generative-markup-presets'
 import { markupTableParts, markupTableSpan } from '@/lib/generative-markup-table'
+import { isArtifactUrl } from '@/lib/artifact-links'
 import type { UIBlock } from '@/lib/generative-ui'
 import { useGenerativeReply } from './generative-reply-context'
 import { Tooltip, TooltipProvider } from '@/components/ui/tooltip'
@@ -13,6 +14,7 @@ import { GenerativeMap } from './generative-map'
 
 const safeURL = (value: unknown) => {
   if (typeof value !== 'string') return undefined
+  if (isArtifactUrl(value)) return value
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.href : undefined } catch { return undefined }
 }
 const scalar = (value: MarkupValue | undefined) => value === undefined || value === null ? '' : Array.isArray(value) ? value.join(', ') : String(value)
@@ -77,13 +79,17 @@ function MarkupImage({ node, state }: { node: MarkupElement; state: Record<strin
 function MarkupTabs({ node, render }: { node: MarkupElement; render: (nodes: MarkupNode[], path: string) => ReactNode }) {
   const id = useId(), [active, setActive] = useState(0)
   const tabs = markupElements(node.children).filter(child => ['tab', 'item'].includes(child.tag))
+  const selected = Math.min(active, Math.max(0, tabs.length - 1))
+  const extra = node.children.filter(child => typeof child === 'string' || !['tab', 'item'].includes(child.tag))
+  if (!tabs.length) return <div className="gui-markup-tabs">{render(node.children, 'fallback')}</div>
   return <div className="gui-markup-tabs">
+    {render(extra, 'extra')}
     <div role="tablist" aria-label={scalar(markupAttribute(node, 'label') ?? markupAttribute(node, 'title')) || 'Tabs'} onKeyDown={event => {
-      const next = event.key === 'ArrowRight' ? (active + 1) % tabs.length : event.key === 'ArrowLeft' ? (active + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1
+      const next = event.key === 'ArrowRight' ? (selected + 1) % tabs.length : event.key === 'ArrowLeft' ? (selected + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1
       if (next < 0) return
       event.preventDefault(); setActive(next); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
-    }}>{tabs.map((tab, i) => <button key={i} type="button" role="tab" id={`${id}-tab-${i}`} aria-controls={`${id}-panel-${i}`} aria-selected={active === i} tabIndex={active === i ? 0 : -1} onClick={() => setActive(i)}>{scalar(markupAttribute(tab, 'title') ?? markupAttribute(tab, 'label')) || String(i + 1)}</button>)}</div>
-    {tabs.map((tab, i) => <div key={i} role="tabpanel" id={`${id}-panel-${i}`} aria-labelledby={`${id}-tab-${i}`} hidden={active !== i}>{render(tab.children, `tab-${i}`)}</div>)}
+    }}>{tabs.map((tab, i) => <button key={i} type="button" role="tab" id={`${id}-tab-${i}`} aria-controls={`${id}-panel-${i}`} aria-selected={selected === i} tabIndex={selected === i ? 0 : -1} onClick={() => setActive(i)}>{scalar(markupAttribute(tab, 'title') ?? markupAttribute(tab, 'label')) || String(i + 1)}</button>)}</div>
+    {tabs.map((tab, i) => <div key={i} role="tabpanel" id={`${id}-panel-${i}`} aria-labelledby={`${id}-tab-${i}`} hidden={selected !== i}>{render(tab.children, `tab-${i}`)}</div>)}
   </div>
 }
 
@@ -92,12 +98,20 @@ function MarkupTable({ node, render, state }: { node: MarkupElement; render: (no
   const [query, setQuery] = useState(''), [sort, setSort] = useState<{ column: number; direction: number }>()
   const children = markupElements(node.children)
   const { head, headers, foot, bodies, columns, flat } = markupTableParts(node, state)
+  const structural = new Set('caption colgroup col thead tbody tfoot tr th td'.split(' '))
+  const flatten = (nodes: MarkupNode[]): MarkupNode[] => nodes.flatMap(child => typeof child !== 'string' && structural.has(child.tag) ? flatten(child.children) : [child])
+  const rows = [head, ...bodies, foot].flatMap(group => markupElements(group?.children ?? [], 'tr'))
+  const hasCells = rows.some(row => markupElements(row.children).some(cell => cell.tag === 'th' || cell.tag === 'td'))
+  const hasContent = flatten(node.children.filter(child => typeof child === 'string' || !['caption', 'colgroup', 'col'].includes(child.tag))).some(child => typeof child !== 'string' || !!child.trim())
+  const invalidGroups = [head, ...bodies, foot].some(group => group?.children.some(child => typeof child === 'string' ? !!child.trim() : child.tag !== 'tr'))
+  if ((!hasCells && hasContent) || invalidGroups || rows.some(row => row.children.some(child => typeof child === 'string' ? !!child.trim() : !['th', 'td'].includes(child.tag)))) return <div className="gui-markup-prose">{render(flatten(node.children), 'fallback')}</div>
   const sortable = flat && !!markupAttribute(node, 'sortable', state), searchable = flat && !!markupAttribute(node, 'searchable', state)
   const layout = scalar(markupAttribute(node, 'layout', state) ?? markupAttribute(node, 'tablelayout', state)) === 'fixed' ? 'fixed' : 'auto'
   const borders = scalar(markupAttribute(node, 'borders', state))
   const tableStyle = { ...layoutStyle(node, state), minWidth: length(markupAttribute(node, 'minwidth', state)), tableLayout: layout } satisfies CSSProperties
   const valueText = (child: MarkupElement) => markupText(child.children).replace(/\{(\w+)\}/g, (_, name: string) => scalar(state[name]))
   return <div className="gui-markup-table" role="region" aria-label={scalar(markupAttribute(node, 'label', state) ?? markupAttribute(node, 'title', state)) || t('generative.table')} tabIndex={0}>
+    {render(node.children.filter(child => typeof child === 'string' || !structural.has(child.tag)), 'extra')}
     {searchable && <input className="gui-input" aria-label={t('generative.filterTable')} placeholder={t('generative.filterTable')} value={query} onChange={event => setQuery(event.target.value)} />}
     <table style={tableStyle} data-layout={layout} data-borders={['all', 'none'].includes(borders) ? borders : markupAttribute(node, 'bordered', state) || markupAttribute(node, 'border', state) ? 'all' : 'rows'}>
       {children.filter(child => child.tag === 'caption').map((child, i) => <caption key={i}>{render(child.children, 'caption', true)}</caption>)}
@@ -134,12 +148,12 @@ export function GenerativeMarkup({ document: doc, live, cites = [], renderBlock 
     try { if (await reply.submit(text)) setSent(true); else setFailed(true) } catch { setFailed(true) }
     finally { sending.current = false; setPending(false) }
   }
-  const expressionText = (text: string, markdown: boolean) => text.replace(/\{\{\s*(\w+)\s*\}\}|\{([^{}\n]+)\}/g, (match, name: string, expression: string) => {
+  const expressionText = (text: string, markdown: boolean) => mapMarkupExpressions(text, (expression, name) => {
     const value = name ? (Object.hasOwn(state, name) ? state[name] : undefined) : evaluateMarkupExpression(expression, state)
-    if (value === undefined) return match
+    if (value === undefined) return undefined
     const result = scalar(value)
     return markdown ? result.replace(/[\\`*_[\]<>~]/g, '\\$&') : result
-  })
+  }, markdown)
   const a = (node: MarkupElement, name: string) => markupAttribute(node, name, state)
   function render(nodes: MarkupNode[], path = 'root', inline = false): ReactNode {
     return nodes.map((node, i) => {
@@ -168,7 +182,8 @@ export function GenerativeMarkup({ document: doc, live, cites = [], renderBlock 
         case 'text': case 'span': case 'small': return <span {...props} className="gui-markup-text">{children(true)}</span>
         case 'heading': return createElement(`h${Math.round(bounded(Number(a(node, 'level')), 1, 6, 3))}`, { ...props, className: 'gui-markup-heading' }, children(true))
         case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': return createElement(tag, { ...props, className: 'gui-markup-heading' }, children(true))
-        case 'p': case 'strong': case 'b': case 'em': case 'i': case 'code': case 'pre': case 'kbd': case 'mark': case 'blockquote': return createElement(tag, props, children(true))
+        case 'code': case 'pre': return createElement(tag, props, markupText(node.children, false))
+        case 'p': case 'strong': case 'b': case 'em': case 'i': case 'kbd': case 'mark': case 'blockquote': return createElement(tag, props, children(true))
         case 'br': return <br key={key} />
         case 'card': return <article {...props} className="gui-markup-card">{a(node, 'title') && <h3 className="gui-markup-heading">{scalar(a(node, 'title'))}</h3>}{children()}</article>
         case 'card-header': case 'card-content': case 'card-footer': return <div {...props} className={`gui-markup-${tag}`}>{children()}</div>
@@ -223,6 +238,7 @@ export function GenerativeMarkup({ document: doc, live, cites = [], renderBlock 
           const name = binding ?? key
           return <fieldset {...props} className="gui-markup-radio-group" data-direction={a(node, 'direction') === 'row' ? 'row' : 'col'} disabled={!!a(node, 'disabled') || live || pending || sent}>
             <legend>{scalar(a(node, 'label') ?? a(node, 'title')) || <span className="sr-only">{name}</span>}</legend>
+            {render(node.children.filter(child => typeof child === 'string' || child.tag !== 'radio'), `${key}-extra`)}
             {markupElements(node.children, 'radio').map((radio, n) => control(a(node, 'required') ? { ...radio, attrs: { ...radio.attrs, required: { literal: true } } } : radio, `${key}-${n}`, 'radio', name, value))}
           </fieldset>
         }

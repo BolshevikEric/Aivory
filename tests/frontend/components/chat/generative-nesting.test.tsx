@@ -6,6 +6,7 @@ import { Markdown } from '@/components/chat/markdown'
 import { PrivateMarkdown } from '@/components/chat/private-markdown'
 import { parseUIMarkup } from '@/lib/generative-markup'
 import { nestedComponents, nestedDiagram } from '../../fixtures/generative-nesting'
+import { weeklyProgress } from '../../fixtures/generative-inline'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('@/store/theme', () => ({ useTheme: (selector: (state: { resolved: string }) => unknown) => selector({ resolved: 'light' }) }))
@@ -17,6 +18,15 @@ function render(source: string) {
 }
 
 describe('recursive component composition and SVG', () => {
+  it.each(['ordinary', 'private'])('renders a bare progress summary after tabs in %s replies', (mode) => {
+    const root = document.createElement('div')
+    root.innerHTML = renderToStaticMarkup(mode === 'ordinary' ? <Markdown allowGenerativeUI content={weeklyProgress} /> : <PrivateMarkdown allowGenerativeUI text={weeklyProgress} />)
+    const summary = Array.from(root.querySelectorAll('p')).find(node => node.textContent?.startsWith('Progress:'))
+    expect(summary?.textContent).toBe('Progress: Week 1 \u25cb / Week 2 \u25cb / Week 3 \u25cb / Week 4 \u25cb')
+    expect(root.querySelectorAll('input[type="checkbox"]')).toHaveLength(4)
+    expect(root.textContent).toContain('Research card')
+    expect(root.textContent).not.toContain('{w1c')
+  })
   it.each(['ordinary', 'private'])('renders interleaved components in %s replies while preserving surrounding prose', (mode) => {
     const source = '## Plans <badge>Ready</badge>\n\nBefore **bold** <badge tone="success">Available</badge> after.\n\n3. Choose <button href="https://example.test">Open</button> now.\n4. Keep context.\n\n> See <badge>Tip</badge> below.\n\n| Plan | Status |\n| --- | --- |\n| Basic | <badge>Available</badge> |'
     const root = document.createElement('div')

@@ -15,13 +15,18 @@ import PrivateChat from '@/pages/chat/PrivateChat'
 import { proportionalComplexTable as complexTable } from '../frontend/fixtures/generative-table'
 import { nestedComponents } from '../frontend/fixtures/generative-nesting'
 import { sampleMap, nestedMap } from '../frontend/fixtures/generative-map'
-import { interleavedComponents } from '../frontend/fixtures/generative-inline'
+import { interleavedComponents, weeklyProgress } from '../frontend/fixtures/generative-inline'
+import { recoveredComponents } from '../frontend/fixtures/generative-robustness'
+import type { ArtifactRef } from '@/types/chat'
 
 const fence = (lang: string, code: string) => `\`\`\`${lang}\n${code}\n\`\`\``
 const quotedNews = `{"version":1,"title":"News","blocks":[{"type":"tabs","items":[{"title":"Domestic","blocks":[{"type":"text","text":"新增"学校食品安全""网络食品经营"专节。"}]},{"title":"International","blocks":[{"type":"text","text":"美国表示"强烈谴责"。"}]}]}]}`
 const preview = new URLSearchParams(globalThis.location.search).has('preview')
 const maps = new URLSearchParams(globalThis.location.search).has('maps')
 const interleaved = new URLSearchParams(globalThis.location.search).has('interleaved')
+const weekly = new URLSearchParams(globalThis.location.search).has('weekly')
+const robustness = new URLSearchParams(globalThis.location.search).has('robustness')
+const artifactCase = new URLSearchParams(globalThis.location.search).has('artifacts')
 const tableImageURL = (file: string) => preview
   ? new URL(file === 'missing.png' ? '/missing-table-image.png' : '/icon-512.png', globalThis.location.href).href
   : `https://images.example.test/${file}`
@@ -115,13 +120,17 @@ let formAttempts = 0
 function Harness() {
   const [html, setHTML] = useState('<button id="action" onclick="this.textContent=\'Updated\'">Calculate</button>')
   const [live, setLive] = useState(false)
-  const [markup, setMarkup] = useState(maps ? sampleMap : interleaved ? interleavedComponents : markupLibrary)
+  const [markup, setMarkup] = useState(maps ? sampleMap : robustness ? recoveredComponents : weekly ? weeklyProgress : interleaved ? interleavedComponents : markupLibrary)
+  const [artifacts, setArtifacts] = useState<ArtifactRef[]>([])
   useEffect(() => {
-    Reflect.set(window, '__GUI__', { setHTML, setLive, setMarkup, setLanguage: (locale: string) => i18n.changeLanguage(locale) })
+    Reflect.set(window, '__GUI__', { setHTML, setLive, setMarkup, setArtifacts, setLanguage: (locale: string) => i18n.changeLanguage(locale) })
   }, [])
-  if (interleaved) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
+  if (artifactCase) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
+    <Markdown allowGenerativeUI content={markup} artifacts={artifacts} live={live} />
+  </main>
+  if (interleaved || weekly || robustness) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
     <section data-case="interleaved"><GenerativeReplyProvider messageId="interleaved-message" status="ready" onReply={async (_id, text) => { Reflect.set(window, '__INTERLEAVED_REPLY__', text); return true }}><Markdown allowGenerativeUI content={markup} live={live} /></GenerativeReplyProvider></section>
-    <section data-case="interleaved-private"><PrivateMarkdown allowGenerativeUI text={interleavedComponents} /></section>
+    <section data-case="interleaved-private"><PrivateMarkdown allowGenerativeUI text={robustness ? recoveredComponents : weekly ? weeklyProgress : interleavedComponents} /></section>
   </main>
   if (maps) return <main style={{ width: '100%', maxWidth: 760, padding: 16, margin: 'auto' }}>
     <section data-case="map"><GenerativeReplyProvider messageId="map-message" status="ready" onReply={async (_messageId, text) => { Reflect.set(window, '__MAP_REPLY__', text); return true }}><Markdown allowGenerativeUI content={markup} live={live} /></GenerativeReplyProvider></section>

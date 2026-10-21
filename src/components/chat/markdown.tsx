@@ -36,7 +36,7 @@ interface MarkdownProps {
   allowHtmlShare?: boolean
   /** Citations for this turn — inline `[n]` markers become source links. */
   citations?: Citation[]
-  /** Artifacts owned by this message, used to resolve sandbox output links. */
+  /** Files owned by this message, used to resolve attachment and sandbox links. */
   artifacts?: ArtifactRef[]
   /** Opens an authenticated preview for an inline knowledge-base citation. */
   onOpenDocumentCitation?: (citation: Citation) => void
@@ -174,6 +174,9 @@ const MarkdownBlockView = memo(
         }
       case 'hr':
         return <hr className={cn('my-6 border-[var(--color-divider)]', blockAnim)} />
+      case 'html':
+      case 'raw':
+        return <div className="my-3 whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: blockMarkdownToHtml(b.content, cites, breaks, mathCopyLabels) }} />
       case 'table':
         return (
           <div

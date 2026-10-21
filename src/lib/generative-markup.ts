@@ -20,7 +20,10 @@ const presetComponents = new Set((
 ).split(/\s+/))
 export const markupComponents = new Set([...presetComponents, ...markupSVGTags.keys()])
 const voidTags = new Set(['spacer', 'divider', 'separator', 'br', 'col', 'image', 'img', 'asyncimage', 'avatar', 'input', 'slider', 'range', 'progress', 'meter', 'gauge', 'metric', 'skeleton', 'spinner', 'point', 'cell', 'curve', 'parameter', 'output', 'state', 'cite'])
-const validName = (name: string) => /^[a-zA-Z_][\w]{0,39}$/.test(name) && !['__proto__', 'prototype', 'constructor', 'window', 'document', 'globalThis', 'eval', 'Function'].includes(name)
+const htmlVoidTags = new Set('area base embed hr img input link meta param source track wbr'.split(' '))
+const discardedTags = new Set('script style iframe object embed template noscript head foreignobject portal fencedframe'.split(' '))
+const fallbackBlocks = new Set('html body div main article aside header footer nav section address center figure figcaption'.split(' '))
+const validName = (name: string) => /^[a-zA-Z_][\w]{0,39}$/.test(name) && !['true', 'false', 'null', '__proto__', 'prototype', 'constructor', 'window', 'document', 'globalThis', 'eval', 'Function'].includes(name)
 export const isMarkupName = validName
 
 function quoted(source: string, start: number): { value: string; end: number } {
@@ -157,11 +160,11 @@ function readTag(source: string, start: number) {
       else if ('"\''.includes(source[i] || '\0')) {
         // HTML quoted attributes preserve backslashes (unlike expression strings).
         const end = source.indexOf(source[i], i + 1)
-        if (end < 0) throw new Error('attribute quote')
+        if (end < 0) throw new Error('unfinished attribute quote')
         attr = { literal: decode(source.slice(i + 1, end)) }; i = end + 1
       } else {
         const value = source.slice(i).match(/^[^\s>]+/)?.[0].replace(/\/$/, '')
-        if (!value) throw new Error('attribute value')
+        if (!value) throw new Error(i >= source.length ? 'unfinished attribute value' : 'attribute value')
         attr = { literal: decode(value) }; i += value.length
       }
     }
@@ -170,11 +173,25 @@ function readTag(source: string, start: number) {
   throw new Error('unfinished tag')
 }
 
+function closingElement(source: string, token: ReturnType<typeof readTag>): { start: number; end: number } | undefined {
+  const closing = new RegExp(`</${token.tag}\\s*>`, 'ig')
+  closing.lastIndex = token.end
+  const match = closing.exec(source)
+  return match ? { start: match.index, end: match.index + match[0].length } : undefined
+}
+
+function discardedElementEnd(source: string, token: ReturnType<typeof readTag>): number | undefined {
+  return token.closing || token.selfClosing || htmlVoidTags.has(token.tag) ? token.end : closingElement(source, token)?.end
+}
+
 export function markupAttribute(node: MarkupElement, name: string, state: Record<string, MarkupValue> = {}): MarkupValue | undefined {
   const value = node.attrs[name.toLowerCase()]
   return value && ('literal' in value ? value.literal : evaluateMarkupExpression(value.expression, state))
 }
-export function markupText(nodes: MarkupNode[]): string { return nodes.map(node => typeof node === 'string' ? node : markupText(node.children)).join('').trim() }
+export function markupText(nodes: MarkupNode[], trim = true): string {
+  const text = nodes.map(node => typeof node === 'string' ? node : markupText(node.children, false)).join('')
+  return trim ? text.trim() : text
+}
 export function markupElements(nodes: MarkupNode[], tag?: string): MarkupElement[] { return nodes.filter((node): node is MarkupElement => typeof node !== 'string' && (!tag || node.tag === tag)) }
 
 export function markupBinding(node: MarkupElement, setters: Record<string, string> = {}): string | undefined {
@@ -187,11 +204,21 @@ export function markupBinding(node: MarkupElement, setters: Record<string, strin
 }
 
 export function parseUIMarkup(source: string, live = false): MarkupDocument | null {
+  return parseMarkup(source, live, false)
+}
+
+/** Recover model answers as preset nodes; never mount unknown HTML or execute its attributes. */
+export function parseUIAnswer(source: string, live = false): MarkupDocument | null {
+  return parseMarkup(source, live, true)
+}
+
+function parseMarkup(source: string, live: boolean, recover: boolean): MarkupDocument | null {
   if (!source.trim() || source.length > MAX_MARKUP_SOURCE) return null
   try {
     const doc: MarkupDocument = { children: [], initial: Object.create(null), setters: Object.create(null) }
     const stack: MarkupElement[] = []
-    let i = 0, count = 0, components = 0
+    const math = new RegExp(proseMath.source, 'y')
+    let i = 0, count = 0, components = 0, discarded = false
     const children = () => stack.at(-1)?.children ?? doc.children
     const addState = (name: string, value: MarkupValue) => {
       if (!validName(name) || Object.hasOwn(doc.initial, name) || Object.keys(doc.initial).length >= 60) throw new Error('state')
@@ -215,35 +242,76 @@ export function parseUIMarkup(source: string, live = false): MarkupDocument | nu
       }
       if (/^<\/?[A-Za-z]/.test(source.slice(i))) {
         let token: ReturnType<typeof readTag>
-        try { token = readTag(source, i) } catch (e) { if (live && !source.slice(i).includes('>')) break; throw e }
+        try { token = readTag(source, i) } catch (e) { if (live && e instanceof Error && e.message.startsWith('unfinished ')) break; throw e }
         const inSVG = stack.some(parent => parent.tag === 'svg')
-        if (inSVG ? !markupSVGTags.has(token.tag) : !presetComponents.has(token.tag) && token.tag !== 'svg') throw new Error('unsupported component')
-        if ((inSVG || token.tag === 'svg') && Object.keys(token.attrs).some(name => name.startsWith('on'))) throw new Error('SVG event handler')
+        const supported = inSVG ? markupSVGTags.has(token.tag) : presetComponents.has(token.tag) || token.tag === 'svg'
+        if (!recover && !supported) throw new Error('unsupported component')
+        if (recover && (discardedTags.has(token.tag) || (inSVG && !supported))) {
+          discarded = true
+          i = discardedElementEnd(source, token) ?? source.length
+          continue
+        }
+        if ((inSVG || token.tag === 'svg') && Object.keys(token.attrs).some(name => name.startsWith('on'))) {
+          if (!recover) throw new Error('SVG event handler')
+          for (const name of Object.keys(token.attrs)) if (name.startsWith('on')) delete token.attrs[name]
+        }
         if (token.closing) {
-          if (stack.at(-1)?.tag !== token.tag) throw new Error('unbalanced tag')
-          stack.pop()
+          if (recover) {
+            let index = stack.length - 1
+            while (index >= 0 && stack[index].tag !== token.tag) index--
+            if (index >= 0) stack.length = index
+          } else {
+            if (stack.at(-1)?.tag !== token.tag) throw new Error('unbalanced tag')
+            stack.pop()
+          }
         } else {
           const node: MarkupElement = { tag: token.tag, attrs: token.attrs, children: [] }
           children().push(node); components++
           if (components > 3000) throw new Error('components')
+          if (!inSVG && !token.selfClosing && ['code', 'pre'].includes(token.tag)) {
+            const closing = closingElement(source, token)
+            if (!closing && !live && !recover) throw new Error('unfinished literal')
+            node.children.push(decode(source.slice(token.end, closing?.start ?? source.length)))
+            i = closing?.end ?? source.length
+            continue
+          }
           if (token.tag === 'state') {
             const name = markupAttribute(node, 'name'), value = markupAttribute(node, 'value')
             if (typeof name !== 'string' || value === undefined) throw new Error('state declaration')
             addState(name, value)
           }
-          if (!token.selfClosing) { stack.push(node); if (stack.length > 24) throw new Error('depth') }
+          if (!token.selfClosing && !(recover && !supported && htmlVoidTags.has(token.tag))) { stack.push(node); if (stack.length > 24) throw new Error('depth') }
         }
         i = token.end; continue
       }
-      const start = i++
-      if (source[start] === '`') {
-        const ticks = source.slice(start).match(/^`+/)![0]
-        const end = source.indexOf(ticks, i + ticks.length - 1)
-        i = end < 0 ? source.length : end + ticks.length
-      } else while (i < source.length && source[i] !== '<' && source[i] !== '`' && !source.startsWith('{@body', i)) i++
+      const start = i
+      while (i < source.length) {
+        if (/^<\/?[A-Za-z]/.test(source.slice(i)) || source.startsWith('{@body', i)) break
+        if (source[i] === '`') {
+          const ticks = source.slice(i).match(/^`+/)![0], end = source.indexOf(ticks, i + ticks.length)
+          i = end < 0 ? source.length : end + ticks.length
+        } else if (source[i] === '{') {
+          try { i = braces(source, i).end } catch { i++ }
+        } else if (source[i] === '$' || source[i] === '\\') {
+          math.lastIndex = i
+          const match = math.exec(source)
+          i = match ? math.lastIndex : /^(?:\$\$|\\\[|\\\()/.test(source.slice(i)) ? source.length : source[i] === '\\' ? Math.min(source.length, i + 2) : i + 1
+        } else i++
+      }
       children().push(decode(source.slice(start, i)))
     }
-    if ((!live && stack.length) || !components) return null
+    if (!recover && ((!live && stack.length) || !components)) return null
+    if (recover) {
+      const normalize = (nodes: MarkupNode[], inSVG = false): MarkupNode[] => nodes.flatMap(node => {
+        if (typeof node === 'string') return [node]
+        const supported = inSVG ? markupSVGTags.has(node.tag) : presetComponents.has(node.tag) || node.tag === 'svg'
+        node.children = normalize(node.children, inSVG || node.tag === 'svg')
+        if (supported) return [node]
+        return fallbackBlocks.has(node.tag) ? ['\n\n', ...node.children, '\n\n'] : node.children
+      })
+      doc.children = normalize(doc.children)
+      if (!doc.children.some(node => typeof node !== 'string' || node.trim()) && !discarded) return null
+    }
     function initialize(nodes: MarkupNode[]) {
       for (const node of markupElements(nodes)) {
         if (node.tag === 'svg') continue
@@ -264,7 +332,14 @@ export function parseUIMarkup(source: string, live = false): MarkupDocument | nu
 /** Compatibility with the example's one approved callback, interpreted as data. */
 export function markupReply(node: MarkupElement, state: Record<string, MarkupValue>): string | undefined {
   const prompt = markupAttribute(node, 'prompt', state)
-  if (typeof prompt === 'string') return prompt.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name: string) => Object.hasOwn(state, name) ? String(state[name]) : '').trim().slice(0, 16000)
+  if (typeof prompt === 'string') {
+    let missing = false
+    const text = prompt.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name: string) => {
+      if (!Object.hasOwn(state, name)) { missing = true; return match }
+      return String(state[name])
+    }).trim().slice(0, 16000)
+    return missing ? undefined : text
+  }
   const handler = node.attrs.onclick ?? node.attrs.onsubmit
   if (!handler || !('expression' in handler)) return undefined
   const match = handler.expression.match(/^\(\s*\)\s*=>\s*GenUI\.issueNewTurn\(([\s\S]*)\)\s*;?$/)
@@ -275,6 +350,38 @@ export function markupReply(node: MarkupElement, state: Record<string, MarkupVal
 const inlineComponents = new Set('text span small strong b em i code kbd mark br badge tag link a button tooltip cite svg state'.split(' '))
 const proseMath = /\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|(?<!\\)\$(?!\s)[^$\n]+?\$|\\\([\s\S]*?\\\)/g
 const escapeMarkup = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** Apply interpolation only to prose, preserving literal code, escapes and LaTeX. */
+export function mapMarkupExpressions(source: string, replace: (expression: string, name?: string) => string | undefined, markdown = true): string {
+  if (!source.includes('{')) return source
+  const protectedRanges: [number, number][] = []
+  const protect = (raw: string, tokens: Token[], base: number, depth = 0) => {
+    if (depth > 24) { protectedRanges.push([base, base + raw.length]); return }
+    let offset = 0
+    for (const token of tokens) {
+      const start = raw.indexOf(token.raw, offset)
+      if (start < 0) continue
+      offset = start + token.raw.length
+      if (['code', 'codespan', 'escape'].includes(token.type)) protectedRanges.push([base + start, base + offset])
+      else if ('tokens' in token && token.tokens) protect(token.raw, token.tokens, base + start, depth + 1)
+    }
+  }
+  if (markdown) {
+    let offset = 0
+    for (const token of marked.lexer(source)) {
+      const start = source.indexOf(token.raw, offset)
+      if (start < 0) continue
+      offset = start + token.raw.length
+      if (token.type === 'code') protectedRanges.push([start, offset])
+      else protect(token.raw, marked.Lexer.lexInline(token.raw), start)
+    }
+    for (const match of source.matchAll(proseMath)) protectedRanges.push([match.index!, match.index! + match[0].length])
+  }
+  return source.replace(/\{\{\s*(\w+)\s*\}\}|\{([^{}\n]+)\}/g, (match, name: string, expression: string, offset: number) => {
+    if (protectedRanges.some(([start, end]) => offset >= start && offset < end)) return match
+    return replace(expression, name) ?? match
+  })
+}
 
 function componentFence(source: string): string {
   const fenceLength = Math.max(3, ...Array.from(source.matchAll(/`+/g), match => match[0].length + 1))
@@ -290,13 +397,25 @@ function serializeMarkup(node: MarkupNode): string {
   return voidTags.has(node.tag) ? `<${node.tag}${attrs}/>` : `<${node.tag}${attrs}>${node.children.map(serializeMarkup).join('')}</${node.tag}>`
 }
 
+function serializeDocument(doc: MarkupDocument): string {
+  return stateDeclarations(doc) + doc.children.map(serializeMarkup).join('')
+}
+
+function stateDeclarations(doc: MarkupDocument): string {
+  return Object.entries(doc.setters).map(([setter, name]) => `{@body const [${name},${setter}] = DIL.useState(${JSON.stringify(doc.initial[name])})}`).join('\n')
+}
+
+function redeclaresState(nodes: MarkupNode[], state: Record<string, MarkupValue>): boolean {
+  return markupElements(nodes).some(node => (node.tag === 'state' && Object.hasOwn(state, String(markupAttribute(node, 'name')))) || redeclaresState(node.children, state))
+}
+
 /** Parse emphasis/links across component boundaries without exposing tag attributes to Markdown. */
 function formatProseRun(nodes: MarkupNode[]): MarkupNode[] {
   const text = nodes.filter(node => typeof node === 'string').join('')
   let prefix = 'AIVORYCOMPONENTTOKEN'
   while (text.includes(prefix)) prefix += 'X'
-  const elements: MarkupElement[] = []
-  const source = nodes.map(node => typeof node === 'string' ? node : `${prefix}${elements.push(node) - 1}Z`).join('')
+  const elements: MarkupNode[] = []
+  const source = mapMarkupExpressions(nodes.map(node => typeof node === 'string' ? node : `${prefix}${elements.push(node) - 1}Z`).join(''), (expression, name) => `${prefix}${elements.push(name ? `{{${name}}}` : `{${expression}}`) - 1}Z`)
   const marker = new RegExp(`${prefix}(\\d+)Z`, 'g')
   const restore = (raw: string): MarkupNode[] => {
     const parts: MarkupNode[] = []
@@ -319,7 +438,7 @@ function formatProseRun(nodes: MarkupNode[]): MarkupNode[] {
 /** Preserve the prose container around inline tags, splitting around block components. */
 function proseMarkup(source: string, wrapper = 'p'): string | null {
   const protectedSource = source.replace(proseMath, value => value.replace(/</g, '&lt;').replace(/>/g, '&gt;')).replace(/\\([<>])/g, (_, value: string) => value === '<' ? '&lt;' : '&gt;')
-  const doc = parseUIMarkup(protectedSource, true) ?? parseUIMarkup(`<span>${protectedSource}</span>`)
+  const doc = parseUIAnswer(protectedSource, true)
   if (!doc) return null
   const nodes = doc.children.length === 1 && typeof doc.children[0] !== 'string' && doc.children[0].tag === 'span' && !Object.keys(doc.children[0].attrs).length
     ? doc.children[0].children : doc.children
@@ -333,8 +452,7 @@ function proseMarkup(source: string, wrapper = 'p'): string | null {
     else { flush(); result += serializeMarkup(node) }
   }
   flush()
-  const declarations = Object.entries(doc.setters).map(([setter, name]) => `{@body const [${name},${setter}] = DIL.useState(${JSON.stringify(doc.initial[name])})}`).join('\n')
-  return declarations + result
+  return stateDeclarations(doc) + result
 }
 
 function hasProseComponents(source: string): boolean {
@@ -342,8 +460,18 @@ function hasProseComponents(source: string): boolean {
   let found = false
   marked.walkTokens(marked.lexer(source.replace(proseMath, '')), token => {
     const tag = token.type === 'html' ? token.raw.match(/^<([A-Za-z][\w-]*)[\s/>]/)?.[1].toLowerCase() : undefined
-    if (tag && (presetComponents.has(tag) || tag === 'svg')) found = true
+    if (tag) found = true
     if (token.type === 'text' && token.raw.includes('{@body')) found = true
+  })
+  return found
+}
+
+function hasStateExpressions(source: string, state: Record<string, MarkupValue>): boolean {
+  if (!source.includes('{') || !Object.keys(state).length) return false
+  let found = false
+  mapMarkupExpressions(source, (expression, name) => {
+    if (name ? Object.hasOwn(state, name) : evaluateMarkupExpression(expression, state) !== undefined && evaluateMarkupExpression(expression) === undefined) found = true
+    return undefined
   })
   return found
 }
@@ -385,7 +513,10 @@ function proseTokenMarkup(token: Token, depth = 0): string | null {
     }
     case 'hr': return '<divider/>'
     case 'code': return escapeMarkup(token.raw)
-    case 'html': return parseUIMarkup(token.raw, true) ? token.raw : null
+    case 'html': {
+      const doc = parseUIAnswer(token.raw, true)
+      return doc ? serializeDocument(doc) : null
+    }
     default: return proseMarkup(token.raw)
   }
 }
@@ -407,6 +538,8 @@ export function prepareGenerativeMarkup(source: string): string {
     if (token.type === 'list' || token.type === 'blockquote') nestedRanges.push([start, tokenOffset])
   }
   let fence = '', result = ''
+  const automaticGroups = new Set<number>()
+  const math = new RegExp(proseMath.source, 'y')
   for (let line = 0; line < lines.length; line++) {
     const current = lines[line], marker = current.match(/^\s{0,3}(`{3,}|~{3,})/)
     if (marker) {
@@ -414,8 +547,9 @@ export function prepareGenerativeMarkup(source: string): string {
       else if (marker[1][0] === fence[0] && marker[1].length >= fence.length && /^\s{0,3}(?:`+|~+)\s*$/.test(current)) fence = ''
     }
     const startTag = current.trimStart().match(/^<([A-Za-z][\w-]*)[\s/>]/)?.[1].toLowerCase()
-    if (fence || nestedRanges.some(([start, end]) => lineOffsets[line] >= start && lineOffsets[line] < end) || /^(?: {4}|\t)/.test(current) || (!current.trimStart().startsWith('{@body') && (!startTag || !markupComponents.has(startTag)))) { result += current + '\n'; continue }
-    let chunk = '', depth = 0, started = false, cursor = 0
+    if (fence || nestedRanges.some(([start, end]) => lineOffsets[line] >= start && lineOffsets[line] < end) || /^(?: {4}|\t)/.test(current) || (!current.trimStart().startsWith('{@body') && !startTag)) { result += current + '\n'; continue }
+    let chunk = '', started = false, cursor = 0
+    const openTags: string[] = []
     // Scan progressively so each source character is visited only once.
     for (; line < lines.length; line++) {
       chunk += lines[line] + '\n'
@@ -427,33 +561,88 @@ export function prepareGenerativeMarkup(source: string): string {
           cursor = end + 3
         } else if (chunk.startsWith('{@body', cursor)) {
           try { cursor = braces(chunk, cursor).end } catch { incomplete = true; break }
+        } else if (chunk[cursor] === '{') {
+          try { cursor = braces(chunk, cursor).end } catch { incomplete = true; break }
+        } else if (chunk[cursor] === '$' || chunk[cursor] === '\\') {
+          math.lastIndex = cursor
+          const match = math.exec(chunk)
+          if (!match && /^(?:\$\$|\\\[|\\\()/.test(chunk.slice(cursor))) { incomplete = true; break }
+          cursor = match ? math.lastIndex : chunk[cursor] === '\\' ? Math.min(chunk.length, cursor + 2) : cursor + 1
         } else if (/^<\/?[A-Za-z]/.test(chunk.slice(cursor))) {
-          try { const tag = readTag(chunk, cursor); depth += tag.closing ? -1 : tag.selfClosing ? 0 : 1; started = true; cursor = tag.end } catch { incomplete = true; break }
+          try {
+            const tag = readTag(chunk, cursor)
+            if (discardedTags.has(tag.tag)) {
+              const end = discardedElementEnd(chunk, tag)
+              if (end === undefined) { incomplete = true; break }
+              cursor = end
+            } else if (!tag.closing && !tag.selfClosing && ['code', 'pre'].includes(tag.tag)) {
+              const end = closingElement(chunk, tag)?.end
+              if (end === undefined) { incomplete = true; break }
+              cursor = end
+            } else {
+              if (tag.closing) {
+                const index = openTags.lastIndexOf(tag.tag)
+                if (index >= 0) openTags.length = index
+              } else if (!tag.selfClosing && !(!markupComponents.has(tag.tag) && htmlVoidTags.has(tag.tag))) openTags.push(tag.tag)
+              cursor = tag.end
+            }
+            started = true
+          } catch { incomplete = true; break }
         } else if (chunk[cursor] === '`') {
           const ticks = chunk.slice(cursor).match(/^`+/)![0], end = chunk.indexOf(ticks, cursor + ticks.length)
           if (end < 0) { incomplete = true; break }
           cursor = end + ticks.length
         } else cursor++
       }
-      if (!incomplete && started && depth <= 0) {
-        const next = lines.slice(line + 1).find(value => value.trim())?.trimStart() ?? ''
+      if (!incomplete && started && !openTags.length) {
+        let nextLine = line + 1
+        while (nextLine < lines.length && !lines[nextLine].trim()) nextLine++
+        const next = lines[nextLine]?.trimStart() ?? ''
         const nextTag = next.match(/^<([A-Za-z][\w-]*)[\s/>]/)?.[1].toLowerCase()
-        if (!next.startsWith('{@body') && (!nextTag || !markupComponents.has(nextTag))) break
+        if (!next.startsWith('{@body') && !nextTag) break
       }
     }
-    const doc = parseUIMarkup(chunk, true)
+    const doc = parseUIAnswer(chunk, true)
     const mixed = doc?.children.some(node => typeof node === 'string' && node.trim())
-    result += componentFence(mixed ? proseMarkup(chunk) ?? chunk : chunk)
+    const normalized = doc ? serializeDocument(doc) : chunk
+    if (doc && !normalized.trim()) { result += '\n'; continue }
+    automaticGroups.add(result.length + 1)
+    result += componentFence(mixed ? proseMarkup(normalized) ?? normalized : normalized)
   }
   let promoted = '', offset = 0
-  for (const token of marked.lexer(result, { gfm: true })) {
+  const tokens = marked.lexer(result, { gfm: true })
+  const proseTypes = new Set(['paragraph', 'heading', 'list', 'blockquote', 'table', 'html'])
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
     const start = result.indexOf(token.raw, offset)
     if (start < 0) continue
     promoted += result.slice(offset, start)
     offset = start + token.raw.length
-    if (!['paragraph', 'heading', 'list', 'blockquote', 'table'].includes(token.type) || !hasProseComponents(token.raw)) { promoted += token.raw; continue }
-    const markup = proseTokenMarkup(token)
-    promoted += markup === null ? token.raw : componentFence(markup)
+    const automatic = token.type === 'code' && automaticGroups.has(start)
+    const markup = automatic ? token.text : proseTypes.has(token.type) && hasProseComponents(token.raw) ? proseTokenMarkup(token) : null
+    if (markup === null) { promoted += token.raw; continue }
+    if (!markup.trim()) continue
+    let state = parseUIMarkup(markup, true)?.initial ?? {}
+    let combined = markup, last = index, groupEnd = offset, cursor = offset
+    // Keep trailing state-dependent prose in the same React component as its controls.
+    for (let next = index + 1; next < tokens.length && Object.keys(state).length; next++) {
+      const candidate = tokens[next], candidateStart = result.indexOf(candidate.raw, cursor)
+      if (candidateStart < 0 || result.slice(cursor, candidateStart).trim()) break
+      cursor = candidateStart + candidate.raw.length
+      if (candidate.type === 'space') continue
+      if (!proseTypes.has(candidate.type) || !hasStateExpressions(candidate.raw, state)) break
+      const suffix = proseTokenMarkup(candidate)
+      if (suffix === null || combined.length + suffix.length + 1 > MAX_MARKUP_SOURCE) break
+      const nextDoc = parseUIMarkup(suffix, true)
+      if (!nextDoc || Object.values(nextDoc.setters).some(name => Object.hasOwn(state, name)) || redeclaresState(nextDoc.children, state)) break
+      combined += '\n' + suffix
+      state = { ...nextDoc.initial, ...state }
+      last = next; groupEnd = cursor
+    }
+    if (last > index && parseUIMarkup(combined, true)) {
+      promoted += componentFence(combined)
+      index = last; offset = groupEnd
+    } else promoted += automatic ? token.raw : componentFence(markup)
   }
   return (promoted + result.slice(offset)).trimEnd()
 }

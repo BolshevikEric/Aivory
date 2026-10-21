@@ -10,7 +10,7 @@ import { GenerativeForm } from './generative-form'
 import { parseUIDocument, type UIBlock, type UITableCell, type UITableColumn } from '@/lib/generative-ui'
 import { InlineHTML } from './inline-html'
 import { GenerativeMarkup } from './generative-markup'
-import { parseUIMarkup } from '@/lib/generative-markup'
+import { parseUIAnswer } from '@/lib/generative-markup'
 import type { CiteRef } from '@/lib/markdown'
 import '@/styles/generative-ui.css'
 
@@ -146,10 +146,10 @@ function Blocks({ blocks, live }: { blocks: UIBlock[]; live: boolean }) { return
 export function GenerativeUI({ code, lang, live = false, cites }: { code: string; lang: 'aivory-ui' | 'aivory-html'; live?: boolean; cites?: CiteRef[] }) {
   const { t } = useTranslation('chat')
   const doc = useMemo(() => lang === 'aivory-ui' && /^\s*\{(?!@body)/.test(code) ? parseUIDocument(code) : null, [code, lang])
-  const markup = useMemo(() => lang === 'aivory-ui' && !doc ? parseUIMarkup(code, live) : null, [code, doc, lang, live])
+  const markup = useMemo(() => lang === 'aivory-ui' && !doc ? parseUIAnswer(code, live) : null, [code, doc, lang, live])
   const invalid = lang === 'aivory-ui' && !doc && !markup
   return <section data-generative-ui={lang} data-generative-markup={markup ? '' : undefined} className={markup ? 'my-4 min-w-0 max-w-full text-[var(--color-fg)] [overflow-wrap:anywhere]' : 'my-4 min-w-0 max-w-full rounded-xl bg-[var(--color-surface)] p-4 text-[var(--color-fg)] sm:p-5 [overflow-wrap:anywhere]'}>
-    {invalid ? <p role="status" className="m-0 text-sm text-[var(--color-fg-muted)]">{t(live ? 'generative.generating' : 'generative.invalid')}</p> : lang === 'aivory-html' ? <InlineHTML code={code} live={live} /> : markup ? <GenerativeMarkup document={markup} live={live} cites={cites} renderBlock={block => <Block block={block} live={live} />} /> : doc && <>
+    {invalid ? <><p role="status" className="m-0 text-sm text-[var(--color-fg-muted)]">{t(live ? 'generative.generating' : 'generative.invalid')}</p>{!live && <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs"><code>{code}</code></pre>}</> : lang === 'aivory-html' ? <InlineHTML code={code} live={live} /> : markup ? <GenerativeMarkup document={markup} live={live} cites={cites} renderBlock={block => <Block block={block} live={live} />} /> : doc && <>
       {(doc.title || doc.description) && <div className="mb-5 space-y-1"><div className="text-base font-semibold">{doc.title}</div>{doc.description && <p className="m-0 text-sm text-[var(--color-fg-muted)]">{doc.description}</p>}</div>}
       <Blocks blocks={doc.blocks} live={live} />
     </>}

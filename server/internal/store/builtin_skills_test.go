@@ -18,7 +18,7 @@ func TestBuiltinSkillSeedPreservesAdministratorChanges(t *testing.T) {
 	if strings.Contains(strings.ToLower(skill.Instructions), "json") || strings.Contains(skill.Instructions, "blocks array") {
 		t.Fatal("built-in UI instructions mention the retired output format")
 	}
-	for _, required := range []string{"Both complete UI layouts", "Raw tags do not require a code fence or an outer container", "Separate groups do not share state"} {
+	for _, required := range []string{"Both complete UI layouts", "Raw tags do not require a code fence or an outer container", "Immediately following Markdown blocks", "Separate groups do not share state", "do not invent component names", "Code, escaped braces, and LaTeX remain literal"} {
 		if !strings.Contains(skill.Instructions, required) {
 			t.Errorf("built-in UI instructions are missing %q", required)
 		}

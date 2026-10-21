@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { evaluateMarkupExpression, markupAttribute, markupBinding, markupComponents, markupElements, markupReply, parseUIMarkup, prepareGenerativeMarkup, MAX_MARKUP_SOURCE, type MarkupNode } from '@/lib/generative-markup'
+import { evaluateMarkupExpression, mapMarkupExpressions, markupAttribute, markupBinding, markupComponents, markupElements, markupReply, parseUIAnswer, parseUIMarkup, prepareGenerativeMarkup, MAX_MARKUP_SOURCE, type MarkupNode } from '@/lib/generative-markup'
 import { markupPreset } from '@/lib/generative-markup-presets'
 import { tokenizeMarkdown } from '@/lib/markdown'
+import { weeklyProgress } from '../fixtures/generative-inline'
+import { evolvingState } from '../fixtures/generative-robustness'
 
 describe('composable generative markup', () => {
   it('keeps every shipped example compatible with the markup renderer and visualization engines', () => {
@@ -49,6 +51,9 @@ describe('composable generative markup', () => {
     const doc = parseUIMarkup('<state name="kind" value="生活"/><form prompt="Find {{kind}} in {{city}}"><input name="city" value="台北"/><switch name="tax"/><button type="submit">Send</button></form>')!
     expect(doc.initial).toEqual({ kind: '生活', city: '台北', tax: false })
     expect(markupReply(markupElements(doc.children)[1], doc.initial)).toBe('Find 生活 in 台北')
+    const toggles = parseUIMarkup('<checkbox name="done" value={true}/><switch name="optional" checked={false}/><input name="empty" value={null}/>')!
+    expect(toggles.initial).toEqual({ done: true, optional: false, empty: '' })
+    expect(markupReply(markupElements(parseUIMarkup('<button prompt="Review {{missing}}">Review</button>')!.children)[0], {})).toBeUndefined()
   })
   it('handles quoted braces, arrows, unicode and escaped expression strings', () => {
     expect(evaluateMarkupExpression('"a} > {b" + "\\n\\u53f0"')).toBe('a} > {b\n台')
@@ -74,6 +79,34 @@ describe('composable generative markup', () => {
     expect(parseUIMarkup('<box><text>Hello</text>')).toBeNull()
     expect(parseUIMarkup('<box></row>', true)).toBeNull()
     expect(parseUIMarkup('<box>`<script>not executable</script>`</box>')).not.toBeNull()
+    expect(parseUIMarkup('<box><text>Kept</text><row title="a > b" gap={', true)).not.toBeNull()
+    expect(parseUIMarkup('<box><text>Kept</text><row title="a > b', true)).not.toBeNull()
+  })
+  it('treats tags inside expressions, formulas, escapes and code as literal text', () => {
+    const source = '<box><checkbox name="done"/><text>{done ? "<button>" : "<script>"} $x<y$ \\<badge>literal\\</badge> `<image src="https://unsafe.example.test"/>`</text></box>'
+    const doc = parseUIMarkup(source)!
+    const text = markupElements(markupElements(doc.children)[0].children, 'text')[0]
+    expect(text.children).toHaveLength(1)
+    expect(typeof text.children[0]).toBe('string')
+    const mixed = tokenizeMarkdown('<checkbox name="done"/>\n\nResult: {done ? "**Complete**" : "<script>"}', false, true)[0]
+    expect(parseUIMarkup(mixed.content)).not.toBeNull()
+    expect(mixed.content).toContain('done ? &quot;**Complete**&quot; : &quot;&lt;script&gt;&quot;')
+    const blocks = tokenizeMarkdown('<box><text>{true ? "<script>" : "<button>"}</text>\n\n$$x<text>y$$\n</box>\n\n## Outside\n\nKept outside.', false, true)
+    expect(blocks.filter(block => block.lang === 'aivory-ui')).toHaveLength(1)
+    expect(blocks.find(block => block.type === 'heading')?.content).toBe('Outside')
+  })
+  it('keeps recovery bounded and the strict protocol parser unchanged', () => {
+    expect(parseUIMarkup('<div><card>Kept</card></div>')).toBeNull()
+    expect(parseUIAnswer('<div><card>Kept</card></div>')?.children.some(node => typeof node !== 'string' && node.tag === 'card')).toBe(true)
+    expect(parseUIAnswer('<box>'.repeat(25) + '</box>'.repeat(25))).toBeNull()
+    expect(parseUIAnswer('a'.repeat(MAX_MARKUP_SOURCE + 1))).toBeNull()
+    expect(parseUIAnswer('<br/>'.repeat(3001))).toBeNull()
+    for (const name of ['true', 'false', 'null']) expect(parseUIMarkup(`<state name="${name}" value={1}/>`)).toBeNull()
+  })
+  it('never maps prose expressions inside nested code, escaped braces or math', () => {
+    const source = 'Active {done}; **`{done}`**; $x_{done}$; \\{done};\n\n```text\n{done}\n```\n\n    {done}'
+    const mapped = mapMarkupExpressions(source, () => 'changed')
+    expect(mapped).toBe(source.replace('Active {done}', 'Active changed'))
   })
   it('keeps raw component trees together across blank lines and state declarations', () => {
     const source = '# Answer\n\nBefore.\n\n{@body const [kind,setKind] = DIL.useState("vlog")}\n<box>\n**Choose**\n\n<radio-group value={kind} onChange={setKind}><radio value="vlog">Vlog</radio></radio-group>\n</box>\n\n<button prompt="Find {{kind}}">Find</button>\n\nAfter.'
@@ -91,6 +124,56 @@ describe('composable generative markup', () => {
     const fenced = '```aivory-ui\n<box>\n\nContent\n</box>\n```'
     expect(prepareGenerativeMarkup(fenced)).toBe(fenced)
     expect(tokenizeMarkdown('<box>$$x^2$$</box>', false, true)).toMatchObject([{ type: 'code', lang: 'aivory-ui', content: '<box>$$x^2$$</box>' }])
+  })
+  it('shares tab control state with the immediately following Markdown progress summary', () => {
+    const prepared = prepareGenerativeMarkup(weeklyProgress)
+    const blocks = tokenizeMarkdown(weeklyProgress, false, true)
+    const ui = blocks.filter(block => block.lang === 'aivory-ui')
+    expect(ui).toHaveLength(1)
+    expect(ui[0].content).toContain('<p>Progress: Week 1 {w1c ?')
+    expect(parseUIMarkup(ui[0].content)?.initial).toEqual({ w1c: false, w2c: false, w3c: false, w4c: false })
+    expect(ui[0].content).not.toContain('Research card')
+    expect(blocks.at(-1)?.content).toBe('Record the weekly findings here.')
+    expect(prepareGenerativeMarkup(prepared)).toBe(prepared)
+  })
+  it('preserves dependent Markdown headings, lists, quotes, tables and inline component groups', () => {
+    const source = 'Choose <checkbox name="done" label="Done"/> now.\n\n## Result {done ? "Done" : "Pending"}\n\n- Selected: {{done}}\n\n> State: {done}\n\n| State |\n| --- |\n| {done} |\n\nContinue <button prompt="Review {{done}}">Review</button>.'
+    const ui = tokenizeMarkdown(source, false, true).filter(block => block.lang === 'aivory-ui')
+    expect(ui).toHaveLength(1)
+    for (const tag of ['h2', 'ul', 'blockquote', 'table', 'button']) expect(ui[0].content).toContain(`<${tag}`)
+    expect(parseUIMarkup(ui[0].content)?.initial.done).toBe(false)
+  })
+  it('extends automatic groups with state introduced by a dependent paragraph', () => {
+    const ui = tokenizeMarkdown(evolvingState, false, true).filter(block => block.lang === 'aivory-ui')
+    expect(ui).toHaveLength(1)
+    expect(ui[0].content).toContain('Notes: {notes}')
+    expect(parseUIMarkup(ui[0].content)?.initial).toEqual({ done: false, notes: 'Draft' })
+  })
+  it('does not merge an independently redeclared state into the previous group', () => {
+    const source = '<checkbox name="done"/>\n\n<text>{done}</text>\n\nNew {@body const [done,setDone] = DIL.useState(true)} <checkbox value={done} onChange={setDone}/> group.'
+    const ui = tokenizeMarkdown(source, false, true).filter(block => block.lang === 'aivory-ui')
+    expect(ui).toHaveLength(2)
+    expect(parseUIMarkup(ui[0].content)?.initial.done).toBe(false)
+    expect(parseUIMarkup(ui[1].content)?.initial.done).toBe(true)
+    const nested = tokenizeMarkdown('<checkbox name="done"/>\n\nNew <card><state name="done" value={true}/><text>{done}</text></card> group.', false, true).filter(block => block.lang === 'aivory-ui')
+    expect(nested).toHaveLength(2)
+    expect(parseUIMarkup(nested[0].content)?.initial.done).toBe(false)
+  })
+  it('keeps state boundaries at explicit fences, unrelated prose and source examples', () => {
+    const control = '<checkbox name="done" label="Done"/>'
+    const summary = 'Result: {done ? "Done" : "Pending"}'
+    for (const boundary of ['Unrelated paragraph.', '## Next section', '```text\n{done}\n```', '    {done}', '`{done}`', '- `{done}`', '$x + {done}$', '$${done}$$', '\\{done}', 'Unknown {missing}', '[reference]: https://example.test', '```aivory-ui\n<checkbox name="other"/>\n```']) {
+      const ui = tokenizeMarkdown(`${control}\n\n${boundary}\n\n${summary}`, false, true).filter(block => block.lang === 'aivory-ui')
+      expect(ui[0].content, boundary).not.toContain('Result:')
+    }
+    const fenced = tokenizeMarkdown(`\`\`\`aivory-ui\n${control}\n\`\`\`\n\n${summary}`, false, true)
+    expect(fenced[0].content).toBe(control)
+    expect(fenced.at(-1)?.content).toBe(summary)
+    const independent = tokenizeMarkdown(`${control}\n\n${summary}\n\nUnrelated.\n\n<checkbox name="done" value={true}/>\n\n${summary}`, false, true).filter(block => block.lang === 'aivory-ui')
+    expect(independent).toHaveLength(2)
+    expect(parseUIMarkup(independent[0].content)?.initial.done).toBe(false)
+    expect(parseUIMarkup(independent[1].content), independent[1].content).not.toBeNull()
+    expect(parseUIMarkup(independent[1].content)?.initial.done).toBe(true)
   })
   it('interleaves inline components with prose, headings, lists, quotes and Markdown tables', () => {
     const source = '## Status <badge>Ready</badge>\n\nBefore **bold** <badge tone="success">Available</badge> after.\n\n3. Compare <button prompt="Compare plans">Compare</button> first.\n4. Keep <text color="muted">context</text>.\n\n> A note <badge>Tip</badge> for you.\n\n| Plan | Status |\n| --- | --- |\n| Basic | <badge>Available</badge> |\n\nEnd.'

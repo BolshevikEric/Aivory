@@ -1,3 +1,5 @@
+import { isArtifactUrl } from './artifact-links'
+
 /** Native SVG names are separate from the surrounding preset component names. */
 export const markupSVGTags = new Map((
   'svg g defs symbol use path rect circle ellipse line polyline polygon text tspan textPath title desc ' +
@@ -38,10 +40,11 @@ export function markupSVGAttribute(name: string, value: unknown, prefix: string,
   if (canonical === 'href') {
     if (text.startsWith('#') && localID.test(text.slice(1))) return [canonical, '#' + prefix + text.slice(1)]
     if (tag === 'image') {
+      if (isArtifactUrl(text)) return [canonical, text]
       try {
         const url = new URL(text)
         if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) return [canonical, url.href]
-      } catch { /* An SVG image must have an absolute HTTP(S) URL. */ }
+      } catch { /* Other SVG image URLs must be absolute HTTP(S). */ }
     }
     return undefined
   }
