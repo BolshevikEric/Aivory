@@ -45,6 +45,8 @@ import { markConversationsDeleted, unmarkConversationsDeleted } from '@/lib/sync
 import { toast } from '@/hooks/use-toast'
 import { activeWorkspaceId, useWorkspaces } from '@/store/workspaces'
 import { useAuth } from '@/store/auth'
+import { userCan } from '@/lib/user-permissions'
+import { workspaceAllowsMessageEditing } from '@/lib/workspace-permissions'
 import { useComposerPrefs, type ComposerMode } from '@/store/composer-prefs'
 import { useModels } from '@/store/models'
 import type { ToolMode } from '@/lib/tool-mode'
@@ -2895,6 +2897,23 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
   },
 
   async editMessageInPlace(conversationId, messageId, text) {
+    if (!userCan(useAuth.getState().user, 'allow_message_editing')) {
+      throw new Error('permission denied')
+    }
+    const conversation = get().conversations.find((item) => item.id === conversationId)
+    const workspaceID = conversation?.workspaceId
+    const workspaceState = useWorkspaces.getState()
+    if (!workspaceAllowsMessageEditing(
+      workspaceID,
+      workspaceState.workspaces.find((workspace) => workspace.id === workspaceID),
+      workspaceID ? workspaceState.policies[workspaceID] : undefined,
+      {
+        workspacesLoaded: workspaceState.loaded,
+        switching: workspaceState.switching,
+        policyLoading: workspaceID ? workspaceState.policyLoading[workspaceID] : false,
+        policyError: workspaceID ? workspaceState.policyErrors[workspaceID] : null,
+      },
+    )) throw new Error('permission denied')
     const previousMessage = get().conversations
       .find((c) => c.id === conversationId)
       ?.messages.find((m) => m.id === messageId)

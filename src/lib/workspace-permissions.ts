@@ -129,6 +129,20 @@ export function workspacePolicyResolvedForScope(
     !options.policyError
 }
 
+/** Workspace controls narrow the user's group permission; admins bypass only
+ * member-level restrictions, never the workspace-wide policy. */
+export function workspaceAllowsMessageEditing(
+  workspaceId: string | null | undefined,
+  workspace: ApiWorkspace | null | undefined,
+  policy: Partial<ApiWorkspacePolicy> | null | undefined,
+  options: WorkspacePolicyResolutionOptions = {},
+): boolean {
+  if (!workspaceId) return true
+  if (!workspace || workspace.id !== workspaceId || workspace.role === 'guest') return false
+  if (!workspacePolicyResolvedForScope(workspaceId, policy, options) || policy?.AllowMessageEditing === false) return false
+  return workspace.is_owner === true || workspace.role === 'admin' || workspace.can_edit_messages !== false
+}
+
 /**
  * Stable fingerprint for the workspace fields that shape the chat/image model
  * catalog. It lets the model cache distinguish an ordinary same-policy refresh

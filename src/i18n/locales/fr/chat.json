@@ -1006,6 +1006,10 @@
         "label": "Supprimer le contenu des bases",
         "description": "Supprimer, relancer ou gérer du contenu lorsque la base concernée l'autorise aussi."
       },
+      "can_edit_messages": {
+        "label": "Modifier les messages",
+        "description": "Enregistrer directement ses propres messages et modifier les réponses de l’IA si le groupe et l’espace l’autorisent. Modifier puis renvoyer ses propres messages reste possible."
+      },
       "can_delete_conversations": {
         "label": "Supprimer les conversations",
         "description": "Supprimer les messages et les conversations de cet espace, y compris celles créées par l'utilisateur."
@@ -1139,6 +1143,10 @@
       "AllowKnowledgeBases": {
         "label": "Bases de connaissances",
         "description": "Créer et utiliser les bases et projets de l'espace."
+      },
+      "AllowMessageEditing": {
+        "label": "Modifier les messages",
+        "description": "Autoriser l’enregistrement direct de ses propres messages et la modification des réponses de l’IA. Les restrictions du groupe et du membre s’appliquent aussi. Ce réglage concerne les administrateurs. Modifier puis renvoyer reste possible."
       },
       "AllowFileUpload": {
         "label": "Téléversement de fichiers",

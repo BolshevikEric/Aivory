@@ -15,6 +15,7 @@ import { useWorkspaces } from '@/store/workspaces'
 import { toast } from '@/hooks/use-toast'
 import { protectedFirstRoundMessageIds } from '@/lib/message-state'
 import { userCan } from '@/lib/user-permissions'
+import { workspaceAllowsMessageEditing } from '@/lib/workspace-permissions'
 import { GenerativeReplyProvider } from './generative-reply'
 import { useConversationGenerativeReply } from '@/hooks/use-conversation-generative-reply'
 import type { MessageImageSelection } from '@/hooks/use-conversation-image-share'
@@ -49,6 +50,18 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey, onGenera
   )
   const isWorkspaceGuest = conversationWorkspace?.role === 'guest'
   const isReadOnlyConversation = isWorkspaceGuest || conversation.archived
+  const canEditInWorkspace = useWorkspaces((s) => workspaceAllowsMessageEditing(
+    conversation.workspaceId,
+    conversationWorkspace,
+    conversation.workspaceId ? s.policies[conversation.workspaceId] : undefined,
+    {
+      workspacesLoaded: s.loaded,
+      switching: s.switching,
+      policyLoading: conversation.workspaceId ? s.policyLoading[conversation.workspaceId] : false,
+      policyError: conversation.workspaceId ? s.policyErrors[conversation.workspaceId] : null,
+    },
+  ))
+  const canEditMessages = userCan(user, 'allow_message_editing') && canEditInWorkspace
   const handleGenerativeReply = useConversationGenerativeReply(conversation, Boolean(isReadOnlyConversation), onGenerativeReplyAccepted)
   const canDeleteConversations =
     userCan(user, 'allow_conversation_deletion') &&
@@ -391,7 +404,7 @@ export function MessageList({ conversation, scrollToMessageId, jumpKey, onGenera
             onRegenerate={isReadOnlyConversation ? undefined : handleRegenerate}
             onEdit={isReadOnlyConversation ? undefined : handleEdit}
             onImageEdit={canMaskEdit ? handleImageEdit : undefined}
-            onSaveEdit={isReadOnlyConversation ? undefined : handleSaveEdit}
+            onSaveEdit={isReadOnlyConversation || !canEditMessages ? undefined : handleSaveEdit}
             onFeedback={isWorkspaceGuest ? undefined : handleFeedback}
             onReport={isWorkspaceGuest ? undefined : handleReport}
             onBranchSwitch={isWorkspaceGuest ? undefined : handleBranchSwitch}

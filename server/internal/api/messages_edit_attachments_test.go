@@ -35,6 +35,26 @@ func TestPostMessageEditResendPreservesExistingImage(t *testing.T) {
 		t.Run("parent="+parentID, func(t *testing.T) {
 			fx := seedImageCapabilityFixture(t)
 			ctx, db := t.Context(), fx.deps.DB
+			mustExec(t, db, `INSERT INTO user_groups(id,name,permissions) VALUES('resend-group','Resend','{"allow_message_editing":false}')`)
+			mustExec(t, db, `UPDATE users SET role='user',group_id='resend-group' WHERE id='u1'`)
+			fx.user.Role = "user"
+			if err := store.SetModelQuotas(ctx, db, "m_vision", []store.ModelGroupQuota{{GroupID: "resend-group", LimitType: "count", LimitValue: 0}}); err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, db, `INSERT INTO users(id,email,password_hash,role) VALUES('resend-owner','resend-owner@example.test','h','user')`)
+			workspace, err := store.CreateWorkspace(ctx, db, "resend-owner", "Resend")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.JoinWorkspace(ctx, db, workspace.ID, "u1"); err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, db, `UPDATE conversations SET workspace_id=?,is_public=1 WHERE id='c1'`, workspace.ID)
+			mustExec(t, db, `UPDATE workspace_members SET can_edit_messages=0 WHERE workspace_id=? AND user_id='u1'`, workspace.ID)
+			disabled := false
+			if _, err := store.UpdateWorkspacePolicy(ctx, db, workspace.ID, "resend-owner", store.WorkspacePolicyPatch{AllowMessageEditing: &disabled}); err != nil {
+				t.Fatal(err)
+			}
 			if parentID != "" {
 				if _, err := store.CreateMessage(ctx, db, store.Message{
 					ID: parentID, ConversationID: "c1", Role: "assistant",

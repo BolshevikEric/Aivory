@@ -1006,6 +1006,10 @@
         "label": "刪除知識庫內容",
         "description": "具體知識庫同時允許時，可刪除、重試或管理其中內容。"
       },
+      "can_edit_messages": {
+        "label": "訊息編輯",
+        "description": "允許直接儲存自己的訊息修改和編輯 AI 回覆，仍須使用者群組與空間總開關允許。關閉後仍可編輯自己的訊息並重新傳送。"
+      },
       "can_delete_conversations": {
         "label": "刪除對話",
         "description": "刪除此工作空間內的訊息和整個對話，包括自己建立的對話。"
@@ -1139,6 +1143,10 @@
       "AllowKnowledgeBases": {
         "label": "知識庫",
         "description": "建立並使用工作空間知識庫和專案。"
+      },
+      "AllowMessageEditing": {
+        "label": "訊息編輯",
+        "description": "允許直接儲存自己的訊息修改和編輯 AI 回覆。使用者群組與成員權限仍可限制，管理員也受空間總開關約束。關閉後仍可編輯自己的訊息並重新傳送。"
       },
       "AllowFileUpload": {
         "label": "檔案上傳",

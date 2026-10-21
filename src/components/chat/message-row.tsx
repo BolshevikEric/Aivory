@@ -281,6 +281,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
   const user = useAuth((s) => s.user)
   const meId = user?.id
   const canExportConversations = userCan(user, 'allow_conversation_export')
+  const canSaveEdit = !readOnly && Boolean(onSaveEdit) && userCan(user, 'allow_message_editing')
   // readOnly (admin transcript viewer): there is no "me" perspective — keep the
   // classic role-based layout so mixed legacy/authored turns don't zigzag.
   const isOwn = isUser && (readOnly ? true : message.authorId ? message.authorId === meId : true)
@@ -485,9 +486,9 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
   }, [onFeedback])
 
   useEffect(() => {
-    if (isUser ? onEdit : onSaveEdit) return
+    if (isUser ? onEdit : canSaveEdit) return
     setEditing(false)
-  }, [isUser, onEdit, onSaveEdit])
+  }, [isUser, onEdit, canSaveEdit])
 
   // An in-place edit (or any authoritative external refresh) invalidates an
   // old dislike. Clear the row-local draft only after the feedback mutation
@@ -518,7 +519,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
   // exact Markdown source, including intentional leading/trailing whitespace.
   async function saveInPlace() {
     const next = isUser ? draft.trim() : draft
-    if (!next.trim() || savingEdit || !onSaveEdit) return
+    if (!next.trim() || savingEdit || !canSaveEdit || !onSaveEdit) return
     setSavingEdit(true)
     try {
       await onSaveEdit(message.id, next)
@@ -776,16 +777,18 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
                 <Button size="sm" variant="ghost" disabled={savingEdit} onClick={() => setEditing(false)}>
                   {t('actions.cancelEdit', { defaultValue: 'Cancel' })}
                 </Button>
-                <Button size="sm" variant="secondary" loading={savingEdit} onClick={() => void saveInPlace()}>
-                  {t('actions.saveInPlace', { defaultValue: 'Save' })}
-                </Button>
+                {canSaveEdit ? (
+                  <Button size="sm" variant="secondary" loading={savingEdit} onClick={() => void saveInPlace()}>
+                    {t('actions.saveInPlace', { defaultValue: 'Save' })}
+                  </Button>
+                ) : null}
                 <Button size="sm" variant="primary" disabled={savingEdit} onClick={commitEdit}>
                   {t('actions.saveEdit', { defaultValue: 'Save & resend' })}
                 </Button>
               </div>
             </div>
           </div>
-        ) : editing ? (
+        ) : editing && canSaveEdit ? (
           <div className="w-full">
             <Textarea
               ref={assistantEditRef}
@@ -1252,7 +1255,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
                 </Tooltip>
                 ) : null}
 
-                {!isUser && message.content && onSaveEdit ? (
+                {!isUser && message.content && canSaveEdit ? (
                   <Tooltip content={t('actions.edit')}>
                     <button
                       type="button"
@@ -1475,7 +1478,7 @@ function MessageRowImpl({ message, userName, onRegenerate, onEdit, onImageEdit, 
               ) : null}
               {!isUser ? (
                 <>
-                  {message.content && onSaveEdit ? (
+                  {message.content && canSaveEdit ? (
                     <MsgActionRow
                       icon={<Pencil size={18} aria-hidden />}
                       label={t('actions.edit')}

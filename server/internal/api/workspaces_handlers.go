@@ -550,6 +550,7 @@ func updateWorkspacePolicyHandler(d Deps, w http.ResponseWriter, r *http.Request
 		AllowPrompts             *bool     `json:"allow_prompts"`
 		AllowPrivateChat         *bool     `json:"allow_private_chat"`
 		AllowAiPPT               *bool     `json:"allow_ai_ppt"`
+		AllowMessageEditing      *bool     `json:"allow_message_editing"`
 		AllowSandbox             *bool     `json:"allow_sandbox"`
 		AllowImageGeneration     *bool     `json:"allow_image_generation"`
 		AllowKnowledgeBases      *bool     `json:"allow_knowledge_bases"`
@@ -578,6 +579,7 @@ func updateWorkspacePolicyHandler(d Deps, w http.ResponseWriter, r *http.Request
 		AllowPrompts:             req.AllowPrompts,
 		AllowPrivateChat:         req.AllowPrivateChat,
 		AllowAiPPT:               req.AllowAiPPT,
+		AllowMessageEditing:      req.AllowMessageEditing,
 		AllowSandbox:             req.AllowSandbox,
 		AllowImageGeneration:     req.AllowImageGeneration,
 		AllowKnowledgeBases:      req.AllowKnowledgeBases,

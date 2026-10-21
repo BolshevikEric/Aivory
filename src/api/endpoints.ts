@@ -801,6 +801,7 @@ export const workspacesApi = {
       AllowPrompts: 'allow_prompts',
       AllowPrivateChat: 'allow_private_chat',
       AllowAiPPT: 'allow_ai_ppt',
+      AllowMessageEditing: 'allow_message_editing',
       AllowSandbox: 'allow_sandbox',
       AllowImageGeneration: 'allow_image_generation',
       AllowKnowledgeBases: 'allow_knowledge_bases',

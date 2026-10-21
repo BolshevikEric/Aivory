@@ -1014,6 +1014,10 @@
         "label": "Delete knowledge-base content",
         "description": "Delete, retry, or manage content when the specific knowledge base also allows it."
       },
+      "can_edit_messages": {
+        "label": "Edit messages",
+        "description": "Save changes to their own messages in place and edit AI replies when their user group and workspace allow it. Editing and resending their own messages remains available."
+      },
       "can_delete_conversations": {
         "label": "Delete conversations",
         "description": "Delete messages and conversations in this workspace, including conversations they created."
@@ -1147,6 +1151,10 @@
       "AllowKnowledgeBases": {
         "label": "Knowledge bases",
         "description": "Create and use workspace knowledge bases and projects."
+      },
+      "AllowMessageEditing": {
+        "label": "Edit messages",
+        "description": "Allow saving own messages in place and editing AI replies. User group and member restrictions still apply; workspace admins also obey this switch. Editing and resending own messages remains available."
       },
       "AllowFileUpload": {
         "label": "File upload",

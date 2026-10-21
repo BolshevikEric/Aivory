@@ -141,7 +141,7 @@ func TestHTTPWorkspaceLegacyPermissionPatchDoesNotBroadenNewCapabilities(t *test
 	if updated.CanCreateProjects || !updated.CanCreatePrompts || !updated.CanCreateSkills || updated.CanCreateMCP {
 		t.Fatalf("legacy patch rewrote creation permissions: %+v", updated)
 	}
-	if !updated.CanUsePrompts || updated.CanUseSkills || updated.CanUseMCP || updated.CanDeleteConversations {
+	if !updated.CanUsePrompts || updated.CanUseSkills || updated.CanUseMCP || updated.CanDeleteConversations || updated.CanEditMessages {
 		t.Fatalf("legacy patch broadened omitted permissions: %+v", updated)
 	}
 }

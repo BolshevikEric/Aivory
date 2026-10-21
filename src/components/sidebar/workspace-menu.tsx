@@ -486,6 +486,7 @@ export function WorkspaceMembersDialog({ open, onOpenChange }: { open: boolean; 
       can_delete_kb_content: member.can_delete_kb_content,
       can_delete_conversations: member.can_delete_conversations,
       can_use_ai_ppt: member.can_use_ai_ppt ?? true,
+      can_edit_messages: member.can_edit_messages ?? true,
     })
   }
 
@@ -1121,6 +1122,7 @@ const WORKSPACE_PERMISSION_GROUPS: WorkspaceMemberPermissionGroup[] = [
       { key: 'can_add_kb_files', label: 'Add knowledge-base files', description: 'Upload and paste content into workspace knowledge bases.' },
       { key: 'can_delete_kb_content', label: 'Delete knowledge-base content', description: 'Delete or retry content when the specific library also allows it.' },
       { key: 'can_delete_conversations', label: 'Delete conversations', description: 'Delete messages and conversations in this workspace, including conversations they created.' },
+      { key: 'can_edit_messages', label: 'Edit messages', description: 'Save their own messages in place and edit AI replies when their user group and workspace allow it. Editing and resending their own messages remains available.' },
     ],
   },
 ]
@@ -1534,7 +1536,7 @@ function WorkspacePolicyPanel({ workspaceID }: { workspaceID: string }) {
 
   const allModelsAllowed = policy.AllowedModelIDs.length === 0
   const capabilities = workspaceCapabilities(policy)
-  type CapabilityKey = 'AllowToolCalling' | 'AllowDrawing' | 'AllowPrivateChat' | 'AllowAiPPT' | 'AllowMCP' | 'AllowSkills' | 'AllowPrompts' | 'AllowKnowledgeBases' | 'AllowFileUpload'
+  type CapabilityKey = 'AllowToolCalling' | 'AllowDrawing' | 'AllowPrivateChat' | 'AllowAiPPT' | 'AllowMessageEditing' | 'AllowMCP' | 'AllowSkills' | 'AllowPrompts' | 'AllowKnowledgeBases' | 'AllowFileUpload'
   const capabilityGroups: Array<{
     id: 'core' | 'resources' | 'content'
     label: string
@@ -1569,6 +1571,7 @@ function WorkspacePolicyPanel({ workspaceID }: { workspaceID: string }) {
       rows: [
         { key: 'AllowKnowledgeBases', label: 'Knowledge bases', description: 'Create and use workspace knowledge bases and projects.' },
         { key: 'AllowFileUpload', label: 'File upload', description: 'Attach files to workspace conversations.' },
+        { key: 'AllowMessageEditing', label: 'Edit messages', description: 'Allow saving own messages in place and editing AI replies. User group and member restrictions still apply. Editing and resending own messages remains available.' },
       ],
     },
   ]
@@ -1589,6 +1592,7 @@ function WorkspacePolicyPanel({ workspaceID }: { workspaceID: string }) {
         AllowPrompts: capabilities.prompts,
         AllowPrivateChat: capabilities.privateChat,
         AllowAiPPT: policy!.AllowAiPPT ?? true,
+        AllowMessageEditing: policy!.AllowMessageEditing ?? true,
         AllowKnowledgeBases: capabilities.knowledgeBases,
         AllowFileUpload: capabilities.fileUpload,
         MemberMonthlyCreditLimit: Math.max(0, Number(limitDraft) || 0),
@@ -1657,6 +1661,8 @@ function WorkspacePolicyPanel({ workspaceID }: { workspaceID: string }) {
                             ? capabilities.privateChat
                             : row.key === 'AllowAiPPT'
                               ? policy.AllowAiPPT ?? true
+                            : row.key === 'AllowMessageEditing'
+                              ? policy.AllowMessageEditing ?? true
                             : row.key === 'AllowKnowledgeBases'
                               ? capabilities.knowledgeBases
                               : capabilities.fileUpload
@@ -1684,6 +1690,7 @@ function WorkspacePolicyPanel({ workspaceID }: { workspaceID: string }) {
                           if (row.key === 'AllowPrompts') return { ...current, AllowPrompts: checked }
                           if (row.key === 'AllowPrivateChat') return { ...current, AllowPrivateChat: checked }
                           if (row.key === 'AllowAiPPT') return { ...current, AllowAiPPT: checked }
+                          if (row.key === 'AllowMessageEditing') return { ...current, AllowMessageEditing: checked }
                           if (row.key === 'AllowKnowledgeBases') return { ...current, AllowKnowledgeBases: checked }
                           return { ...current, AllowFileUpload: checked }
                         })

@@ -307,6 +307,7 @@ func Migrate(db *sql.DB) error {
 	addWorkspaceCanDeleteKBContent := `ALTER TABLE workspace_members ADD COLUMN can_delete_kb_content INTEGER NOT NULL DEFAULT 1`
 	addWorkspaceCanDeleteConversations := `ALTER TABLE workspace_members ADD COLUMN can_delete_conversations INTEGER NOT NULL DEFAULT 1`
 	addWorkspaceCanUseAiPPT := `ALTER TABLE workspace_members ADD COLUMN can_use_ai_ppt INTEGER NOT NULL DEFAULT 1`
+	addWorkspaceCanEditMessages := `ALTER TABLE workspace_members ADD COLUMN can_edit_messages INTEGER NOT NULL DEFAULT 1`
 	addAiPPTDeckWorkspace := `ALTER TABLE aippt_decks ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`
 	addWorkspaceInvitePurpose := `ALTER TABLE workspace_invites ADD COLUMN purpose TEXT NOT NULL DEFAULT 'manual'`
 	// A durable deletion fence prevents creations from racing a multi-step
@@ -321,6 +322,7 @@ func Migrate(db *sql.DB) error {
 	addWorkspaceAllowPrompts := `ALTER TABLE workspace_policies ADD COLUMN allow_prompts INTEGER NOT NULL DEFAULT 1`
 	addWorkspaceAllowPrivateChat := `ALTER TABLE workspace_policies ADD COLUMN allow_private_chat INTEGER NOT NULL DEFAULT 1`
 	addWorkspaceAllowAiPPT := `ALTER TABLE workspace_policies ADD COLUMN allow_ai_ppt INTEGER NOT NULL DEFAULT 1`
+	addWorkspaceAllowMessageEditing := `ALTER TABLE workspace_policies ADD COLUMN allow_message_editing INTEGER NOT NULL DEFAULT 1`
 	// §workspace RBAC phase 2 — private/workspace visibility on projects and
 	// knowledge bases. Existing shared rows stay shared (DEFAULT 1).
 	addKBIsPublic := `ALTER TABLE knowledge_bases ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1`
@@ -493,6 +495,8 @@ func Migrate(db *sql.DB) error {
 		addWorkspaceAllowPrivateChat = `ALTER TABLE workspace_policies ADD COLUMN IF NOT EXISTS allow_private_chat INTEGER NOT NULL DEFAULT 1`
 		addWorkspaceAllowAiPPT = `ALTER TABLE workspace_policies ADD COLUMN IF NOT EXISTS allow_ai_ppt INTEGER NOT NULL DEFAULT 1`
 		addWorkspaceCanUseAiPPT = `ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_use_ai_ppt INTEGER NOT NULL DEFAULT 1`
+		addWorkspaceCanEditMessages = `ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_edit_messages INTEGER NOT NULL DEFAULT 1`
+		addWorkspaceAllowMessageEditing = `ALTER TABLE workspace_policies ADD COLUMN IF NOT EXISTS allow_message_editing INTEGER NOT NULL DEFAULT 1`
 		addAiPPTDeckWorkspace = `ALTER TABLE aippt_decks ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''`
 		addKBIsPublic = `ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS is_public INTEGER NOT NULL DEFAULT 1`
 		addProjectIsPublic = `ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_public INTEGER NOT NULL DEFAULT 1`
@@ -588,7 +592,7 @@ func Migrate(db *sql.DB) error {
 		addFileDraft, addConversationDraftScope, addFileBranchMessage, addFileRelPath, addFileVisionEvidence, addFileVisionEvidenceKey, addDocumentIngestUpdatedAt, addDocumentUploader,
 		addWorkspaceCanCreateProjects, addWorkspaceCanPrivateConversations, addWorkspaceCanCreateSkillsPrompts, addWorkspaceCanCreatePrompts, addWorkspaceCanCreateSkills, addWorkspaceCanCreateMCP, addWorkspaceCanUsePrompts, addWorkspaceCanUseSkills, addWorkspaceCanUseMCP, addWorkspaceCanCreateKB, addWorkspaceCanAddKBFiles, addWorkspaceCanDeleteKBContent, addWorkspaceCanDeleteConversations, addWorkspaceCanUseAiPPT, addAiPPTDeckWorkspace, addWorkspaceInvitePurpose, addWorkspaceDeleting, addWorkspaceIcon, addWorkspaceDescription,
 		addWorkspaceAllowToolCalling, addWorkspaceAllowDrawing, addWorkspaceAllowMCP, addWorkspaceAllowSkills, addWorkspaceAllowPrompts,
-		addWorkspaceAllowPrivateChat, addWorkspaceAllowAiPPT,
+		addWorkspaceAllowPrivateChat, addWorkspaceAllowAiPPT, addWorkspaceAllowMessageEditing, addWorkspaceCanEditMessages,
 		addKBIsPublic, addProjectIsPublic,
 		addModelFast, addConvFast, addMsgFast,
 		addSkillDisplayDescription, addUserSkillIcon, addUserSkillWorkspace, addUserPromptWorkspace, addMsgSelectedUserSkills, addMsgDisabledModelSkills,
@@ -778,9 +782,9 @@ func Migrate(db *sql.DB) error {
 		"files":                           {"draft", "branch_message_id"},
 		"documents":                       {"ingest_updated_at", "uploaded_by_user_id"},
 		"knowledge_base_shares":           {"kb_id", "user_id", "role", "created_at", "updated_at"},
-		"workspace_members":               {"workspace_id", "user_id", "role", "can_create_projects", "can_private_conversations", "can_create_skills_prompts", "can_create_prompts", "can_create_skills", "can_create_mcp", "can_use_prompts", "can_use_skills", "can_use_mcp", "can_create_kb", "can_add_kb_files", "can_delete_kb_content", "can_delete_conversations", "can_use_ai_ppt", "joined_at"},
+		"workspace_members":               {"workspace_id", "user_id", "role", "can_create_projects", "can_private_conversations", "can_create_skills_prompts", "can_create_prompts", "can_create_skills", "can_create_mcp", "can_use_prompts", "can_use_skills", "can_use_mcp", "can_create_kb", "can_add_kb_files", "can_delete_kb_content", "can_delete_conversations", "can_use_ai_ppt", "can_edit_messages", "joined_at"},
 		"aippt_decks":                     {"workspace_id"},
-		"workspace_policies":              {"workspace_id", "allowed_model_ids", "allowed_tool_ids", "allowed_mcp_server_ids", "allow_sandbox", "allow_image_generation", "allow_tool_calling", "allow_drawing", "allow_mcp", "allow_skills", "allow_prompts", "allow_private_chat", "allow_ai_ppt", "allow_knowledge_bases", "allow_file_upload", "member_monthly_credit_limit", "updated_by", "updated_at"},
+		"workspace_policies":              {"workspace_id", "allowed_model_ids", "allowed_tool_ids", "allowed_mcp_server_ids", "allow_sandbox", "allow_image_generation", "allow_tool_calling", "allow_drawing", "allow_mcp", "allow_skills", "allow_prompts", "allow_private_chat", "allow_ai_ppt", "allow_message_editing", "allow_knowledge_bases", "allow_file_upload", "member_monthly_credit_limit", "updated_by", "updated_at"},
 		"workspace_announcements":         {"workspace_id", "config", "updated_by", "updated_at"},
 		"site_notifications":              {"id", "title", "body", "enabled", "version", "created_at", "updated_at"},
 		"site_notification_states":        {"user_id", "notification_id", "read_version", "dismissed_version"},

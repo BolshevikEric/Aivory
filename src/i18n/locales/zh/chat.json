@@ -1006,6 +1006,10 @@
         "label": "删除知识库内容",
         "description": "具体知识库同时允许时，可删除、重试或管理其中内容。"
       },
+      "can_edit_messages": {
+        "label": "消息编辑",
+        "description": "允许直接保存自己的消息修改和编辑 AI 回复，仍须用户组与空间总开关允许。关闭后仍可编辑自己的消息并重新发送。"
+      },
       "can_delete_conversations": {
         "label": "删除对话",
         "description": "删除此工作空间内的消息和整个对话，包括自己创建的对话。"
@@ -1139,6 +1143,10 @@
       "AllowKnowledgeBases": {
         "label": "知识库",
         "description": "创建并使用工作空间知识库和项目。"
+      },
+      "AllowMessageEditing": {
+        "label": "消息编辑",
+        "description": "允许直接保存自己的消息修改和编辑 AI 回复。用户组与成员权限仍可限制，管理员也受空间总开关约束。关闭后仍可编辑自己的消息并重新发送。"
       },
       "AllowFileUpload": {
         "label": "文件上传",

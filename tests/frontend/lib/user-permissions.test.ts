@@ -16,7 +16,7 @@ describe('user group capabilities', () => {
     expect(userCanUseMCPServer({ ...user, role: 'admin' }, 'mine')).toBe(true)
   })
 
-  it.each(['allow_prompts', 'allow_skills', 'allow_workspace_deletion'] as const)(
+  it.each(['allow_prompts', 'allow_skills', 'allow_workspace_deletion', 'allow_message_editing'] as const)(
     'defaults %s for legacy profiles and preserves explicit denials', (capability) => {
       expect(userCan({ role: 'user' }, capability)).toBe(true)
       const permissions = { ...DEFAULT_USER_PERMISSIONS, [capability]: false }

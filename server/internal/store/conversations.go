@@ -1824,6 +1824,21 @@ func updateMessageContent(ctx context.Context, db *sql.DB, id, expectedConvID, u
 		if role == "user" && ((authorID != "" && authorID != userID) || (authorID == "" && ownerID != userID)) {
 			return ErrNotFound
 		}
+		if workspaceID != "" {
+			var allowed int
+			args := append([]any{workspaceID}, workspaceMemberCapabilityArgs(userID)...)
+			// Recheck both workspace ceilings under the same lock used by policy
+			// and membership updates, so a revocation cannot race the content write.
+			err := tx.QueryRowContext(ctx, `SELECT COALESCE(p.allow_message_editing,1)
+				FROM workspaces w LEFT JOIN workspace_policies p ON p.workspace_id=w.id
+				WHERE w.id=? AND `+workspaceMemberCapabilityPredicate("w", "can_edit_messages"), args...).Scan(&allowed)
+			if errors.Is(err, sql.ErrNoRows) || (err == nil && allowed != 1) {
+				return ErrForbidden
+			}
+			if err != nil {
+				return err
+			}
+		}
 	}
 	// Context compaction locks this same conversation row before validating and
 	// appending a summary block. Serialize every edit with that write even for the

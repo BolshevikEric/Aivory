@@ -203,7 +203,7 @@ func TestUserGroupUpdateOnlyRevokesPermissionsOnSemanticChange(t *testing.T) {
 	assertNoPermissionEvent(t, target)
 	assertNoPermissionEvent(t, other)
 
-	permissions.AllowDrawing = false
+	permissions.AllowMessageEditing = false
 	requestBody, err = json.Marshal(map[string]any{"permissions": permissions})
 	if err != nil {
 		t.Fatal(err)

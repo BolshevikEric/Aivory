@@ -20,7 +20,7 @@ func TestNormalizeUserGroupPermissionsDefaultsNewCapabilitiesForLegacyJSON(t *te
 	if !legacy.AllowPrompts || !legacy.AllowSkills || !legacy.AllowWorkspaceDeletion {
 		t.Fatalf("new capability defaults changed legacy access: %+v", legacy)
 	}
-	if !legacy.AllowKnowledgeBases || !legacy.AllowKnowledgeBaseSharing || !legacy.AllowConversationDeletion || !legacy.AllowDrawing || !legacy.AllowPrivateChat {
+	if !legacy.AllowKnowledgeBases || !legacy.AllowKnowledgeBaseSharing || !legacy.AllowConversationDeletion || !legacy.AllowMessageEditing || !legacy.AllowDrawing || !legacy.AllowPrivateChat {
 		t.Fatalf("missing legacy fields did not retain permissive defaults: %+v", legacy)
 	}
 
@@ -52,6 +52,22 @@ func TestNormalizeUserGroupPermissionsDefaultsNewCapabilitiesForLegacyJSON(t *te
 	}
 	if contradictory.AllowKnowledgeBaseSharing {
 		t.Fatal("contradictory sharing policy was not normalized closed")
+	}
+}
+
+func TestUserGroupMessageEditingPermissionPreservesDenialAndDetectsChanges(t *testing.T) {
+	restricted, err := NormalizeUserGroupPermissions(json.RawMessage(`{"allow_message_editing":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restricted.AllowMessageEditing {
+		t.Fatal("explicit allow_message_editing=false was not preserved")
+	}
+	if UserGroupPermissionsEqual(DefaultUserGroupPermissions(), restricted) {
+		t.Fatal("message editing capability change was treated as equal")
+	}
+	if isZeroUserGroupPermissions(UserGroupPermissions{AllowMessageEditing: true}) {
+		t.Fatal("message editing policy was mistaken for a zero-value legacy policy")
 	}
 }
 

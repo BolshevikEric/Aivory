@@ -20,7 +20,7 @@ func TestWorkspaceMemberPermissionsDefaultAndOwnerManagement(t *testing.T) {
 		t.Fatalf("get workspace: %v", err)
 	}
 	if !workspace.CanCreateProjects || !workspace.CanPrivateConversations || !workspace.CanCreateSkillsPrompts || !workspace.CanCreateKB ||
-		!workspace.CanAddKBFiles || !workspace.CanDeleteKBContent || !workspace.CanDeleteConversations {
+		!workspace.CanAddKBFiles || !workspace.CanDeleteKBContent || !workspace.CanDeleteConversations || !workspace.CanEditMessages {
 		t.Fatalf("new member permissions=%+v, want all enabled", workspace)
 	}
 
@@ -37,12 +37,12 @@ func TestWorkspaceMemberPermissionsDefaultAndOwnerManagement(t *testing.T) {
 		t.Fatalf("owner update permissions: %v", err)
 	}
 	if updated.CanCreateProjects || updated.CanPrivateConversations || updated.CanCreateSkillsPrompts || updated.CanCreateKB ||
-		updated.CanAddKBFiles || updated.CanDeleteKBContent || updated.CanDeleteConversations {
+		updated.CanAddKBFiles || updated.CanDeleteKBContent || updated.CanDeleteConversations || updated.CanEditMessages {
 		t.Fatalf("updated permissions=%+v, want all disabled", updated)
 	}
 	workspace, err = GetWorkspaceForMember(ctx, db, "ws1", "outsider")
 	if err != nil || workspace.CanCreateProjects || workspace.CanPrivateConversations || workspace.CanCreateSkillsPrompts || workspace.CanCreateKB ||
-		workspace.CanAddKBFiles || workspace.CanDeleteKBContent || workspace.CanDeleteConversations {
+		workspace.CanAddKBFiles || workspace.CanDeleteKBContent || workspace.CanDeleteConversations || workspace.CanEditMessages {
 		t.Fatalf("effective workspace permissions=%+v err=%v", workspace, err)
 	}
 	if _, err := CreateProject(ctx, db, Project{UserID: "outsider", WorkspaceID: "ws1", Name: "Denied project"}); !errors.Is(err, ErrNotFound) {
@@ -61,15 +61,15 @@ func TestWorkspaceMemberPermissionsLegacyJSONKeepsConversationDeletionEnabled(t 
 	if err := json.Unmarshal([]byte(`{"can_create_projects":false}`), &legacy); err != nil {
 		t.Fatal(err)
 	}
-	if !legacy.CanDeleteConversations {
+	if !legacy.CanDeleteConversations || !legacy.CanEditMessages {
 		t.Fatalf("legacy payload disabled conversation deletion: %+v", legacy)
 	}
 
 	var explicit WorkspaceMemberPermissions
-	if err := json.Unmarshal([]byte(`{"can_delete_conversations":false}`), &explicit); err != nil {
+	if err := json.Unmarshal([]byte(`{"can_delete_conversations":false,"can_edit_messages":false}`), &explicit); err != nil {
 		t.Fatal(err)
 	}
-	if explicit.CanDeleteConversations {
+	if explicit.CanDeleteConversations || explicit.CanEditMessages {
 		t.Fatalf("explicit false was not preserved: %+v", explicit)
 	}
 }

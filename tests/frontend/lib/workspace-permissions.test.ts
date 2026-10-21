@@ -7,9 +7,40 @@ import {
   workspaceCapabilitiesForScope,
   workspaceModelPolicyKey,
   workspacePolicyResolvedForScope,
+  workspaceAllowsMessageEditing,
 } from '@/lib/workspace-permissions'
+import { DEFAULT_USER_PERMISSIONS, userCan } from '@/lib/user-permissions'
+import type { ApiWorkspace } from '@/api/types'
 
 describe('workspace member permission semantics', () => {
+  it.each([
+    ['all allow', true, true, true, 'member', 'user', true],
+    ['group denies workspace admin', false, true, true, 'admin', 'user', false],
+    ['workspace denies workspace admin', true, false, true, 'admin', 'user', false],
+    ['member denies', true, true, false, 'member', 'user', false],
+    ['workspace admin bypasses member only', true, true, false, 'admin', 'user', true],
+    ['site admin bypasses group', false, true, true, 'member', 'admin', true],
+    ['site admin obeys workspace', true, false, true, 'admin', 'admin', false],
+    ['site admin obeys member', true, true, false, 'member', 'admin', false],
+    ['guest remains read only', true, true, true, 'guest', 'user', false],
+  ] as const)('intersects message editing permissions: %s', (_name, group, space, member, role, siteRole, allowed) => {
+    const user = { role: siteRole, permissions: { ...DEFAULT_USER_PERMISSIONS, allow_message_editing: group } }
+    const workspace = { id: 'space', role, can_edit_messages: member } as ApiWorkspace
+    expect(userCan(user, 'allow_message_editing') && workspaceAllowsMessageEditing('space', workspace, { AllowMessageEditing: space })).toBe(allowed)
+  })
+
+  it('keeps message editing closed until workspace policy and membership are available', () => {
+    const workspace = { id: 'space', role: 'member' } as ApiWorkspace
+    expect(workspaceAllowsMessageEditing('space', workspace, undefined)).toBe(false)
+    expect(workspaceAllowsMessageEditing('space', undefined, { AllowMessageEditing: true })).toBe(false)
+    expect(workspaceAllowsMessageEditing('other-space', workspace, { AllowMessageEditing: true })).toBe(false)
+    for (const options of [{ policyLoading: true }, { policyError: 'offline' }, { switching: true }, { workspacesLoaded: false }]) {
+      expect(workspaceAllowsMessageEditing('space', workspace, { AllowMessageEditing: true }, options)).toBe(false)
+    }
+    expect(workspaceAllowsMessageEditing('space', workspace, {})).toBe(true)
+    expect(workspaceAllowsMessageEditing(null, undefined, { AllowMessageEditing: false })).toBe(true)
+  })
+
   it('does not expose a member-permission editor for owners or admins', () => {
     expect(canEditWorkspaceMemberPermissions({ is_owner: true, role: 'admin' })).toBe(false)
     expect(canEditWorkspaceMemberPermissions({ is_owner: false, role: 'admin' })).toBe(false)

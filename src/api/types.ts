@@ -359,6 +359,7 @@ export interface ApiWorkspace {
   can_add_kb_files: boolean
   can_delete_kb_content: boolean
   can_delete_conversations: boolean
+  can_edit_messages?: boolean
 }
 
 export interface ApiWorkspaceMember {
@@ -384,6 +385,7 @@ export interface ApiWorkspaceMember {
   can_delete_kb_content: boolean
   can_delete_conversations: boolean
   can_use_ai_ppt: boolean
+  can_edit_messages?: boolean
 }
 
 export interface ApiWorkspaceMemberPermissions {
@@ -391,6 +393,7 @@ export interface ApiWorkspaceMemberPermissions {
   can_private_conversations: boolean
   can_create_skills_prompts: boolean
   can_use_ai_ppt: boolean
+  can_edit_messages?: boolean
   /** Creation and usage are intentionally independent capabilities. */
   can_create_prompts?: boolean
   can_create_skills?: boolean
@@ -434,6 +437,7 @@ export interface ApiWorkspacePolicy {
   AllowPrompts: boolean
   AllowPrivateChat: boolean
   AllowAiPPT?: boolean
+  AllowMessageEditing?: boolean
   /** Deprecated fields retained for older deployments. */
   AllowSandbox?: boolean
   AllowImageGeneration?: boolean
@@ -623,6 +627,7 @@ export interface ApiUserGroupPermissions {
   allow_file_upload: boolean
   allow_conversation_export: boolean
   allow_conversation_deletion: boolean
+  allow_message_editing: boolean
   allow_voice_transcription: boolean
   allow_memory: boolean
   allow_drawing: boolean

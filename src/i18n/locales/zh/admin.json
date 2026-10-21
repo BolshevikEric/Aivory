@@ -1401,6 +1401,8 @@
       "exportHint": "导出单条回复或账号内全部对话。",
       "deleteConversations": "删除对话",
       "deleteConversationsHint": "删除消息、对话及项目内对话。删除整个工作空间由独立权限控制。",
+      "messageEditing": "消息编辑",
+      "messageEditingHint": "允许直接保存自己的消息修改和编辑 AI 回复。关闭后隐藏相关操作，仍可编辑自己的消息并重新发送。",
       "voice": "语音识别",
       "voiceHint": "使用流式或录音语音转写。",
       "memory": "使用记忆",

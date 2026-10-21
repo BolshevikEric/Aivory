@@ -13,6 +13,7 @@ export const DEFAULT_USER_PERMISSIONS: ApiUserGroupPermissions = {
   allow_file_upload: true,
   allow_conversation_export: true,
   allow_conversation_deletion: true,
+  allow_message_editing: true,
   allow_voice_transcription: true,
   allow_memory: true,
   allow_drawing: true,
@@ -31,6 +32,7 @@ export type UserCapability = keyof Pick<
   | 'allow_file_upload'
   | 'allow_conversation_export'
   | 'allow_conversation_deletion'
+  | 'allow_message_editing'
   | 'allow_voice_transcription'
   | 'allow_memory'
   | 'allow_drawing'

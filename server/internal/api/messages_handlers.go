@@ -2304,6 +2304,9 @@ func checkDailyMessageLimit(d Deps, userID string) bool {
 // member who can access it.
 func editMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	u := authUser(r)
+	if !requireUserCapability(d, w, r, func(p store.UserGroupPermissions) bool { return p.AllowMessageEditing }) {
+		return
+	}
 	convID := pathParam(r, "id")
 	msgID := pathParam(r, "msgId")
 	conv, err := store.GetConversation(r.Context(), d.DB, convID, u.ID)
@@ -2358,6 +2361,10 @@ func editMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		blocks, _ = json.Marshal(userBlocks)
 	}
 	if err := store.UpdateMessageContentForUser(r.Context(), d.DB, convID, u.ID, msgID, blocks); err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			writeError(w, http.StatusForbidden, errForbidden)
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, 404, errNotFound)
 			return

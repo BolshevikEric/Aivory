@@ -42,6 +42,72 @@ func TestReplaceAssistantReplyTextPreservesNonAnswerBlocks(t *testing.T) {
 	}
 }
 
+func TestEditMessageHandlerEnforcesCurrentGroupMessageEditingPermission(t *testing.T) {
+	db := openMigrated(t, filepath.Join(t.TempDir(), "edit-permissions.db"))
+	t.Cleanup(func() { _ = db.Close() })
+	mustExec(t, db, `INSERT INTO user_groups(id,name,permissions) VALUES('edit-group','Editing','{}')`)
+	mustExec(t, db, `INSERT INTO users(id,email,password_hash,role,group_id) VALUES('editor','editor@example.test','h','user','edit-group')`)
+	if _, err := store.CreateConversation(t.Context(), db, store.Conversation{ID: "edit-conv", UserID: "editor", Title: "Editing"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"user", "assistant"} {
+		if _, err := store.CreateMessage(t.Context(), db, store.Message{
+			ID: role, ConversationID: "edit-conv", Role: role, AuthorID: "editor",
+			Blocks: json.RawMessage(`[{"kind":"text","text":"original"}]`),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Reuse the authenticated identity while changing the stored policy so a
+	// stale session cannot retain editing access after an administrator revokes it.
+	user := &store.User{ID: "editor", Role: "user", Status: "active"}
+	for _, tc := range []struct {
+		name, permissions string
+		admin             bool
+		status            int
+	}{
+		{name: "legacy default", permissions: `{}`, status: http.StatusOK},
+		{name: "disabled", permissions: `{"allow_message_editing":false}`, status: http.StatusForbidden},
+		{name: "re-enabled", permissions: `{"allow_message_editing":true}`, status: http.StatusOK},
+		{name: "administrator bypass", permissions: `{"allow_message_editing":false}`, admin: true, status: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mustExec(t, db, `UPDATE user_groups SET permissions=? WHERE id='edit-group'`, tc.permissions)
+			if tc.admin {
+				user.Role = "admin"
+				mustExec(t, db, `UPDATE users SET role='admin' WHERE id='editor'`)
+			}
+			for _, role := range []string{"user", "assistant"} {
+				before, err := store.GetMessage(t.Context(), db, role)
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := tc.name + " " + role
+				body, _ := json.Marshal(map[string]string{"text": text})
+				req := httptest.NewRequest(http.MethodPatch, "/api/conversations/edit-conv/messages/"+role, bytes.NewReader(body))
+				ctx := context.WithValue(req.Context(), userCtxKey{}, user)
+				ctx = context.WithValue(ctx, pathCtxKey{}, map[string]string{"id": "edit-conv", "msgId": role})
+				rec := httptest.NewRecorder()
+				editMessageHandler(Deps{DB: db}, rec, req.WithContext(ctx))
+				if rec.Code != tc.status {
+					t.Fatalf("%s status=%d body=%s, want %d", role, rec.Code, rec.Body.String(), tc.status)
+				}
+				after, err := store.GetMessage(t.Context(), db, role)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tc.status == http.StatusForbidden {
+					if !bytes.Equal(before.Blocks, after.Blocks) {
+						t.Fatalf("denied %s edit changed message: %s", role, after.Blocks)
+					}
+				} else if got := branchHTTPMessageText(t, *after); got != text {
+					t.Fatalf("%s edit text=%q, want %q", role, got, text)
+				}
+			}
+		})
+	}
+}
+
 func TestEditMessageHandlerAllowsWorkspaceAssistantButProtectsUserAuthorship(t *testing.T) {
 	db := openMigrated(t, filepath.Join(t.TempDir(), "edit-assistant.db"))
 	defer db.Close()

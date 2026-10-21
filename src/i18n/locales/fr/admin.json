@@ -1397,6 +1397,8 @@
       "exportHint": "Exporter une réponse ou toutes les conversations du compte.",
       "deleteConversations": "Supprimer les conversations",
       "deleteConversationsHint": "Supprimer des messages, des conversations et celles des projets. La suppression d’un espace entier a une autorisation distincte.",
+      "messageEditing": "Modifier les messages",
+      "messageEditingHint": "Enregistrer directement les modifications de ses propres messages et modifier les réponses de l’IA. Désactiver masque ces actions ; modifier puis renvoyer ses propres messages reste possible.",
       "voice": "Reconnaissance vocale",
       "voiceHint": "Transcrire un flux audio ou un enregistrement.",
       "memory": "Utiliser la mémoire",

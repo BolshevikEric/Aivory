@@ -1397,6 +1397,8 @@
       "exportHint": "匯出單一回覆或帳號內全部對話。",
       "deleteConversations": "刪除對話",
       "deleteConversationsHint": "刪除訊息、對話及專案內對話。刪除整個工作空間由獨立權限控制。",
+      "messageEditing": "訊息編輯",
+      "messageEditingHint": "允許直接儲存自己的訊息修改和編輯 AI 回覆。關閉後隱藏相關操作，仍可編輯自己的訊息並重新傳送。",
       "voice": "語音辨識",
       "voiceHint": "使用串流或錄音語音轉寫。",
       "memory": "使用記憶",

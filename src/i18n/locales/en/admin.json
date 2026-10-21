@@ -1397,6 +1397,8 @@
       "exportHint": "Export individual replies or all account conversations.",
       "deleteConversations": "Delete conversations",
       "deleteConversationsHint": "Delete messages, conversations and project conversations. Deleting an entire workspace has a separate permission.",
+      "messageEditing": "Edit messages",
+      "messageEditingHint": "Save changes to their own messages in place and edit AI replies. Disabling hides these actions; editing and resending their own messages remains available.",
       "voice": "Voice recognition",
       "voiceHint": "Use streaming or recorded speech transcription.",
       "memory": "Use memory",
