@@ -1005,6 +1005,18 @@
     "configureStorage": "Configure storage"
   },
   "tools": {
+    "fetchJinaUrlInvalid": "Enter an absolute HTTP(S) Reader URL without credentials, a query, or a fragment.",
+    "fetchSection": "Web reading (Fetch)",
+    "fetchDescription": "Choose how to read a web page. This setting is independent of web search.",
+    "fetchProvider": "Web reading service",
+    "fetchBuiltin": "Built-in (direct + Jina fallback)",
+    "fetchJinaBaseUrl": "Jina-compatible Reader URL",
+    "fetchJinaHint": "Leave blank to use the deployment default. Used when direct reading fails.",
+    "fetchJinaUrlMode": "Reader URL format",
+    "fetchJinaModeDefault": "Use deployment default",
+    "fetchJinaModeEscaped": "Escaped target URL (Jina)",
+    "fetchJinaModeRaw": "Original target URL",
+    "fetchApiKeyHint": "Separate from the search API key. Leave unchanged to keep the saved or deployment key.",
     "title": "Tools",
     "mapSection": "Maps",
     "mapProvider": "Map provider",

@@ -177,3 +177,49 @@ describe('Yuanbao administrator configuration', () => {
     expect(errorToast).not.toHaveBeenCalled()
   })
 })
+
+describe('Independent web reading configuration', () => {
+  it('defaults to the built-in reader and shows the deployment reader address as a placeholder', async () => {
+    settings.mockResolvedValue({ fetch_jina_default_base_url: 'https://deployment-reader.example.test' })
+    await mount()
+    expect(container.querySelector('#fetch-provider')?.textContent).toBe('admin:tools.fetchBuiltin')
+    expect(container.querySelector<HTMLInputElement>('#fetch-jina-url')?.value).toBe('')
+    expect(container.querySelector<HTMLInputElement>('#fetch-jina-url')?.placeholder).toBe('https://deployment-reader.example.test')
+    expect(container.querySelector('#fetch-api-key')).toBeNull()
+    await save()
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty('fetch_jina_default_base_url')
+  })
+
+  it('saves the reader address and mode independently from the selected search provider', async () => {
+    settings.mockResolvedValue({ search_provider: 'yuanbao', fetch_provider: 'builtin', fetch_jina_base_url: 'https://reader.example.test', fetch_jina_url_mode: 'raw', site_name: 'Unrelated' })
+    await mount()
+    expect(container.querySelector<HTMLInputElement>('#fetch-jina-url')?.value).toBe('https://reader.example.test')
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith({ search_provider: 'yuanbao', fetch_provider: 'builtin', fetch_jina_base_url: 'https://reader.example.test', fetch_jina_url_mode: 'raw' })
+  })
+
+  it.each(['deepseek', 'anysearch'])('shows a masked independent API key for %s', async (provider) => {
+    settings.mockResolvedValue({ search_provider: 'deepseek', search_api_key: 'search-only', fetch_provider: provider, fetch_api_key: '••••••', search_base_url: 'https://legacy.example.test' })
+    await mount()
+    expect(container.querySelector<HTMLInputElement>('#search-key')?.value).toBe('search-only')
+    expect(container.querySelector<HTMLInputElement>('#fetch-api-key')?.type).toBe('password')
+    expect(container.querySelector<HTMLInputElement>('#fetch-api-key')?.value).toBe('••••••')
+    expect(container.querySelector('#fetch-jina-url')).toBeNull()
+    await save()
+    expect(updateSettings).toHaveBeenCalledWith({ search_provider: 'deepseek', search_api_key: 'search-only', fetch_provider: provider, fetch_api_key: '••••••' })
+    expect(errorToast).not.toHaveBeenCalled()
+  })
+
+  it('rejects a reader address with embedded credentials or a non-web scheme', async () => {
+    for (const value of ['ftp://reader.example.test', 'https://user:secret@reader.example.test', 'https://reader.example.test?key=secret']) {
+      settings.mockResolvedValue({ fetch_provider: 'builtin', fetch_jina_base_url: value })
+      await mount()
+      await save()
+      expect(updateSettings).not.toHaveBeenCalled()
+      expect(errorToast).toHaveBeenLastCalledWith('admin:tools.fetchJinaUrlInvalid')
+      // Each case needs a fresh component to reload its initial settings.
+      act(() => root.unmount())
+      root = createRoot(container)
+    }
+  })
+})

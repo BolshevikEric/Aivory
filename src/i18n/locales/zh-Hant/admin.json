@@ -1005,6 +1005,18 @@
     "configureStorage": "設定儲存"
   },
   "tools": {
+    "fetchJinaUrlInvalid": "請輸入完整的 HTTP(S) Reader 位址，不得包含使用者名稱、密碼、查詢參數或片段。",
+    "fetchSection": "網頁讀取（Fetch）",
+    "fetchDescription": "選擇如何讀取網頁，與聯網搜尋服務獨立設定。",
+    "fetchProvider": "網頁讀取服務",
+    "fetchBuiltin": "內建（直接讀取 + Jina 備援）",
+    "fetchJinaBaseUrl": "Jina 相容 Reader 位址",
+    "fetchJinaHint": "留空使用環境變數中的預設位址，直接讀取失敗時使用。",
+    "fetchJinaUrlMode": "Reader URL 格式",
+    "fetchJinaModeDefault": "使用環境變數預設值",
+    "fetchJinaModeEscaped": "跳脫目標 URL（Jina）",
+    "fetchJinaModeRaw": "原始目標 URL",
+    "fetchApiKeyHint": "獨立於搜尋 API Key。保持不變可繼續使用已儲存或環境變數中的金鑰。",
     "title": "工具",
     "mapSection": "地圖服務",
     "mapProvider": "地圖服務商",

@@ -1005,6 +1005,18 @@
     "configureStorage": "ストレージを設定"
   },
   "tools": {
+    "fetchJinaUrlInvalid": "認証情報、クエリ、フラグメントを含まない絶対 HTTP(S) Reader URL を入力してください。",
+    "fetchSection": "ウェブページの読み取り（Fetch）",
+    "fetchDescription": "ページの読み取り方法を選択します。ウェブ検索とは個別に設定できます。",
+    "fetchProvider": "読み取りサービス",
+    "fetchBuiltin": "内蔵（直接取得 + Jina フォールバック）",
+    "fetchJinaBaseUrl": "Jina 互換 Reader URL",
+    "fetchJinaHint": "空欄で環境変数の既定 URL を使用します。直接取得できない場合に利用します。",
+    "fetchJinaUrlMode": "Reader URL 形式",
+    "fetchJinaModeDefault": "環境変数の既定値を使用",
+    "fetchJinaModeEscaped": "対象 URL をエスケープ（Jina）",
+    "fetchJinaModeRaw": "元の対象 URL",
+    "fetchApiKeyHint": "検索用 API キーとは別の設定です。変更しなければ保存済みまたは環境変数のキーを使用します。",
     "title": "ツール",
     "mapSection": "地図サービス",
     "mapProvider": "地図プロバイダー",

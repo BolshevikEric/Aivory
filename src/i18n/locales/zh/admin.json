@@ -1009,6 +1009,18 @@
     "configureStorage": "配置存储"
   },
   "tools": {
+    "fetchJinaUrlInvalid": "请输入完整的 HTTP(S) Reader 地址，不得包含用户名、密码、查询参数或片段。",
+    "fetchSection": "网页读取（Fetch）",
+    "fetchDescription": "选择如何读取网页，与联网搜索服务独立配置。",
+    "fetchProvider": "网页读取服务",
+    "fetchBuiltin": "内置（直接读取 + Jina 回退）",
+    "fetchJinaBaseUrl": "Jina 兼容 Reader 地址",
+    "fetchJinaHint": "留空使用环境变量中的默认地址，直接读取失败时使用。",
+    "fetchJinaUrlMode": "Reader URL 格式",
+    "fetchJinaModeDefault": "使用环境变量默认值",
+    "fetchJinaModeEscaped": "转义目标 URL（Jina）",
+    "fetchJinaModeRaw": "原始目标 URL",
+    "fetchApiKeyHint": "独立于搜索 API Key。保持不变可继续使用已保存或环境变量中的密钥。",
     "title": "工具",
     "mapSection": "地图服务",
     "mapProvider": "地图服务商",

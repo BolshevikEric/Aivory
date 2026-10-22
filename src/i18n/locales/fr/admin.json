@@ -1005,6 +1005,18 @@
     "configureStorage": "Configurer le stockage"
   },
   "tools": {
+    "fetchJinaUrlInvalid": "Saisissez une URL HTTP(S) absolue sans identifiants, paramètres de requête ni fragment.",
+    "fetchSection": "Lecture de pages web (Fetch)",
+    "fetchDescription": "Choisissez comment lire une page web, indépendamment de la recherche.",
+    "fetchProvider": "Service de lecture",
+    "fetchBuiltin": "Intégré (accès direct + repli Jina)",
+    "fetchJinaBaseUrl": "URL du Reader compatible Jina",
+    "fetchJinaHint": "Laisser vide pour utiliser la valeur du déploiement. Utilisé si la lecture directe échoue.",
+    "fetchJinaUrlMode": "Format d’URL du Reader",
+    "fetchJinaModeDefault": "Valeur du déploiement",
+    "fetchJinaModeEscaped": "URL cible échappée (Jina)",
+    "fetchJinaModeRaw": "URL cible originale",
+    "fetchApiKeyHint": "Clé distincte de celle de la recherche. Sans modification, la clé enregistrée ou celle du déploiement est conservée.",
     "title": "Outils",
     "mapSection": "Cartes",
     "mapProvider": "Fournisseur de cartes",

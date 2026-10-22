@@ -1,6 +1,6 @@
 /**
  * AdminTools — outbound services the assistant invokes during a conversation:
- * web search (DuckDuckGo / SearXNG / Serper / Brave / Tavily / AnySearch) and the code
+ * web search, web reading (built-in / DeepSeek / AnySearch), maps, and the code
  * sandbox sidecar.
  *
  * Shares the global `/admin/settings` endpoint with other admin pages; PATCH
@@ -35,6 +35,10 @@ const OWNED_KEYS = [
   'search_secret_key',
   'search_engines',
   'search_result_count',
+  'fetch_provider',
+  'fetch_api_key',
+  'fetch_jina_base_url',
+  'fetch_jina_url_mode',
   'map_provider',
   'map_amap_web_api_key',
   'map_amap_js_api_key',
@@ -161,13 +165,24 @@ export default function AdminTools() {
       toast.error(t('admin:settings.fields.searchResultCountInvalid'))
       return
     }
+    const fetchProvider = readString('fetch_provider') || 'builtin'
+    if (fetchProvider === 'builtin' && readString('fetch_jina_base_url').trim()) {
+      try {
+        const rawUrl = readString('fetch_jina_base_url').trim()
+        const url = new URL(rawUrl)
+        if (rawUrl.length > 2048 || !['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || rawUrl.includes('?') || rawUrl.includes('#') || /\s/.test(rawUrl)) throw new Error('invalid reader URL')
+      } catch {
+        toast.error(t('admin:tools.fetchJinaUrlInvalid'))
+        return
+      }
+    }
     savingRef.current = true
     setSaving(true)
     try {
       const patch: Settings = {}
       for (const k of OWNED_KEYS) {
         if (k === 'search_result_count') continue
-        if (k === 'search_base_url' && readString('search_provider') === 'anysearch') continue
+        if (k === 'search_base_url' && ['anysearch', 'deepseek'].includes(readString('search_provider'))) continue
         if (k in draft) patch[k] = draft[k]
       }
       if (readString('search_provider') === 'searxng') patch.search_result_count = searchResultCount
@@ -402,6 +417,7 @@ export default function AdminTools() {
                       <SelectItem value="tavily">{t('admin:settings.fields.searchTavily')}</SelectItem>
                       <SelectItem value="anysearch">{t('admin:settings.fields.searchAnysearch')}</SelectItem>
                       <SelectItem value="yuanbao">{t('admin:settings.fields.searchYuanbao')}</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
@@ -489,7 +505,7 @@ export default function AdminTools() {
                   </>
                 )}
 
-                {['serper', 'brave', 'tavily', 'anysearch'].includes(searchProvider) && (
+                {['serper', 'brave', 'tavily', 'anysearch', 'deepseek'].includes(searchProvider) && (
                   <Field
                     label={t(searchProvider === 'anysearch'
                       ? 'admin:settings.fields.searchApiKeyOptional'
@@ -506,6 +522,56 @@ export default function AdminTools() {
                         const value = e.target.value
                         setDraft((current) => ({ ...current, search_api_key: value }))
                       }}
+                    />
+                  </Field>
+                )}
+              </div>
+            </SettingsBlock>
+          </SettingsSection>
+
+          <SettingsSection title={t('admin:tools.fetchSection')} description={t('admin:tools.fetchDescription')} className="mb-0" bodyClassName="divide-y-0">
+            <SettingsBlock>
+              <div className="admin-form-grid admin-form-grid--pair">
+                <Field label={t('admin:tools.fetchProvider')} htmlFor="fetch-provider">
+                  <Select value={readString('fetch_provider') || 'builtin'} disabled={saving} onValueChange={value => setDraft(current => ({ ...current, fetch_provider: value }))}>
+                    <SelectTrigger id="fetch-provider"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="builtin">{t('admin:tools.fetchBuiltin')}</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek</SelectItem>
+                      <SelectItem value="anysearch">AnySearch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {(!readString('fetch_provider') || readString('fetch_provider') === 'builtin') ? <>
+                  <Field label={t('admin:tools.fetchJinaBaseUrl')} htmlFor="fetch-jina-url" hint={t('admin:tools.fetchJinaHint')}>
+                    <Input
+                      id="fetch-jina-url"
+                      type="url"
+                      placeholder={readString('fetch_jina_default_base_url', 'https://r.jina.ai')}
+                      value={readString('fetch_jina_base_url')}
+                      disabled={saving}
+                      onChange={event => setDraft(current => ({ ...current, fetch_jina_base_url: event.target.value }))}
+                    />
+                  </Field>
+                  <Field label={t('admin:tools.fetchJinaUrlMode')} htmlFor="fetch-jina-mode">
+                    <Select value={readString('fetch_jina_url_mode') || 'default'} disabled={saving} onValueChange={value => setDraft(current => ({ ...current, fetch_jina_url_mode: value === 'default' ? '' : value }))}>
+                      <SelectTrigger id="fetch-jina-mode"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">{t('admin:tools.fetchJinaModeDefault')}</SelectItem>
+                        <SelectItem value="escaped">{t('admin:tools.fetchJinaModeEscaped')}</SelectItem>
+                        <SelectItem value="raw">{t('admin:tools.fetchJinaModeRaw')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </> : (
+                  <Field label={t(readString('fetch_provider') === 'anysearch' ? 'admin:settings.fields.searchApiKeyOptional' : 'admin:settings.fields.searchApiKey')} htmlFor="fetch-api-key" hint={t('admin:tools.fetchApiKeyHint')}>
+                    <Input
+                      id="fetch-api-key"
+                      type="password"
+                      autoComplete="new-password"
+                      value={readString('fetch_api_key')}
+                      disabled={saving}
+                      onChange={event => setDraft(current => ({ ...current, fetch_api_key: event.target.value }))}
                     />
                   </Field>
                 )}
