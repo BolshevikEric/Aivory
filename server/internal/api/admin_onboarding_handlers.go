@@ -357,7 +357,7 @@ func onboardingSearchReady(d Deps) (bool, error) {
 		return false, err
 	}
 	switch strings.ToLower(provider) {
-	case "serper", "brave", "tavily":
+	case "serper", "brave", "tavily", "deepseek":
 		return apiKey != "", nil
 	case "searxng":
 		return baseURL != "", nil

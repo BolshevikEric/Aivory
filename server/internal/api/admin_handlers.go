@@ -1616,7 +1616,7 @@ var settingsKeys = []string{
 	"audio_transcribe_price_per_second",
 	// §4.4 web search backend — admin-configurable, live-reloaded each call.
 	// Provider ∈ {"", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo"
-	// (alias "ddg"), "yuanbao", "auto"}. SearXNG is the self-hosted option and only
+	// (alias "ddg"), "yuanbao", "deepseek", "auto"}. SearXNG is the self-hosted option and only
 	// needs base_url (no api_key); DuckDuckGo is the free option and needs no config
 	// at all; Yuanbao is a Tencent Cloud API 3.0 service and needs the
 	// SecretId/SecretKey pair instead of an API key. Empty provider falls back to
@@ -1625,6 +1625,7 @@ var settingsKeys = []string{
 	// shortcuts. Empty means that SearXNG chooses its enabled defaults.
 	"search_provider", "search_base_url", "search_api_key", "search_engines", "search_result_count",
 	"search_secret_id", "search_secret_key",
+	"fetch_provider", "fetch_api_key", "fetch_jina_base_url", "fetch_jina_url_mode",
 	"map_provider", "map_amap_web_api_key", "map_amap_js_api_key", "map_amap_security_secret",
 	// §4.6 upload safety — extension allowlist. Stored as a single
 	// comma-separated string (e.g. "pdf,docx,txt,png,jpg"). Empty string means
@@ -1748,6 +1749,19 @@ func adminSettingsGet(d Deps, w http.ResponseWriter, _ *http.Request) {
 			out[k] = json.RawMessage("null")
 		}
 	}
+	// Runtime defaults are displayed without persisting environment values.
+	if string(out["fetch_provider"]) == "null" {
+		provider := strings.ToLower(strings.TrimSpace(d.Config.FetchProvider))
+		if provider == "" {
+			provider = "builtin"
+		}
+		out["fetch_provider"], _ = json.Marshal(provider)
+	}
+	if string(out["fetch_api_key"]) == "null" && d.Config.FetchAPIKey != "" {
+		out["fetch_api_key"], _ = json.Marshal(d.Config.FetchAPIKey)
+	}
+	out["fetch_jina_default_base_url"], _ = json.Marshal(envcfg.Str("AIVORY_TOOLS_WEB_FETCH_JINA_BASE", "https://r.jina.ai"))
+	out["fetch_jina_default_url_mode"], _ = json.Marshal(envcfg.Str("AIVORY_TOOLS_WEB_FETCH_JINA_URL_MODE", "escaped"))
 	// Read-only runtime capability. It is intentionally outside settingsKeys so
 	// clients cannot persist or spoof it through PATCH /admin/settings.
 	if sandboxConfigured(d) {
@@ -2131,17 +2145,52 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 				}
 				provider = strings.ToLower(strings.TrimSpace(provider))
 				switch provider {
-				case "", "auto", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo", "ddg", "yuanbao":
+				case "", "auto", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo", "ddg", "yuanbao", "deepseek":
 				default:
 					return 0, errInvalidInput
 				}
 				v, _ = json.Marshal(provider)
-			case "search_secret_id", "search_secret_key":
+			case "search_secret_id", "search_secret_key", "search_api_key", "fetch_api_key":
 				var value string
 				if json.Unmarshal(v, &value) != nil {
 					return 0, errInvalidInput
 				}
 				v, _ = json.Marshal(strings.TrimSpace(value))
+			case "fetch_provider":
+				var provider string
+				if json.Unmarshal(v, &provider) != nil {
+					return 0, errInvalidInput
+				}
+				provider = strings.ToLower(strings.TrimSpace(provider))
+				switch provider {
+				case "", "builtin", "deepseek", "anysearch":
+				default:
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(provider)
+			case "fetch_jina_base_url":
+				var base string
+				if json.Unmarshal(v, &base) != nil {
+					return 0, errInvalidInput
+				}
+				base = strings.TrimSpace(base)
+				if base != "" {
+					parsed, err := url.Parse(base)
+					if err != nil || len(base) > 2048 || strings.ContainsAny(base, " \t\r\n") || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+						return 0, errInvalidInput
+					}
+				}
+				v, _ = json.Marshal(strings.TrimRight(base, "/"))
+			case "fetch_jina_url_mode":
+				var mode string
+				if json.Unmarshal(v, &mode) != nil {
+					return 0, errInvalidInput
+				}
+				mode = strings.ToLower(strings.TrimSpace(mode))
+				if mode != "" && mode != "escaped" && mode != "raw" {
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(mode)
 			case "search_result_count":
 				var count int
 				if json.Unmarshal(v, &count) != nil || count < 1 || count > 50 {

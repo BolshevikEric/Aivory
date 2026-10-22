@@ -22,6 +22,7 @@ type webPageImage struct {
 }
 
 type fetchedPage struct {
+	Title  string
 	Text   string
 	Images []webPageImage
 }
@@ -175,6 +176,9 @@ func markdownPageImages(body, sourceURL string) []webPageImage {
 }
 
 func fetchedPageOutput(page fetchedPage, sourceURL string, showImages bool, offset int) (string, []llm.Citation) {
+	if page.Title != "" {
+		page.Text = capExtractedText("Title: " + page.Title + "\nURL: " + sourceURL + "\n\n" + page.Text)
+	}
 	if len(page.Images) == 0 {
 		return page.Text, nil
 	}

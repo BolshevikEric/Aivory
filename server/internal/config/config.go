@@ -50,6 +50,8 @@ type Config struct {
 	SearchBaseURL             string
 	SearchSecretID            string
 	SearchSecretKey           string
+	FetchProvider             string
+	FetchAPIKey               string
 	EmbeddingBaseURL          string
 	EmbeddingAPIKey           string
 	EmbeddingModel            string
@@ -114,6 +116,8 @@ func Load() Config {
 		SearchBaseURL:          getenv("SEARCH_BASE_URL", ""),
 		SearchSecretID:         getenv("SEARCH_SECRET_ID", ""),
 		SearchSecretKey:        getenv("SEARCH_SECRET_KEY", ""),
+		FetchProvider:          getenv("FETCH_PROVIDER", "builtin"),
+		FetchAPIKey:            getenv("FETCH_API_KEY", ""),
 		EmbeddingBaseURL:       getenv("EMBEDDING_BASE_URL", ""),
 		EmbeddingAPIKey:        getenv("EMBEDDING_API_KEY", ""),
 		EmbeddingModel:         getenv("EMBEDDING_MODEL", "text-embedding-3-small"),

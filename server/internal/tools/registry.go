@@ -153,7 +153,7 @@ func NewRegistry(db *sql.DB, cfg config.Config, logger *log.Logger) *Registry {
 	search := newSettingsSearcher(db, cfg.SearchProvider, cfg.SearchAPIKey, cfg.SearchBaseURL)
 	search.fallbackSecretID, search.fallbackSecretKey = cfg.SearchSecretID, cfg.SearchSecretKey
 	r.Register(&webSearchTool{cfg: cfg, searcher: search})
-	r.Register(&webFetchTool{})
+	r.Register(&webFetchTool{db: db, cfg: cfg})
 	r.Register(&fetchImageTool{sandbox: sb, logger: logger})
 	r.Register(&pythonExecuteTool{sandbox: sb, uploadDir: cfg.UploadDir, artifactDir: cfg.ArtifactDir, logger: logger})
 	r.Register(&imageGenerateTool{db: db, uploadDir: cfg.UploadDir, artifactDir: cfg.ArtifactDir, logger: logger})

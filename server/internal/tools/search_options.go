@@ -16,17 +16,21 @@ type searcherWithOptions interface {
 }
 
 type webSearchOptions struct {
-	Categories []string       `json:"categories,omitempty"`
-	TimeRange  string         `json:"time_range,omitempty"`
-	Language   string         `json:"language,omitempty"`
-	PageNo     *int           `json:"pageno,omitempty"`
-	Engines    []string       `json:"engines,omitempty"`
-	SafeSearch *int           `json:"safesearch,omitempty"`
-	MaxResults *int           `json:"max_results,omitempty"`
-	Tag        string         `json:"tag,omitempty"`
-	Zone       string         `json:"zone,omitempty"`
-	Params     map[string]any `json:"params,omitempty"`
-	Format     string         `json:"format,omitempty"`
+	Categories       []string       `json:"categories,omitempty"`
+	TimeRange        string         `json:"time_range,omitempty"`
+	Language         string         `json:"language,omitempty"`
+	PageNo           *int           `json:"pageno,omitempty"`
+	Engines          []string       `json:"engines,omitempty"`
+	SafeSearch       *int           `json:"safesearch,omitempty"`
+	MaxResults       *int           `json:"max_results,omitempty"`
+	Tag              string         `json:"tag,omitempty"`
+	Zone             string         `json:"zone,omitempty"`
+	Params           map[string]any `json:"params,omitempty"`
+	Format           string         `json:"format,omitempty"`
+	Count            *int           `json:"count,omitempty"`
+	OriginalQuestion string         `json:"ori_question,omitempty"`
+	Localization     string         `json:"localization,omitempty"`
+	NeedContent      *bool          `json:"need_content,omitempty"`
 	// Yuanbao (Tencent Cloud wsa) specific filters. Other backends do not
 	// advertise them, so they stay unset there.
 	Mode      *int   `json:"mode,omitempty"`
