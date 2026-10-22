@@ -363,7 +363,7 @@ func onboardingSearchReady(d Deps) (bool, error) {
 		return baseURL != "", nil
 	case "yuanbao":
 		return secretID != "" && secretKey != "", nil
-	case "duckduckgo", "ddg", "anysearch":
+	case "duckduckgo", "ddg", "anysearch", "youcom", "you":
 		return true, nil
 	case "", "auto":
 		return apiKey != "" || baseURL != "", nil

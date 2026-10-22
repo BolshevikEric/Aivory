@@ -504,7 +504,7 @@ HTTP server 超时、优雅关闭、启动流程常量等。
 
 | 后台设置 / 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `search_provider` / `SEARCH_PROVIDER` | 部署默认值 | 选择 `deepseek` 时使用搜索密钥 `search_api_key` / `SEARCH_API_KEY`。 |
+| `search_provider` / `SEARCH_PROVIDER` | 部署默认值 | 选择 `deepseek` 时使用搜索密钥 `search_api_key` / `SEARCH_API_KEY`。选择 `youcom` 时使用 `search_api_key`（为空时读取 `YDC_API_KEY`）调用 `POST https://ydc-index.io/v1/search`；未配置密钥时调用免 key 的 `GET https://api.you.com/v1/agents/search`（按 IP 计，每天 100 次）。 |
 | `fetch_provider` / `FETCH_PROVIDER` | `builtin` | `builtin` 为内置直接读取与可选的 Jina 回退；`deepseek` 为 DeepSeek Fetch；`anysearch` 为 AnySearch Extract。 |
 | `fetch_api_key` / `FETCH_API_KEY` | 空 | 网页读取密钥，独立于搜索。DeepSeek 必填，AnySearch 支持匿名调用。密钥返回时显示掩码；显式清空已保存密钥后不再使用环境变量中的密钥。 |
 | `fetch_jina_base_url` / `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `https://r.jina.ai` | 内置读取失败后的 Reader 地址。后台留空则使用环境变量默认值。 |
