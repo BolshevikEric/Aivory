@@ -249,7 +249,7 @@
 | `AIVORY_TOOLS_WEB_FETCH_EXTRACTED_TEXT_CHAR_CAP` | `int` | `32000` | `tools/builtins.go:39` | Character cap on web_fetch's HTML-stripped text before it is truncated with an ellipsis marker. |
 | `AIVORY_TOOLS_WEB_FETCH_DIRECT_TIMEOUT` | `duration` | `12s` | `tools/builtins.go` | Single-attempt timeout for web fetch connecting directly to the target site. |
 | `AIVORY_TOOLS_WEB_FETCH_JINA_FALLBACK` | `bool` | `true` | `tools/builtins.go` | Whether to use a Reader fallback when direct web fetch fails. |
-| `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `string` | `https://r.jina.ai` | `tools/builtins.go` | Base address of the trusted Jina-compatible Reader service. |
+| `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `string` | `https://r.jina.ai` | `tools/builtins.go` | Jina-compatible Reader address; administrator fetch_jina_base_url overrides it. Clearing the admin address restores this environment default. |
 | `AIVORY_TOOLS_WEB_FETCH_JINA_URL_MODE` | `string` | `escaped` | `tools/builtins.go` | Use `escaped` for Jina Reader or `raw` for compatible services such as `https://markdown.new`; unknown values use `escaped`. |
 | `AIVORY_TOOLS_PYTHON_EXECUTE_UPLOAD_STAGING_FILE_SIZE` | `int64` | `40*1024*1024` | `tools/builtins.go:40` | Per-file size ceiling above which a conversation upload is skipped when staging files into the python sandbox. Keep the sidecar's `SANDBOX_MAX_UPLOAD_BYTES` and `SANDBOX_MAX_BODY_BYTES` at least large enough when raising it. |
 | `AIVORY_TOOLS_PYTHON_EXECUTE_STDOUT_STDERR_TRUNCATION_CAP` | `int` | `32*1024` | `tools/builtins.go:42` | Character cap for truncating python_execute stdout/stderr before it is surfaced to the model. |
@@ -499,3 +499,18 @@ HTTP server 超时、优雅关闭、启动流程常量等。
 | `VITE_AIVORY_KB_DOC_STATUS_POLL_INTERVAL` | `envNum` | `2200` | `src/pages/kb/KnowledgeBaseDetail.tsx:41` | Polling interval (ms) for refreshing knowledge-base document status while any document is still parsing/embedding. |
 | `VITE_AIVORY_CONV_PAGE` | `envNum` | `20` | `src/store/conversations.ts:52` | Conversations fetched per sidebar list page (initial load + infinite-scroll loadMore). |
 | `VITE_AIVORY_MSG_PAGE` | `envNum` | `40` | `src/store/conversations.ts:66` | Messages fetched per page when opening a conversation (first page + scroll-up loadOlderMessages). |
+
+
+### Search and web reading providers
+
+Search and web reading are configured independently in **Admin → Tools**. DeepSeek search uses `POST https://api.deepseek.com/v1/tools/search`; its `count` accepts 1–50 and Aivory requests available page bodies by default (`need_content=true`). Queries may contain `site:`, `lang:`, `after:`, and `before:` operators. See [DeepSeek Search / Fetch](https://api-docs.deepseek.com/guides/search/).
+
+| Setting / environment | Default | Behavior |
+| --- | --- | --- |
+| `search_provider` / `SEARCH_PROVIDER` | deployment default | `deepseek` uses the independent search key (`search_api_key` / `SEARCH_API_KEY`). |
+| `fetch_provider` / `FETCH_PROVIDER` | `builtin` | `builtin`: direct HTML with optional Jina fallback; `deepseek`: DeepSeek Fetch; `anysearch`: AnySearch Extract. |
+| `fetch_api_key` / `FETCH_API_KEY` | empty | Reader credential, independent of search. Required for DeepSeek; optional for anonymous AnySearch extraction. Saved keys are masked; explicitly clearing a saved key disables its environment fallback. |
+| `fetch_jina_base_url` / `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `https://r.jina.ai` | Built-in fallback Reader URL. Empty admin value inherits the environment default. |
+| `fetch_jina_url_mode` / `AIVORY_TOOLS_WEB_FETCH_JINA_URL_MODE` | `escaped` | `escaped` for Jina, `raw` for compatible readers requiring the literal target URL. Empty admin value inherits the environment setting. |
+
+DeepSeek reading uses `POST https://api.deepseek.com/v1/tools/fetch`; AnySearch uses `POST https://api.anysearch.com/v1/extract` with only `{"url":"https://…"}`. Selecting a reader routes all `web_fetch` calls, including Deep Research, through that service. Batch reads retain the same provider for the entire invocation. These APIs are read-only; returned page text remains untrusted external reference material. No new credentials or requests are required when keeping the built-in default.

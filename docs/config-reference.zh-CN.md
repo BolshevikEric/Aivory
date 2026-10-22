@@ -248,7 +248,7 @@
 | `AIVORY_TOOLS_WEB_FETCH_EXTRACTED_TEXT_CHAR_CAP` | `int` | `32000` | `tools/builtins.go:39` | web_fetch 剥离 HTML 后的文本在以省略标记截断前的字符上限。 |
 | `AIVORY_TOOLS_WEB_FETCH_DIRECT_TIMEOUT` | `duration` | `12s` | `tools/builtins.go` | 网页抓取直连目标站点的单次尝试超时。 |
 | `AIVORY_TOOLS_WEB_FETCH_JINA_FALLBACK` | `bool` | `true` | `tools/builtins.go` | 直连网页抓取失败时是否使用 Reader 回退。 |
-| `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `string` | `https://r.jina.ai` | `tools/builtins.go` | 受信任的 Jina 兼容 Reader 服务基础地址。 |
+| `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `string` | `https://r.jina.ai` | `tools/builtins.go` | Jina 兼容 Reader 地址。管理员工具页面的 fetch_jina_base_url 优先；清空后台地址后恢复环境变量默认值。 |
 | `AIVORY_TOOLS_WEB_FETCH_JINA_URL_MODE` | `string` | `escaped` | `tools/builtins.go` | Jina Reader 使用 `escaped`，`https://markdown.new` 等兼容服务使用 `raw`；未知值按 `escaped` 处理。 |
 | `AIVORY_TOOLS_PYTHON_EXECUTE_UPLOAD_STAGING_FILE_SIZE` | `int64` | `40*1024*1024` | `tools/builtins.go:40` | 向 python 沙箱暂存文件时，超过该值则跳过某个会话上传文件的单文件大小上限。调高时还需确保 sidecar 的 `SANDBOX_MAX_UPLOAD_BYTES` 与 `SANDBOX_MAX_BODY_BYTES` 足够大。 |
 | `AIVORY_TOOLS_PYTHON_EXECUTE_STDOUT_STDERR_TRUNCATION_CAP` | `int` | `32*1024` | `tools/builtins.go:42` | python_execute 的 stdout/stderr 在呈现给模型前截断的字符上限。 |
@@ -496,3 +496,18 @@ HTTP server 超时、优雅关闭、启动流程常量等。
 | `VITE_AIVORY_KB_DOC_STATUS_POLL_INTERVAL` | `envNum` | `2200` | `src/pages/kb/KnowledgeBaseDetail.tsx:41` | 当仍有文档处于解析/嵌入阶段时，轮询刷新知识库文档状态的间隔（毫秒）。 |
 | `VITE_AIVORY_CONV_PAGE` | `envNum` | `20` | `src/store/conversations.ts:52` | 侧边栏会话列表每页拉取的会话数（首屏加载与滚动加载）。 |
 | `VITE_AIVORY_MSG_PAGE` | `envNum` | `40` | `src/store/conversations.ts:66` | 打开会话时每页拉取的消息数（首页与向上滚动加载更早消息）。 |
+
+
+### 搜索与网页读取服务
+
+在**管理员后台 → 工具**分别配置搜索和网页读取。DeepSeek 搜索调用 `POST https://api.deepseek.com/v1/tools/search`，`count` 支持 1–50 条，Aivory 默认请求可用的网页正文（`need_content=true`）。查询支持 `site:`、`lang:`、`after:`、`before:` 等语法。参见 [DeepSeek 搜索与抓取文档](https://api-docs.deepseek.com/zh-cn/guides/search/)。
+
+| 后台设置 / 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `search_provider` / `SEARCH_PROVIDER` | 部署默认值 | 选择 `deepseek` 时使用搜索密钥 `search_api_key` / `SEARCH_API_KEY`。 |
+| `fetch_provider` / `FETCH_PROVIDER` | `builtin` | `builtin` 为内置直接读取与可选的 Jina 回退；`deepseek` 为 DeepSeek Fetch；`anysearch` 为 AnySearch Extract。 |
+| `fetch_api_key` / `FETCH_API_KEY` | 空 | 网页读取密钥，独立于搜索。DeepSeek 必填，AnySearch 支持匿名调用。密钥返回时显示掩码；显式清空已保存密钥后不再使用环境变量中的密钥。 |
+| `fetch_jina_base_url` / `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `https://r.jina.ai` | 内置读取失败后的 Reader 地址。后台留空则使用环境变量默认值。 |
+| `fetch_jina_url_mode` / `AIVORY_TOOLS_WEB_FETCH_JINA_URL_MODE` | `escaped` | `escaped` 适用于 Jina；兼容服务要求原始 URL 时使用 `raw`。后台留空则沿用环境变量。 |
+
+DeepSeek 网页读取调用 `POST https://api.deepseek.com/v1/tools/fetch`；AnySearch 调用 `POST https://api.anysearch.com/v1/extract`，请求体只包含 `{"url":"https://…"}`。选择读取服务后，普通对话与深度研究的 `web_fetch` 均使用该服务，同一次批量读取保持同一服务配置。提取后的正文属于外部不可信参考内容。保持默认内置读取方式时，无需新增凭据。
