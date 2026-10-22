@@ -148,7 +148,11 @@ func NewRegistry(db *sql.DB, cfg config.Config, logger *log.Logger) *Registry {
 	// sandbox_api_key), re-read per call, with env as the fallback default.
 	sb := newSettingsSandbox(db, cfg.SandboxBaseURL, cfg.SandboxAPIKey)
 	r.sandbox = sb
-	r.Register(&webSearchTool{cfg: cfg, searcher: newSettingsSearcher(db, cfg.SearchProvider, cfg.SearchAPIKey, cfg.SearchBaseURL)})
+	// Search credentials resolve from settings per call; env values are the
+	// fallback when the corresponding settings row has never been written.
+	search := newSettingsSearcher(db, cfg.SearchProvider, cfg.SearchAPIKey, cfg.SearchBaseURL)
+	search.fallbackSecretID, search.fallbackSecretKey = cfg.SearchSecretID, cfg.SearchSecretKey
+	r.Register(&webSearchTool{cfg: cfg, searcher: search})
 	r.Register(&webFetchTool{})
 	r.Register(&fetchImageTool{sandbox: sb, logger: logger})
 	r.Register(&pythonExecuteTool{sandbox: sb, uploadDir: cfg.UploadDir, artifactDir: cfg.ArtifactDir, logger: logger})

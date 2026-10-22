@@ -156,3 +156,24 @@ describe('Administrator map provider configuration', () => {
     expect(errorToast).toHaveBeenCalledWith('admin:tools.mapCredentialsRequired')
   })
 })
+
+describe('Yuanbao administrator configuration', () => {
+  it('swaps the API key for Tencent Cloud credentials and returns the mask on save', async () => {
+    settings.mockResolvedValue({ search_provider: 'yuanbao', search_secret_id: '••••••', search_secret_key: '••••••' })
+    await mount()
+    expect(container.querySelector<HTMLInputElement>('#search-secret-id')?.type).toBe('password')
+    expect(container.querySelector<HTMLInputElement>('#search-secret-key')?.type).toBe('password')
+    expect(container.querySelector('#search-key')).toBeNull()
+    expect(container.querySelector('#search-url')).toBeNull()
+    expect(container.querySelector('label[for="search-secret-id"]')?.textContent).toBe('admin:settings.fields.searchSecretId')
+    await save()
+    // The masked sentinel is echoed back on purpose; the server treats it as
+    // "keep the stored credential".
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      search_provider: 'yuanbao',
+      search_secret_id: '••••••',
+      search_secret_key: '••••••',
+    }))
+    expect(errorToast).not.toHaveBeenCalled()
+  })
+})

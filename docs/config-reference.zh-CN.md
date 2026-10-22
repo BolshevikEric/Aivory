@@ -243,7 +243,7 @@
 
 | 环境变量 | 类型 | 默认值 | 位置 | 说明 |
 | --- | --- | --- | --- | --- |
-| `AIVORY_TOOLS_IN_TOP_K` | `int` | `5` | `tools/builtins.go:37` | 模型调用未指定 top_k 时 `aivory_web_search` 工具的默认结果数量。 |
+| `AIVORY_TOOLS_IN_TOP_K` | `int` | `10` | `tools/builtins.go` | 模型调用未指定 top_k 时 `aivory_web_search` 工具的默认结果数量。SearXNG 保留 5 的旧默认值并优先使用管理员配置的条数；AnySearch 独立默认为 10。 |
 | `AIVORY_TOOLS_WEB_FETCH_RESPONSE_BODY_READ_CAP` | `int64` | `256*1024` | `tools/builtins.go:38` | web_fetch 在剥离 HTML 前读取的 HTTP 响应体字节上限。 |
 | `AIVORY_TOOLS_WEB_FETCH_EXTRACTED_TEXT_CHAR_CAP` | `int` | `32000` | `tools/builtins.go:39` | web_fetch 剥离 HTML 后的文本在以省略标记截断前的字符上限。 |
 | `AIVORY_TOOLS_WEB_FETCH_DIRECT_TIMEOUT` | `duration` | `12s` | `tools/builtins.go` | 网页抓取直连目标站点的单次尝试超时。 |

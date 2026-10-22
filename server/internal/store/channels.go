@@ -120,6 +120,9 @@ func CreateChannel(ctx context.Context, db *sql.DB, name, typ, apiFormat, baseUR
 	id := genID("ch")
 	name = strings.TrimSpace(name)
 	baseURL = strings.TrimSpace(baseURL)
+	// A key pasted into a browser field routinely carries a trailing newline or
+	// space; store the value that will be sent as the Bearer token.
+	apiKey = strings.TrimSpace(apiKey)
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO channels(id, name, type, api_format, base_url, api_key, headers, enabled, sort_order, updated_at)
 		 VALUES(?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
@@ -191,9 +194,11 @@ func UpdateChannel(ctx context.Context, db *sql.DB, id string, patch ChannelPatc
 		parts = append(parts, "base_url=?")
 		args = append(args, strings.TrimSpace(*patch.BaseURL))
 	}
-	if patch.APIKey != nil && *patch.APIKey != "" {
-		parts = append(parts, "api_key=?")
-		args = append(args, *patch.APIKey)
+	if patch.APIKey != nil {
+		if key := strings.TrimSpace(*patch.APIKey); key != "" {
+			parts = append(parts, "api_key=?")
+			args = append(args, key)
+		}
 	}
 	if patch.Headers != nil {
 		headers, err := requestheaders.Normalize(*patch.Headers)

@@ -528,11 +528,13 @@ func (rs *researcher) researchLoop(ctx context.Context, plan researchPlan) resea
 			if r.Err != nil {
 				continue
 			}
+			// The tool returns a plain notice when no backend is configured; stop
+			// researching instead of spending rounds on an empty backend.
+			if IsSearchNotConfiguredNotice(r.Output) {
+				unconfigured = true
+				continue
+			}
 			for _, c := range r.Citations {
-				if isUnconfiguredCitation(c) {
-					unconfigured = true
-					continue
-				}
 				norm := normalizeURL(c.URL)
 				if norm == "" {
 					continue
@@ -1638,10 +1640,6 @@ func lastUserText(history []UnifiedMessage) string {
 		}
 	}
 	return ""
-}
-
-func isUnconfiguredCitation(c Citation) bool {
-	return domainOf(c.URL) == "example.com"
 }
 
 // normalizeURL lowercases scheme+host, strips "www." and the fragment, drops a

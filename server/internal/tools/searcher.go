@@ -22,9 +22,10 @@ type Searcher interface {
 }
 
 // newSearcher builds the configured searcher. Serper/Brave/Tavily require a
-// key and SearXNG a base URL. DuckDuckGo needs no configuration; AnySearch
-// supports anonymous requests through its fixed official endpoint.
-func newSearcher(provider, apiKey, baseURL string, selectedEngines ...[]string) Searcher {
+// key, SearXNG a base URL, and Yuanbao a Tencent Cloud SecretId/SecretKey pair.
+// DuckDuckGo needs no configuration; AnySearch supports anonymous requests
+// through its fixed official endpoint.
+func newSearcher(provider, apiKey, baseURL, secretID, secretKey string, selectedEngines ...[]string) Searcher {
 	switch strings.ToLower(provider) {
 	case "serper":
 		if apiKey == "" {
@@ -41,6 +42,12 @@ func newSearcher(provider, apiKey, baseURL string, selectedEngines ...[]string) 
 			return nil
 		}
 		return &tavilySearcher{apiKey: apiKey}
+	case "yuanbao":
+		secretID, secretKey = strings.TrimSpace(secretID), strings.TrimSpace(secretKey)
+		if secretID == "" || secretKey == "" {
+			return nil
+		}
+		return &yuanbaoSearcher{secretID: secretID, secretKey: secretKey}
 	case "anysearch":
 		return &anySearchSearcher{apiKey: strings.TrimSpace(apiKey)}
 	case "searxng":
@@ -87,8 +94,9 @@ func (s *serperSearcher) search(ctx context.Context, query string, topK int, _ w
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(resp.Body)
-		return webSearchResults{}, fmt.Errorf("serper: %s", string(b))
+		// Bounded read: a provider error page must not enter the model context whole.
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return webSearchResults{}, fmt.Errorf("serper: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	var parsed map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
@@ -312,20 +320,21 @@ func (s *searxngSearcher) SearchWithOptions(ctx context.Context, query string, t
 	}
 	if len(options.Engines) > 0 {
 		// A per-call choice may narrow the administrator's configured engine
-		// set, but must never replace it with an unconfigured engine.
-		for _, requested := range options.Engines {
-			if len(s.engines) == 0 {
-				break
-			}
-			allowed := false
-			for _, configured := range s.engines {
-				if requested == strings.ToLower(strings.Join(strings.Fields(configured), " ")) {
-					allowed = true
-					break
+		// set, but must never replace it with an unconfigured engine. When the
+		// administrator configured no set, the instance's own enabled engines
+		// remain the boundary and a per-call choice only narrows those.
+		if len(s.engines) > 0 {
+			for _, requested := range options.Engines {
+				allowed := false
+				for _, configured := range s.engines {
+					if requested == strings.ToLower(strings.Join(strings.Fields(configured), " ")) {
+						allowed = true
+						break
+					}
 				}
-			}
-			if !allowed {
-				return "", nil, &llm.ToolUserError{Message: "requested engine is outside the administrator's configured search engines; choose from the tool schema or omit engines"}
+				if !allowed {
+					return "", nil, &llm.ToolUserError{Message: "requested engine is outside the administrator's configured search engines; choose from the tool schema or omit engines"}
+				}
 			}
 		}
 		params.Set("engines", strings.Join(options.Engines, ","))

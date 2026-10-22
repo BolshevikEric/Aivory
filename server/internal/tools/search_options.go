@@ -27,6 +27,12 @@ type webSearchOptions struct {
 	Zone       string         `json:"zone,omitempty"`
 	Params     map[string]any `json:"params,omitempty"`
 	Format     string         `json:"format,omitempty"`
+	// Yuanbao (Tencent Cloud wsa) specific filters. Other backends do not
+	// advertise them, so they stay unset there.
+	Mode      *int   `json:"mode,omitempty"`
+	Industry  string `json:"industry,omitempty"`
+	Freshness string `json:"freshness,omitempty"`
+	Site      string `json:"site,omitempty"`
 }
 
 var searchCategories = []string{
@@ -111,7 +117,29 @@ func normalizeWebSearchOptions(in webSearchOptions) (webSearchOptions, error) {
 		return in, err
 	}
 	in.Engines, err = normalizeSearchOptionList(in.Engines, "engines", searchEnginePattern.MatchString)
-	return in, err
+	if err != nil {
+		return in, err
+	}
+	// Yuanbao-only filters. The tool input is free-form JSON, so they are
+	// validated for every backend even when the active schema omits them.
+	if in.Mode != nil && (*in.Mode < 0 || *in.Mode > 2) {
+		return in, &llm.ToolUserError{Message: "mode must be 0, 1, or 2"}
+	}
+	in.Industry = strings.ToLower(strings.TrimSpace(in.Industry))
+	switch in.Industry {
+	case "", "gov", "news", "acad", "finance":
+	default:
+		return in, &llm.ToolUserError{Message: "industry must be gov, news, acad, or finance"}
+	}
+	in.Freshness = strings.TrimSpace(in.Freshness)
+	if in.Freshness != "" && (len(in.Freshness) > 64 || !yuanbaoFreshnessPattern.MatchString(in.Freshness)) {
+		return in, &llm.ToolUserError{Message: "freshness must be d[N], m[N], y[N], yyyy-mm-dd, or yyyy-mm-dd,yyyy-mm-dd"}
+	}
+	in.Site = strings.ToLower(strings.TrimSpace(in.Site))
+	if in.Site != "" && (len(in.Site) > 512 || !yuanbaoSitePattern.MatchString(in.Site)) {
+		return in, &llm.ToolUserError{Message: "site must be a domain, or exclude:domain|domain with at most five domains"}
+	}
+	return in, nil
 }
 
 func normalizeSearchOptionList(values []string, field string, valid func(string) bool) ([]string, error) {

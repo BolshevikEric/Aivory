@@ -1616,13 +1616,15 @@ var settingsKeys = []string{
 	"audio_transcribe_price_per_second",
 	// §4.4 web search backend — admin-configurable, live-reloaded each call.
 	// Provider ∈ {"", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo"
-	// (alias "ddg"), "auto"}. SearXNG is the self-hosted option and only needs
-	// base_url (no api_key); DuckDuckGo is the free option and needs no config at
-	// all. Empty provider falls back to the env values and finally to the no-op
-	// placeholder.
+	// (alias "ddg"), "yuanbao", "auto"}. SearXNG is the self-hosted option and only
+	// needs base_url (no api_key); DuckDuckGo is the free option and needs no config
+	// at all; Yuanbao is a Tencent Cloud API 3.0 service and needs the
+	// SecretId/SecretKey pair instead of an API key. Empty provider falls back to
+	// the env values and finally to the no-op placeholder.
 	// search_engines is a comma-separated list of SearXNG engine names or
 	// shortcuts. Empty means that SearXNG chooses its enabled defaults.
 	"search_provider", "search_base_url", "search_api_key", "search_engines", "search_result_count",
+	"search_secret_id", "search_secret_key",
 	"map_provider", "map_amap_web_api_key", "map_amap_js_api_key", "map_amap_security_secret",
 	// §4.6 upload safety — extension allowlist. Stored as a single
 	// comma-separated string (e.g. "pdf,docx,txt,png,jpg"). Empty string means
@@ -2120,6 +2122,26 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 					return 0, errInvalidInput
 				}
 				v, _ = json.Marshal(value)
+			case "search_provider":
+				// A typo here used to persist silently and degrade every search
+				// to the "not configured" placeholder; reject it at write time.
+				var provider string
+				if json.Unmarshal(v, &provider) != nil {
+					return 0, errInvalidInput
+				}
+				provider = strings.ToLower(strings.TrimSpace(provider))
+				switch provider {
+				case "", "auto", "serper", "brave", "tavily", "anysearch", "searxng", "duckduckgo", "ddg", "yuanbao":
+				default:
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(provider)
+			case "search_secret_id", "search_secret_key":
+				var value string
+				if json.Unmarshal(v, &value) != nil {
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(strings.TrimSpace(value))
 			case "search_result_count":
 				var count int
 				if json.Unmarshal(v, &count) != nil || count < 1 || count > 50 {
