@@ -1175,6 +1175,8 @@ export interface ApiModel {
   official_tools?: ApiOfficialToolDefinition[]
   /** model_tags ids assigned to this model — drives the picker's tag filter (§ model tags). */
   tags?: string[]
+  /** Admin policy: groups denied access to this model. An empty list allows all groups. */
+  denied_group_ids?: string[]
   /** skill ids bound to this model (model_skills) — these get listed in the
    *  system-prompt skill index; full instructions load on demand via use_skill (§4.17). */
   skills?: string[]

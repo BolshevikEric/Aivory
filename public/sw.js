@@ -24,3 +24,23 @@ self.addEventListener('fetch', (event) => {
     /^\/api\/(files|artifacts)\//.test(url.pathname)
   event.respondWith(fetch(event.request, privateResource ? { cache: 'no-store' } : undefined))
 })
+
+self.addEventListener('notificationclick', (event) => {
+  if (!event.notification.tag.startsWith('aivory-reply:')) return
+  const target = event.notification.data?.target
+  event.notification.close()
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    // Return to an existing app session; its account and workspace checks own navigation.
+    const client = clients.find((item) => item.id === event.notification.data?.clientId)
+    if (!client) return
+    await client.focus()
+    client.postMessage({ type: 'aivory:reply-notification-click', target })
+  })())
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'aivory:notification-client-id') {
+    event.ports[0]?.postMessage(event.source?.id)
+  }
+})

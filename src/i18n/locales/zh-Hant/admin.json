@@ -494,7 +494,18 @@
       "officialToolJSONInvalid": "{{name}} 的請求 JSON 無效。",
       "officialToolJSONMustBeObject": "請輸入有效的 JSON 物件。"
     },
-    "permissionsLead": "為使用者群組設定此模型的週期免費額度；關閉的群組每次使用都會扣除積分。",
+    "groupAccess": {
+      "title": "使用者群組存取權限",
+      "lead": "關閉後，該群組將看不到此模型，也無法呼叫。預設允許所有群組；系統管理員不受此限制，工作空間權限仍同時生效。",
+      "allowed": "允許使用",
+      "switchLabel": "允許 {{group}} 使用此模型",
+      "saveHint": "存取權限會隨頁面的「儲存」按鈕一起儲存。",
+      "loadFailed": "群組載入失敗，請重試。",
+      "retry": "重試",
+      "empty": "暫無使用者群組",
+      "quotaTitle": "週期免費額度"
+    },
+    "permissionsLead": "為可存取此模型的群組設定週期免費額度；未開啟免費額度時每次使用扣除積分。免費額度不會授予模型存取權限。",
     "tagsHint": "給模型指派標籤,用於選擇器篩選。",
     "pc": {
       "toggle": "開關",

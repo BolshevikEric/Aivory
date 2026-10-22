@@ -203,6 +203,8 @@ type Model struct {
 	// Tags is a JSON array of model_tags ids assigned to this model — used by the
 	// model picker's tag filter (§ model tags). Empty = untagged.
 	Tags json.RawMessage `json:"tags"`
+	// DeniedGroupIDs is independent of free allowances. Empty allows all groups.
+	DeniedGroupIDs []string `json:"denied_group_ids"`
 	// Skills lists the skill ids bound to this model (model_skills join, §4.17).
 	// NOT a column — populated on demand (admin model list) so the editor can show
 	// current bindings. Omitted from JSON when not loaded.

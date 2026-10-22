@@ -494,7 +494,18 @@
       "officialToolJSONInvalid": "JSON de requête invalide pour {{name}}.",
       "officialToolJSONMustBeObject": "Saisissez un objet JSON valide."
     },
-    "permissionsLead": "Définissez le quota gratuit de chaque groupe pour ce modèle. Les groupes désactivés dépensent des crédits à chaque utilisation.",
+    "groupAccess": {
+      "title": "Accès des groupes",
+      "lead": "Les groupes sans accès ne peuvent ni voir ni appeler ce modèle. Tous les groupes sont autorisés par défaut. Les administrateurs système sont exemptés ; les restrictions de l’espace de travail restent applicables.",
+      "allowed": "Autoriser l’accès",
+      "switchLabel": "Autoriser {{group}} à utiliser ce modèle",
+      "saveHint": "Utilisez le bouton Enregistrer de la page pour enregistrer les accès.",
+      "loadFailed": "Impossible de charger les groupes. Réessayez.",
+      "retry": "Réessayer",
+      "empty": "Aucun groupe d’utilisateurs",
+      "quotaTitle": "Quota gratuit périodique"
+    },
+    "permissionsLead": "Définissez un quota gratuit périodique pour les groupes ayant accès à ce modèle. Sans quota, chaque utilisation consomme des crédits. Un quota gratuit n’accorde pas l’accès au modèle.",
     "tagsHint": "Étiquette le modèle pour le filtre du sélecteur.",
     "pc": {
       "toggle": "Bascule",

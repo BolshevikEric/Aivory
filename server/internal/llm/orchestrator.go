@@ -1903,6 +1903,9 @@ func (o *Orchestrator) buildFallbackRequest(ctx context.Context, base UnifiedCha
 	if !m.Enabled {
 		return base, nil, "", errors.New("fallback model is disabled")
 	}
+	if err := store.CheckModelGroupAccess(ctx, o.db, base.UserID, m); err != nil {
+		return base, nil, "", err
+	}
 	if m.Kind != "chat" {
 		return base, nil, "", errors.New("fallback model is not a chat model")
 	}
@@ -2831,6 +2834,9 @@ func (o *Orchestrator) Run(ctx context.Context, req RunRequest, onEvent func(Sse
 	}
 	if !model.Enabled {
 		return nil, errors.New("model is disabled")
+	}
+	if err := store.CheckModelGroupAccess(ctx, o.db, req.UserID, model); err != nil {
+		return nil, err
 	}
 	if workspacePolicy != nil && !workspacePolicy.ModelAllowedByPolicy(model.ID) {
 		return nil, errors.New("model is not allowed in this workspace")

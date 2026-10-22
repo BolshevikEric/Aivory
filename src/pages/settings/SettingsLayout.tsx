@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, type ComponentType } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { useTranslation } from 'react-i18next'
-import { User, Briefcase, Wand2, Palette, Sparkles, ShieldCheck, Keyboard, Info, X } from 'lucide-react'
+import { User, Briefcase, Wand2, Palette, Bell, Sparkles, ShieldCheck, Keyboard, Info, X } from 'lucide-react'
 import { DialogOverlay, DialogTitle } from '@/components/ui/dialog'
 import { useSettingsModal, type SettingsTab } from '@/store/settings-modal'
 import { useWorkspaces } from '@/store/workspaces'
@@ -20,6 +20,7 @@ const tabDefs = [
   { key: 'work', icon: Briefcase },
   { key: 'personalization', icon: Wand2 },
   { key: 'appearance', icon: Palette },
+  { key: 'notifications', icon: Bell },
   { key: 'models', icon: Sparkles },
   { key: 'privacy', icon: ShieldCheck },
   { key: 'shortcuts', icon: Keyboard },
@@ -36,6 +37,7 @@ const tabPages: Record<SettingsTab, PreloadableLazy<ComponentType>> = {
   work: lazyWithPreload(() => import('./Work')),
   personalization: lazyWithPreload(() => import('./Personalization')),
   appearance: lazyWithPreload(() => import('./Appearance')),
+  notifications: lazyWithPreload(() => import('./Notifications')),
   models: lazyWithPreload(() => import('./Models')),
   privacy: lazyWithPreload(() => import('./Privacy')),
   shortcuts: lazyWithPreload(() => import('./Shortcuts')),

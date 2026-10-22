@@ -18,7 +18,9 @@ import { isModelCatalogReadyForScope } from '@/lib/model-selection'
 import { workspaceModelPolicyKey } from '@/lib/workspace-permissions'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useAutosizeTextarea } from '@/hooks/use-autosize-textarea'
-import { cn } from '@/lib/utils'
+import { cn, uid } from '@/lib/utils'
+import { captureAccountRequestGuard } from '@/api/client'
+import { publishPrivateReplyCompleted } from '@/lib/reply-notifications'
 import { pulseComposerShell } from '@/lib/composer-pulse'
 import { runViewTransition } from '@/lib/view-transition'
 import { useModels } from '@/store/models'
@@ -230,6 +232,7 @@ export default function PrivateChat() {
    *  lifecycle, epoch guards, and the stop/error/stopped transitions. */
   async function runStream(activeModel: ApiModel, requestHistory: PrivateMessage[], display: PrivateDisplayMessage[]) {
     if (!allowed) return
+    const accountCurrent = captureAccountRequestGuard()
     const epoch = epochRef.current
     const controller = new AbortController()
     controllerRef.current = controller
@@ -258,6 +261,10 @@ export default function PrivateChat() {
       }
       if (!done) throw new Error('private_stream_interrupted')
       sync(true)
+      if (accountCurrent() && !controller.signal.aborted && epoch === epochRef.current &&
+        (assistant.text.trim() || assistant.generatedImages?.length)) {
+        publishPrivateReplyCompleted(workspaceId ?? null, uid('private-reply'))
+      }
     } catch (cause) {
       if (epoch !== epochRef.current) return
       if (controller.signal.aborted) assistant.stopped = true

@@ -16,7 +16,10 @@ const apiMocks = vi.hoisted(() => ({
   streamSSEGet: vi.fn(),
   toastInfo: vi.fn(),
   toastError: vi.fn(),
+  publishReplyCompleted: vi.fn(),
 }))
+
+vi.mock('@/lib/reply-notifications', () => ({ publishReplyCompleted: apiMocks.publishReplyCompleted }))
 
 vi.mock('@/api', () => {
   class ApiError extends Error {
@@ -1708,6 +1711,54 @@ describe('stopped turn optimistic-id reconciliation', () => {
     expect(requestBody?.selected_tool_ids).toEqual([])
   })
 })
+describe('reply notification completion events', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiMocks.streamSSE.mockReset()
+    apiMocks.streamSSEGet.mockReset()
+    apiMocks.get.mockReset().mockResolvedValue(pathResponse('complete'))
+    resetStore()
+  })
+
+  it.each(['send', 'regenerate', 'replay'])('publishes the settled server message on %s completion', async (mode) => {
+    const complete = () => events(
+      { type: 'message_start', message_id: 'msg_server_assistant' },
+      { type: 'text_delta', text: 'finished answer' },
+      { type: 'done' },
+    )
+    if (mode === 'regenerate') {
+      resetStore([
+        { id: 'question', role: 'user', content: 'question', createdAt: 1 },
+        { id: 'previous-answer', parentId: 'question', role: 'assistant', content: 'old answer', createdAt: 2 },
+      ])
+      apiMocks.streamSSE.mockImplementation(complete)
+      await useConversations.getState().regenerate('conv_stop', 'previous-answer', 'model_1')
+    } else {
+      apiMocks.streamSSE.mockImplementation(() => mode === 'replay'
+        ? events({ type: 'message_start', message_id: 'msg_server_assistant' })
+        : complete())
+      apiMocks.streamSSEGet.mockImplementation(complete)
+      await useConversations.getState().sendMessage({ conversationId: 'conv_stop', text: 'question', modelId: 'model_1' })
+    }
+    await vi.waitFor(() => expect(apiMocks.publishReplyCompleted).toHaveBeenCalledOnce())
+    expect(apiMocks.publishReplyCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'conv_stop' }),
+      expect.objectContaining({ id: 'msg_server_assistant', streaming: false, content: 'finished answer' }),
+    )
+  })
+
+  it('never publishes completion for an error frame or history hydration', async () => {
+    apiMocks.streamSSE.mockImplementation(() => events(
+      { type: 'message_start', message_id: 'msg_server_assistant' },
+      { type: 'text_delta', text: 'partial answer' },
+      { type: 'error', message: 'interrupted' },
+    ))
+    await useConversations.getState().sendMessage({ conversationId: 'conv_stop', text: 'question', modelId: 'model_1' })
+    await useConversations.getState().loadOne('conv_stop')
+    expect(apiMocks.publishReplyCompleted).not.toHaveBeenCalled()
+  })
+})
+
 describe('knowledge-base selection ordering', () => {
   beforeEach(() => {
     vi.clearAllMocks()

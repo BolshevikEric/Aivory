@@ -69,11 +69,20 @@ func modelUsesCredits(ctx context.Context, d Deps, userID string, m store.Model,
 	return err != nil || used >= q.LimitValue
 }
 
-// listModelsHandler returns chat models visible to all signed-in users.
+// listModelsHandler returns chat models permitted for the current user.
 func listModelsHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	models, err := store.ListModels(r.Context(), d.DB, "chat", true)
 	if err != nil {
 		writeError(w, 500, err)
+		return
+	}
+	userID := ""
+	if user := authUser(r); user != nil {
+		userID = user.ID
+	}
+	models, err = store.FilterModelsByUserGroup(r.Context(), d.DB, userID, models)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	// §workspace RBAC phase 4: with a workspace scope, hide models the
@@ -165,6 +174,15 @@ func listImageModelsHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	models, err := store.ListModels(r.Context(), d.DB, "image", true)
 	if err != nil {
 		writeError(w, 500, err)
+		return
+	}
+	userID := ""
+	if user := authUser(r); user != nil {
+		userID = user.ID
+	}
+	models, err = store.FilterModelsByUserGroup(r.Context(), d.DB, userID, models)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	// The execution gate rejects a model outside the workspace allowlist. Apply
@@ -476,19 +494,38 @@ func modelsResponse(d Deps, r *http.Request, models []store.Model) map[string]an
 	if raw, err := store.GetSetting(d.DB, "default_model_id"); err == nil {
 		_ = json.Unmarshal(raw, &defaultID)
 	}
+	defaultVisible := false
+	for _, model := range models {
+		if model.ID == defaultID {
+			defaultVisible = true
+			break
+		}
+	}
+	if !defaultVisible {
+		defaultID = ""
+		if len(models) > 0 {
+			defaultID = models[0].ID
+		}
+	}
 	// §verify: whether an auditor model is configured, so the composer can show
 	// the Verify toggle only when the feature is actually usable.
 	verifyAvailable := false
 	if raw, err := store.GetSetting(d.DB, "verify_model_id"); err == nil {
 		var id string
 		if json.Unmarshal(raw, &id) == nil && strings.TrimSpace(id) != "" {
-			verifyAvailable = true
+			if model, err := store.GetModel(r.Context(), d.DB, id); err == nil {
+				verifyAvailable = store.CheckModelGroupAccess(r.Context(), d.DB, userID, model) == nil
+			}
 		}
 	}
 	// §4.6 image outsourcing: whether a vision model is configured, so the
 	// composer may accept images for a text-only model. The server re-checks
 	// usability at turn time; this is the presentation ceiling only.
-	visionAvailable := visionOutsourcingAvailable(r.Context(), d)
+	visionAvailable := false
+	if id := configuredVisionModelID(r.Context(), d); id != "" {
+		model, err := store.GetModel(r.Context(), d.DB, id)
+		visionAvailable = err == nil && store.CheckModelGroupAccess(r.Context(), d.DB, userID, model) == nil
+	}
 	return map[string]any{
 		"models":           items,
 		"default_id":       defaultID,
@@ -523,10 +560,6 @@ func configuredVisionModelID(ctx context.Context, d Deps) string {
 		return ""
 	}
 	return modelID
-}
-
-func visionOutsourcingAvailable(ctx context.Context, d Deps) bool {
-	return configuredVisionModelID(ctx, d) != ""
 }
 
 // researchToolsAvailable reports whether Deep Research can search for a model.

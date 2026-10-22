@@ -158,6 +158,9 @@ func (o *Orchestrator) RunPrivateInWorkspace(ctx context.Context, userID, worksp
 	if len(history) == 0 || model == nil || !model.Enabled || model.Kind != "chat" || model.Fast {
 		return errors.New("private_model_unavailable")
 	}
+	if err := store.CheckModelGroupAccess(ctx, o.db, userID, model); err != nil {
+		return err
+	}
 	if model.ModerationEnabled {
 		var prompt strings.Builder
 		for _, message := range history {
@@ -236,6 +239,9 @@ func (o *Orchestrator) moderatePrivate(ctx context.Context, userID string, model
 }
 
 func (o *Orchestrator) privateCall(ctx context.Context, userID string, model *store.Model, history []UnifiedMessage, system, purpose string, maxTokens int, emit func(SseEvent)) (*UnifiedResult, float64, error) {
+	if err := store.CheckModelGroupAccess(ctx, o.db, userID, model); err != nil {
+		return nil, 0, err
+	}
 	channelCandidates, candidateErr := resolveModelChannelCandidates(ctx, o.db, model, "")
 	if candidateErr != nil {
 		return nil, 0, errors.New("private_model_unavailable")

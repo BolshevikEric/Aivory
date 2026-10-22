@@ -1,6 +1,7 @@
 {
   "title": "Paramètres",
   "tabs": {
+    "notifications": "Notifications",
     "account": "Compte",
     "personalization": "Personnalisation",
     "appearance": "Apparence",
@@ -9,6 +10,23 @@
     "shortcuts": "Raccourcis",
     "about": "À propos",
     "work": "Travail"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Choisissez de recevoir des alertes de réponse en votre absence.",
+    "section": "Alertes de réponse",
+    "deviceOnly": "S'applique uniquement au compte actuel sur cet appareil.",
+    "enabled": "Notifications de fin de réponse",
+    "browserBody": "Recevez une notification du navigateur lorsqu'une réponse de l'IA est terminée et que vous avez quitté cet onglet.",
+    "desktopBody": "Recevez une notification système lorsqu'une réponse est terminée et que l'application est en arrière-plan ou réduite.",
+    "denied": "Les notifications sont bloquées. Autorisez-les dans les permissions du site de votre navigateur, puis réessayez.",
+    "unsupported": "Les notifications ne sont pas disponibles ici. Utilisez un navigateur compatible via HTTPS ou localhost.",
+    "desktopUpdate": "Mettez à jour l'application de bureau pour utiliser les notifications système.",
+    "permissionHint": "L'activation demandera l'autorisation de notification du navigateur.",
+    "active": "Activées. Sélectionnez une notification pour revenir à la conversation. Son contenu n'est pas inclus.",
+    "off": "Désactivées.",
+    "readyTitle": "Aivory · Réponse prête",
+    "readyBody": "La réponse de l'IA est prête. Sélectionnez pour l'afficher."
   },
   "conversations": {
     "title": "Discussions et liens",

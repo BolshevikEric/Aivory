@@ -207,7 +207,7 @@ func createConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	req.ModelID = strings.TrimSpace(req.ModelID)
 	userDefaultModelID := ""
 	if !explicitModel {
-		userDefaultModelID = validUserDefaultConversationModel(r.Context(), d.DB, u.Settings)
+		userDefaultModelID = validUserDefaultConversationModel(r.Context(), d.DB, u.ID, u.Settings)
 		req.ModelID = userDefaultModelID
 	}
 	if req.ModelID == "" {
@@ -218,6 +218,14 @@ func createConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		}
 		req.ModelID = strings.TrimSpace(req.ModelID)
 	}
+	// Workspace binding (§workspaces): only members may create inside a space.
+	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
+	if req.WorkspaceID != "" {
+		if role, merr := store.IsWorkspaceMember(r.Context(), d.DB, req.WorkspaceID, u.ID); merr != nil || role == "" {
+			writeError(w, 404, errNotFound)
+			return
+		}
+	}
 	fast := false
 	if req.Fast != nil {
 		fast = *req.Fast
@@ -227,18 +235,28 @@ func createConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, err)
 			return
 		}
-		fast = fastModel != nil
+		if fastModel != nil {
+			err = store.CheckModelGroupAccess(r.Context(), d.DB, u.ID, fastModel)
+			if err == nil {
+				err = enforceWorkspaceConversationModelPolicy(r.Context(), d.DB, req.WorkspaceID, fastModel)
+			}
+			if err != nil && !errors.Is(err, store.ErrModelGroupAccess) && !errors.Is(err, errWorkspaceModelDisabled) {
+				writeError(w, conversationModelSelectionErrorStatus(err), err)
+				return
+			}
+			fast = err == nil
+		}
 	}
-	// Workspace binding (§workspaces): only members may create inside a space.
-	req.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
-	if req.WorkspaceID != "" {
-		if role, merr := store.IsWorkspaceMember(r.Context(), d.DB, req.WorkspaceID, u.ID); merr != nil || role == "" {
-			writeError(w, 404, errNotFound)
+	if !explicitModel && !fast {
+		var err error
+		req.ModelID, err = accessibleDefaultConversationModel(r.Context(), d.DB, u.ID, req.WorkspaceID, req.ModelID, permissions)
+		if err != nil {
+			writeError(w, conversationModelSelectionErrorStatus(err), err)
 			return
 		}
 	}
 	if err := validateConversationModelSelection(
-		r.Context(), d.DB, req.WorkspaceID, req.ModelID, fast, permissions,
+		r.Context(), d.DB, u.ID, req.WorkspaceID, req.ModelID, fast, permissions,
 	); err != nil {
 		writeError(w, conversationModelSelectionErrorStatus(err), err)
 		return
@@ -284,7 +302,7 @@ func createConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, conv)
 }
 
-func validUserDefaultConversationModel(ctx context.Context, db *sql.DB, settings json.RawMessage) string {
+func validUserDefaultConversationModel(ctx context.Context, db *sql.DB, userID string, settings json.RawMessage) string {
 	var profile struct {
 		DefaultModelID string `json:"default_model_id"`
 	}
@@ -299,7 +317,44 @@ func validUserDefaultConversationModel(ctx context.Context, db *sql.DB, settings
 	if err != nil || !model.Enabled || model.Kind != "chat" || model.Fast {
 		return ""
 	}
+	if store.CheckModelGroupAccess(ctx, db, userID, model) != nil {
+		return ""
+	}
 	return id
+}
+
+// Automatic defaults follow the same permission ceiling as the picker. An
+// explicit selection is never silently replaced by another model.
+func accessibleDefaultConversationModel(ctx context.Context, db *sql.DB, userID, workspaceID, preferredID string, permissions store.UserGroupPermissions) (string, error) {
+	err := validateConversationModelSelection(ctx, db, userID, workspaceID, preferredID, false, permissions)
+	if err == nil {
+		return preferredID, nil
+	}
+	if !errors.Is(err, store.ErrModelGroupAccess) && !errors.Is(err, errWorkspaceModelDisabled) && !errors.Is(err, errWorkspaceImageDisabled) {
+		return "", err
+	}
+	models, listErr := store.ListModels(ctx, db, "chat", true)
+	if listErr != nil {
+		return "", listErr
+	}
+	models, listErr = store.FilterModelsByUserGroup(ctx, db, userID, models)
+	if listErr != nil {
+		return "", listErr
+	}
+	for _, model := range models {
+		if model.Fast {
+			continue
+		}
+		policyErr := enforceWorkspaceConversationModelPolicy(ctx, db, workspaceID, &model)
+		if errors.Is(policyErr, errWorkspaceModelDisabled) {
+			continue
+		}
+		if policyErr != nil {
+			return "", policyErr
+		}
+		return model.ID, nil
+	}
+	return "", err
 }
 
 // validateConversationModelSelection resolves Fast mode exactly as a real turn
@@ -309,7 +364,7 @@ func validUserDefaultConversationModel(ctx context.Context, db *sql.DB, settings
 func validateConversationModelSelection(
 	ctx context.Context,
 	db *sql.DB,
-	workspaceID, modelID string,
+	userID, workspaceID, modelID string,
 	fast bool,
 	permissions store.UserGroupPermissions,
 ) error {
@@ -324,11 +379,14 @@ func validateConversationModelSelection(
 	if model.Kind == "image" && !permissions.AllowDrawing {
 		return errDrawingGroupPermission
 	}
+	if err := store.CheckModelGroupAccess(ctx, db, userID, model); err != nil {
+		return err
+	}
 	return enforceWorkspaceConversationModelPolicy(ctx, db, strings.TrimSpace(workspaceID), model)
 }
 
 func conversationModelSelectionErrorStatus(err error) int {
-	if errors.Is(err, errDrawingGroupPermission) {
+	if errors.Is(err, errDrawingGroupPermission) || errors.Is(err, store.ErrModelGroupAccess) {
 		return http.StatusForbidden
 	}
 	if errors.Is(err, errWorkspaceModelDisabled) || errors.Is(err, errWorkspaceImageDisabled) {
@@ -457,7 +515,7 @@ func createInlineThreadHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validateConversationModelSelection(
-		r.Context(), d.DB, src.WorkspaceID, src.ModelID, src.Fast, permissions,
+		r.Context(), d.DB, u.ID, src.WorkspaceID, src.ModelID, src.Fast, permissions,
 	); err != nil {
 		writeError(w, conversationModelSelectionErrorStatus(err), err)
 		return
@@ -631,7 +689,7 @@ func updateConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 			fast = *p.Fast
 		}
 		if err := validateConversationModelSelection(
-			r.Context(), d.DB, current.WorkspaceID, modelID, fast, permissions,
+			r.Context(), d.DB, u.ID, current.WorkspaceID, modelID, fast, permissions,
 		); err != nil {
 			writeError(w, conversationModelSelectionErrorStatus(err), err)
 			return
@@ -1199,7 +1257,7 @@ func forkConversationHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validateConversationModelSelection(
-		r.Context(), d.DB, conv.WorkspaceID, conv.ModelID, conv.Fast, permissions,
+		r.Context(), d.DB, u.ID, conv.WorkspaceID, conv.ModelID, conv.Fast, permissions,
 	); err != nil {
 		writeError(w, conversationModelSelectionErrorStatus(err), err)
 		return

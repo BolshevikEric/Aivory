@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, session, nativeTheme, screen, Tray, nativeImage, ipcMain, net } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell, session, nativeTheme, screen, Tray, nativeImage, ipcMain, net, Notification } = require('electron')
 const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const { createHash } = require('node:crypto')
@@ -14,6 +14,7 @@ const { attachCloseToMinimize } = require('./window-lifecycle.cjs')
 const { APP_URL, localAppUrl, createLocalHandler } = require('./local-web.cjs')
 const { registerAudioSocketBridge } = require('./audio-socket.cjs')
 const { ApiRequests } = require('./api-requests.cjs')
+const { ReplyNotifications } = require('./reply-notifications.cjs')
 
 app.setName('Aivory')
 let mainWindow
@@ -28,6 +29,7 @@ let browserAuth
 let updateChecker
 let updateTimer
 let updateStartupTimer
+let replyNotifications
 const windowLifecycles = new WeakMap()
 const configuredSessions = new WeakSet()
 const paymentContents = new WeakSet()
@@ -140,6 +142,9 @@ function registerDesktopBridge() {
   handle('desktop:browser-login', () => browserAuth.start())
   handle('desktop:cancel-browser-login', async () => { await browserAuth.cancel(); return { status: 'cancelled' } })
   handle('desktop:check-updates', () => updateChecker.check(true))
+  handle('desktop:reply-notifications-supported', () => Notification.isSupported())
+  handle('desktop:reply-notification', (payload) => replyNotifications?.show(payload) ?? false)
+  handle('desktop:clear-reply-notifications', () => { replyNotifications?.clear() })
   handle('desktop:payment', async (action) => {
     if (!action || !['redirect', 'form_post'].includes(action.type) || !isWebUrl(action.url)) throw new Error('Invalid checkout')
     const fields = action.fields ?? {}
@@ -237,6 +242,8 @@ function createWindow() {
     webPreferences: rendererOptions(),
   })
   connection = new ConnectionStatus(mainWindow, baseUrl, openBrowser, desktopSession)
+  replyNotifications = new ReplyNotifications({ Notification, window: mainWindow, activate: restoreWindow,
+    icon: path.join(app.getAppPath(), 'assets', 'icon.png') })
   mainWindow.on('query-session-end', () => { isQuitting = true })
   mainWindow.on('session-end', () => { isQuitting = true })
   windowLifecycles.set(mainWindow, attachCloseToMinimize(mainWindow, { shouldMinimize: () => !isQuitting }))

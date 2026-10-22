@@ -21,6 +21,7 @@ import { isChatShellPath } from '@/lib/app-paths'
 import { PanelFallback } from '@/components/ui/panel-fallback'
 import { DomainDataDialog } from '@/components/domain/domain-data-dialog'
 import { NotificationCenter } from '@/components/notifications/notification-center'
+import { startReplyNotifications } from '@/lib/reply-notifications'
 
 const Landing = lazy(() => import('@/pages/Landing'))
 const ChatLayout = lazy(() => import('@/pages/chat/ChatLayout'))
@@ -192,6 +193,8 @@ function SettingsRedirect() {
 
 export default function App() {
   useAppViewport()
+  const navigate = useNavigate()
+  useEffect(() => startReplyNotifications(navigate), [navigate])
   const location = useLocation()
   // §23: realtime notify stream (multi-device sync) + version detection.
   // Both are idempotent singletons; the realtime loop follows the

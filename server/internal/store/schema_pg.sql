@@ -401,6 +401,7 @@ CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled, name)
 CREATE TABLE IF NOT EXISTS models (
 	protocol TEXT NOT NULL DEFAULT '',
   id                TEXT PRIMARY KEY,
+  denied_group_ids  TEXT NOT NULL DEFAULT '[]',
   channel_id        TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   kind              TEXT NOT NULL DEFAULT 'chat',
   request_id        TEXT NOT NULL,

@@ -147,6 +147,7 @@ func Migrate(db *sql.DB) error {
 	addOfficialTools := `ALTER TABLE models ADD COLUMN official_tools TEXT NOT NULL DEFAULT '[]'`
 	addBuiltinTools := `ALTER TABLE models ADD COLUMN builtin_tools TEXT DEFAULT NULL`
 	addMCPServerIDs := `ALTER TABLE models ADD COLUMN mcp_server_ids TEXT DEFAULT NULL`
+	addModelDeniedGroups := `ALTER TABLE models ADD COLUMN denied_group_ids TEXT NOT NULL DEFAULT '[]'`
 	addMCPDisabledTools := `ALTER TABLE mcp_servers ADD COLUMN disabled_tools TEXT NOT NULL DEFAULT '[]'`
 	addGroupID := `ALTER TABLE users ADD COLUMN group_id TEXT NOT NULL DEFAULT 'ug_free'`
 	addTotpSecret := `ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`
@@ -382,6 +383,7 @@ func Migrate(db *sql.DB) error {
 		addOfficialTools = `ALTER TABLE models ADD COLUMN IF NOT EXISTS official_tools TEXT NOT NULL DEFAULT '[]'`
 		addBuiltinTools = `ALTER TABLE models ADD COLUMN IF NOT EXISTS builtin_tools TEXT DEFAULT NULL`
 		addMCPServerIDs = `ALTER TABLE models ADD COLUMN IF NOT EXISTS mcp_server_ids TEXT DEFAULT NULL`
+		addModelDeniedGroups = `ALTER TABLE models ADD COLUMN IF NOT EXISTS denied_group_ids TEXT NOT NULL DEFAULT '[]'`
 		addMCPDisabledTools = `ALTER TABLE mcp_servers ADD COLUMN IF NOT EXISTS disabled_tools TEXT NOT NULL DEFAULT '[]'`
 		addGroupID = `ALTER TABLE users ADD COLUMN IF NOT EXISTS group_id TEXT NOT NULL DEFAULT 'ug_free'`
 		addTotpSecret = `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT NOT NULL DEFAULT ''`
@@ -569,7 +571,7 @@ func Migrate(db *sql.DB) error {
 	// duplicate-column error is expected and ignored; Postgres uses IF NOT
 	// EXISTS so it's a clean no-op.
 	for _, ddl := range []string{
-		addImageRef, addOfficialTools, addBuiltinTools, addMCPServerIDs, addMCPDisabledTools, addGroupID, addTotpSecret, addTotpEnabled, addFeedback, addGenMs,
+		addImageRef, addOfficialTools, addBuiltinTools, addMCPServerIDs, addModelDeniedGroups, addMCPDisabledTools, addGroupID, addTotpSecret, addTotpEnabled, addFeedback, addGenMs,
 		addSessID, addSessUA, addSessIP, addSessLoc, addSessSeen,
 		addModEnabled, addModMode,
 		addResearchEnabled,
@@ -770,7 +772,7 @@ func Migrate(db *sql.DB) error {
 		"quota_ledger":                    {"user_id", "scope_type", "model_id", "group_id", "cycle_anchor", "window_start", "limit_type", "reserved_micros", "actual_micros", "status", "expires_at"},
 		"billing_usage":                   {"user_id", "message_id", "model_id", "purpose", "cost_micros", "images_count", "input_tokens", "output_tokens", "currency"},
 		"artifacts":                       {"source"},
-		"models":                          {"official_tools", "builtin_tools", "mcp_server_ids", "moderation_enabled", "moderation_mode", "tags", "extra_params", "image_timeout_sec", "fallback_ttft_sec", "auto_disable_errors", "auto_disable_timeouts", "auto_disable_minutes", "research_enabled", "fallback_channel_id", "fast", "compaction_token_threshold"},
+		"models":                          {"official_tools", "builtin_tools", "mcp_server_ids", "denied_group_ids", "moderation_enabled", "moderation_mode", "tags", "extra_params", "image_timeout_sec", "fallback_ttft_sec", "auto_disable_errors", "auto_disable_timeouts", "auto_disable_minutes", "research_enabled", "fallback_channel_id", "fast", "compaction_token_threshold"},
 		"channel_models":                  {"id", "channel_id", "request_id", "label", "description", "kind", "enabled", "source", "updated_at"},
 		"model_channel_bindings":          {"id", "model_id", "channel_id", "role", "priority", "weight", "consecutive_errors", "consecutive_timeouts", "disabled_until", "updated_at"},
 		"mcp_servers":                     {"id", "name", "icon", "description", "url", "headers", "enabled", "discovered_tools", "disabled_tools", "protocol_version", "last_error", "last_synced_at", "created_at", "updated_at"},

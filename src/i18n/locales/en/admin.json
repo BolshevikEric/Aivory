@@ -494,7 +494,18 @@
       "officialToolJSONInvalid": "Invalid request JSON for {{name}}.",
       "officialToolJSONMustBeObject": "Enter a valid JSON object."
     },
-    "permissionsLead": "Set each group's free allowance for this model. Groups left off spend credits on every use.",
+    "groupAccess": {
+      "title": "User group access",
+      "lead": "Groups with access turned off cannot see or call this model. All groups are allowed by default. System administrators are exempt; workspace restrictions still apply.",
+      "allowed": "Allow access",
+      "switchLabel": "Allow {{group}} to use this model",
+      "saveHint": "Use the page’s Save button to save access changes.",
+      "loadFailed": "Could not load user groups. Please retry.",
+      "retry": "Retry",
+      "empty": "No user groups",
+      "quotaTitle": "Recurring free allowance"
+    },
+    "permissionsLead": "Set a recurring free allowance for groups that can access this model. Without an allowance, each use spends credits. A free allowance does not grant model access.",
     "tagsHint": "Tag the model for the picker's filter.",
     "pc": {
       "toggle": "Toggle",

@@ -1,6 +1,7 @@
 {
   "title": "設定",
   "tabs": {
+    "notifications": "通知",
     "account": "賬號",
     "personalization": "個性化",
     "appearance": "外觀",
@@ -9,6 +10,23 @@
     "shortcuts": "快捷鍵",
     "about": "關於",
     "work": "工作"
+  },
+  "notifications": {
+    "title": "通知",
+    "subtitle": "選擇離開頁面後是否接收回覆提醒。",
+    "section": "回覆提醒",
+    "deviceOnly": "僅對目前帳號在此裝置生效。",
+    "enabled": "回覆完成通知",
+    "browserBody": "離開目前分頁後，AI 回覆完成時傳送瀏覽器通知。",
+    "desktopBody": "桌面應用程式在背景或最小化時，AI 回覆完成後傳送系統通知。",
+    "denied": "通知權限已被封鎖，請在瀏覽器的網站權限中允許通知後重試。",
+    "unsupported": "目前環境不支援通知。請使用支援通知的瀏覽器，並透過 HTTPS 或本機位址存取。",
+    "desktopUpdate": "請更新桌面應用程式以使用系統通知。",
+    "permissionHint": "開啟時將要求瀏覽器通知權限。",
+    "active": "已開啟。點擊通知可返回對應對話；通知不包含對話內容。",
+    "off": "已關閉。",
+    "readyTitle": "Aivory · 回覆已完成",
+    "readyBody": "AI 的回覆已準備好，點擊查看。"
   },
   "conversations": {
     "title": "對話與連結",

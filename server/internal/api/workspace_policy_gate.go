@@ -18,9 +18,9 @@ import (
 
 // enforceWorkspaceTurnPolicy validates a generation turn against the
 // conversation's workspace policy: model allowlist, direct drawing,
-// attachments, knowledge bases and the member monthly credit limit. A nil
-// conversation or personal conversation passes untouched. Direct drawing is
-// intentionally separate from tool-calling image generation; the latter is
+// attachments, knowledge bases and the member monthly credit limit. User-group
+// model access is checked for both personal and workspace conversations.
+// Direct drawing is separate from tool-calling image generation; the latter is
 // covered by AllowToolCalling at the tool boundary.
 func enforceWorkspaceTurnPolicy(
 	ctx context.Context,
@@ -31,6 +31,9 @@ func enforceWorkspaceTurnPolicy(
 	attachmentCount int,
 	knowledgeBaseUsed bool,
 ) error {
+	if err := store.CheckModelGroupAccess(ctx, db, userID, effectiveModel); err != nil {
+		return err
+	}
 	if conv == nil || conv.WorkspaceID == "" {
 		return nil
 	}
@@ -163,6 +166,7 @@ func requireKnowledgeBaseAccess(d Deps, w http.ResponseWriter, r *http.Request, 
 // workspacePolicyErrorStatus maps the policy errors onto HTTP statuses.
 func workspacePolicyErrorStatus(err error) int {
 	if errors.Is(err, errWorkspaceCreditLimitExceeded) ||
+		errors.Is(err, store.ErrModelGroupAccess) ||
 		errors.Is(err, errWorkspaceModelDisabled) ||
 		errors.Is(err, errWorkspaceImageDisabled) ||
 		errors.Is(err, errWorkspaceFileUploadDisabled) ||

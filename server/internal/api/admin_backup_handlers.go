@@ -2513,7 +2513,7 @@ func normalizeLegacyUserGroupPriceArchiveRows(r io.Reader) (io.Reader, error) {
 }
 
 // normalizeModelOfficialToolsArchiveRows upgrades legacy hosted-tool arrays and
-// validates/canonicalizes nullable local and MCP default policies before either
+// validates/canonicalizes group access, local and MCP policies before either
 // importer writes model rows. The historical function name is retained to keep
 // this compatibility path stable.
 func normalizeModelOfficialToolsArchiveRows(r io.Reader) (io.Reader, error) {
@@ -2526,6 +2526,20 @@ func normalizeModelOfficialToolsArchiveRows(r io.Reader) (io.Reader, error) {
 			return bytes.NewReader(out.Bytes()), nil
 		} else if err != nil {
 			return nil, fmt.Errorf("decode models row: %w", err)
+		}
+		if raw, present, err := backupStringField(row, "denied_group_ids"); err != nil {
+			return nil, fmt.Errorf("invalid models.denied_group_ids: %w", err)
+		} else if present {
+			var ids []string
+			if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+				return nil, fmt.Errorf("invalid models.denied_group_ids: %w", err)
+			}
+			ids, err = store.NormalizeModelDeniedGroupIDs(ids)
+			if err != nil {
+				return nil, fmt.Errorf("invalid models.denied_group_ids: %w", err)
+			}
+			normalized, _ := json.Marshal(ids)
+			row["denied_group_ids"], _ = json.Marshal(string(normalized))
 		}
 
 		raw, present, err := backupStringField(row, "official_tools")

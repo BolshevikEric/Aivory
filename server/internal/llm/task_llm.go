@@ -426,6 +426,11 @@ func (t *TaskLLM) runOnce(ctx context.Context, kind TaskKind, prompt string, opt
 	if model.Kind != "chat" {
 		return "", wrapCompactionModelAttempt(fmt.Errorf("task model %q is not a chat model", modelID), kind == TaskCompact)
 	}
+	if opts.UserID != "" {
+		if err := store.CheckModelGroupAccess(ctx, t.db, opts.UserID, model); err != nil {
+			return "", wrapCompactionModelAttempt(err, kind == TaskCompact)
+		}
+	}
 	// Defense in depth, matching stripImageBlocks' provider-side contract: image
 	// bytes must never be serialized into a request whose model cannot read them.
 	if len(opts.ImageBlocks) > 0 && !model.Vision {

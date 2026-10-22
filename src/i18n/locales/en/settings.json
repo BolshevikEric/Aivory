@@ -1,6 +1,7 @@
 {
   "title": "Settings",
   "tabs": {
+    "notifications": "Notifications",
     "account": "Account",
     "personalization": "Personalization",
     "appearance": "Appearance",
@@ -9,6 +10,23 @@
     "shortcuts": "Shortcuts",
     "about": "About",
     "work": "Work"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Choose whether to receive reply alerts while away.",
+    "section": "Reply Alerts",
+    "deviceOnly": "Applies to your current account on this device only.",
+    "enabled": "Reply completion notifications",
+    "browserBody": "Send a browser notification when an AI reply finishes while you are away from this tab.",
+    "desktopBody": "Send a system notification when an AI reply finishes while the desktop app is in the background or minimized.",
+    "denied": "Notifications are blocked. Allow notifications in your browser's site permissions and try again.",
+    "unsupported": "Notifications are unavailable here. Use a supported browser over HTTPS or a localhost address.",
+    "desktopUpdate": "Update the desktop app to use system notifications.",
+    "permissionHint": "Turning this on will request browser notification permission.",
+    "active": "Enabled. Select a notification to return to its conversation. Conversation content is not included.",
+    "off": "Disabled.",
+    "readyTitle": "Aivory · Reply ready",
+    "readyBody": "Your AI reply is ready. Select to view it."
   },
   "conversations": {
     "title": "Chats & links",

@@ -11,6 +11,7 @@ export const SETTINGS_TABS = [
   'work',
   'personalization',
   'appearance',
+  'notifications',
   'models',
   'privacy',
   'shortcuts',

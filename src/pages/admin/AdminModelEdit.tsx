@@ -54,6 +54,7 @@ import { IconPicker } from '@/components/admin/icon-picker'
 import { IconUploader } from '@/components/admin/icon-uploader'
 import { ParamControlsEditor } from '@/components/admin/param-controls-editor'
 import { ModelQuotaEditor } from '@/components/admin/model-quota-editor'
+import { ModelGroupAccessEditor } from '@/components/admin/model-group-access-editor'
 import { AdminSortableList } from '@/components/admin/AdminSortableList'
 import { Badge } from '@/components/ui/badge'
 import { LucideGlyph } from '@/components/ui/lucide-icon'
@@ -1819,18 +1820,34 @@ export default function AdminModelEdit() {
 
               <TabsContent value="permissions" forceMount className="mt-0 min-w-0 data-[state=inactive]:hidden">
                 {draft.kind === 'chat' || draft.kind === 'image' ? (
-                  <SettingsSection
-                    title={t('admin:models.sections.permissions')}
-                    description={t('admin:models.permissionsLead')}
-                    className="mb-0 mt-6"
-                    bodyClassName="divide-y-0"
-                  >
-                    <SettingsBlock>
-                      <div>
-                        <ModelQuotaEditor modelId={id} />
-                      </div>
-                    </SettingsBlock>
-                  </SettingsSection>
+                  <>
+                    <SettingsSection
+                      title={t('admin:models.groupAccess.title')}
+                      description={t('admin:models.groupAccess.lead')}
+                      className="mb-0 mt-6"
+                      bodyClassName="divide-y-0"
+                    >
+                      <SettingsBlock>
+                        <ModelGroupAccessEditor
+                          deniedGroupIDs={draft.denied_group_ids ?? []}
+                          onChange={(denied_group_ids) => patch({ denied_group_ids })}
+                          disabled={saving}
+                        />
+                      </SettingsBlock>
+                    </SettingsSection>
+                    <SettingsSection
+                      title={t('admin:models.groupAccess.quotaTitle')}
+                      description={t('admin:models.permissionsLead')}
+                      className="mb-0 mt-6"
+                      bodyClassName="divide-y-0"
+                    >
+                      <SettingsBlock>
+                        <div>
+                          <ModelQuotaEditor modelId={id} />
+                        </div>
+                      </SettingsBlock>
+                    </SettingsSection>
+                  </>
                 ) : null}
               </TabsContent>
 

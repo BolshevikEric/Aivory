@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -472,6 +473,12 @@ func createModelAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	} else {
 		m.MCPServerIDs = mcpServerIDs
 	}
+	if ids, err := store.NormalizeModelDeniedGroupIDs(m.DeniedGroupIDs); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	} else {
+		m.DeniedGroupIDs = ids
+	}
 	if err := normalizeModelExtraParams(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -586,6 +593,12 @@ func updateModelAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	} else {
 		m.MCPServerIDs = mcpServerIDs
 	}
+	if ids, err := store.NormalizeModelDeniedGroupIDs(m.DeniedGroupIDs); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	} else {
+		m.DeniedGroupIDs = ids
+	}
 	if err := normalizeModelExtraParams(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -625,6 +638,9 @@ func updateModelAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, 404, errNotFound)
 		return
+	}
+	if !slices.Equal(existing.DeniedGroupIDs, upd.DeniedGroupIDs) {
+		publishGlobalEvent(d, "account.permissions_updated")
 	}
 	writeJSON(w, 200, upd)
 }

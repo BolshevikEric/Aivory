@@ -2148,6 +2148,9 @@ func (t *imageGenerateTool) storedImageParamPicks(ctx context.Context, tc *llm.T
 func (t *imageGenerateTool) resolveImageModel(ctx context.Context, tc *llm.ToolContext) (*store.Model, error) {
 	if tc != nil && tc.ImageModelID != "" {
 		if m, err := store.GetModel(ctx, t.db, tc.ImageModelID); err == nil && m.Enabled && m.Kind == "image" {
+			if err := store.CheckModelGroupAccess(ctx, t.db, tc.UserID, m); err != nil {
+				return nil, err
+			}
 			if selected, ok, err := t.selectImageModelChannel(ctx, m); err == nil && ok {
 				return selected, nil
 			}
@@ -2162,6 +2165,16 @@ func (t *imageGenerateTool) resolveImageModel(ctx context.Context, tc *llm.ToolC
 		return nil, &llm.ToolUserError{Message: "no image model configured — an admin must add one (kind=image)"}
 	}
 	for i := range models {
+		userID := ""
+		if tc != nil {
+			userID = tc.UserID
+		}
+		if err := store.CheckModelGroupAccess(ctx, t.db, userID, &models[i]); err != nil {
+			if errors.Is(err, store.ErrModelGroupAccess) {
+				continue
+			}
+			return nil, err
+		}
 		if selected, ok, err := t.selectImageModelChannel(ctx, &models[i]); err == nil && ok {
 			return selected, nil
 		}

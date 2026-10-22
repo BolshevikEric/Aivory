@@ -1,6 +1,7 @@
 {
   "title": "设置",
   "tabs": {
+    "notifications": "通知",
     "account": "账号",
     "personalization": "个性化",
     "appearance": "外观",
@@ -9,6 +10,23 @@
     "shortcuts": "快捷键",
     "about": "关于",
     "work": "工作"
+  },
+  "notifications": {
+    "title": "通知",
+    "subtitle": "选择离开页面后是否接收回复提醒。",
+    "section": "回复提醒",
+    "deviceOnly": "仅对当前账号在本设备生效。",
+    "enabled": "回复完成通知",
+    "browserBody": "离开当前标签页后，AI 回复完成时发送浏览器通知。",
+    "desktopBody": "桌面应用在后台或最小化时，AI 回复完成后发送系统通知。",
+    "denied": "通知权限已被阻止，请在浏览器的网站权限中允许通知后重试。",
+    "unsupported": "当前环境不支持通知。请使用支持通知的浏览器，并通过 HTTPS 或本机地址访问。",
+    "desktopUpdate": "请更新桌面应用以使用系统通知。",
+    "permissionHint": "开启时将请求浏览器通知权限。",
+    "active": "已开启。点击通知可返回对应对话；通知不包含对话内容。",
+    "off": "已关闭。",
+    "readyTitle": "Aivory · 回复已完成",
+    "readyBody": "AI 的回复已准备好，点击查看。"
   },
   "conversations": {
     "title": "对话与链接",

@@ -1,5 +1,5 @@
 /**
- * ModelQuotaEditor — per-model access + usage caps by user group (§ user groups).
+ * ModelQuotaEditor — free allowances and usage caps by user group (§ user groups).
  * Toggle which groups receive a free allowance; for each granted group set a
  * fixed window (period) and a cap (cost in the model's currency, or call count;
  * 0 = unlimited). A missing grant means that group has no free allowance and

@@ -498,7 +498,18 @@
       "officialToolJSONInvalid": "{{name}} 的请求 JSON 无效。",
       "officialToolJSONMustBeObject": "请输入有效的 JSON 对象。"
     },
-    "permissionsLead": "为用户组设置此模型的周期免费额度；关闭的用户组每次使用都会扣积分。",
+    "groupAccess": {
+      "title": "用户组访问权限",
+      "lead": "关闭后，该用户组将看不到此模型，也不能调用。默认允许所有用户组；系统管理员不受此限制，工作空间权限仍同时生效。",
+      "allowed": "允许使用",
+      "switchLabel": "允许 {{group}} 使用此模型",
+      "saveHint": "访问权限随页面的“保存”按钮一起保存。",
+      "loadFailed": "用户组加载失败，请重试。",
+      "retry": "重试",
+      "empty": "暂无用户组",
+      "quotaTitle": "周期免费额度"
+    },
+    "permissionsLead": "为可访问此模型的用户组设置周期免费额度；未开启免费额度时每次使用扣积分。免费额度不会授予模型访问权限。",
     "tagsHint": "给模型分配标签,用于选择器筛选。",
     "pc": {
       "toggle": "开关",

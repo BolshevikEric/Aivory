@@ -48,6 +48,14 @@ func listSelectableToolsHandler(d Deps, w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, errNotFound)
 		return
 	}
+	userID := ""
+	if user := authUser(r); user != nil {
+		userID = user.ID
+	}
+	if err := store.CheckModelGroupAccess(r.Context(), d.DB, userID, model); err != nil {
+		writeError(w, workspacePolicyErrorStatus(err), err)
+		return
+	}
 	permissions, permissionErr := catalogPermissions(d, r)
 	if permissionErr != nil {
 		writeError(w, http.StatusForbidden, errToolGroupPermission)

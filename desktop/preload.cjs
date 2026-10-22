@@ -31,6 +31,9 @@ if (runtime) contextBridge.exposeInMainWorld('aivoryDesktop', Object.freeze({
   loginInBrowser: () => ipcRenderer.invoke('desktop:browser-login'),
   cancelBrowserLogin: () => ipcRenderer.invoke('desktop:cancel-browser-login'),
   checkUpdates: () => ipcRenderer.invoke('desktop:check-updates'),
+  replyNotificationsSupported: () => ipcRenderer.invoke('desktop:reply-notifications-supported'),
+  showReplyNotification: (payload) => ipcRenderer.invoke('desktop:reply-notification', payload),
+  clearReplyNotifications: () => ipcRenderer.invoke('desktop:clear-reply-notifications'),
   openPayment: (action) => ipcRenderer.invoke('desktop:payment', action),
   connectAudioSocket,
   startApiRequest: (id) => ipcRenderer.send('desktop:api-start', id),
@@ -46,6 +49,9 @@ ipcRenderer.on('desktop:authorized', () => {
 })
 ipcRenderer.on('desktop:payment-return', (_event, path) => {
   window.dispatchEvent(new CustomEvent('aivory:desktop-payment-return', { detail: path }))
+})
+ipcRenderer.on('desktop:reply-notification', (_event, target) => {
+  window.dispatchEvent(new CustomEvent('aivory:desktop-reply-notification', { detail: target }))
 })
 
 function reportStatus() {

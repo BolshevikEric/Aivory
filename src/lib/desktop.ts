@@ -16,6 +16,9 @@ declare global {
       }
       startApiRequest?: (id: string) => void
       abortApiRequest?: (id: string) => void
+      replyNotificationsSupported?: () => Promise<boolean>
+      showReplyNotification?: (payload: import('./reply-notifications').ReplyNotificationTarget & { messageId: string; title: string; body: string }) => Promise<boolean>
+      clearReplyNotifications?: () => Promise<void>
     }
   }
 }

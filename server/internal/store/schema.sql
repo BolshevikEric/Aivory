@@ -346,10 +346,8 @@ CREATE TABLE IF NOT EXISTS payment_events (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_events_order_created ON payment_events(order_id, created_at, id);
 
--- Per-model, per-group access + usage cap. A model with NO rows here is open to
--- everyone (unlimited). Once a model has any row, only listed groups may use it;
--- each row caps usage within a fixed window: limit_type 'cost' (in the model's
--- currency) or 'count' (calls), limit_value 0 = granted but unlimited.
+-- Per-model free allowance. Missing rows use credits; access is controlled by
+-- models.denied_group_ids independently of billing.
 CREATE TABLE IF NOT EXISTS model_group_quotas (
   model_id       TEXT NOT NULL REFERENCES models(id) ON DELETE CASCADE,
   group_id       TEXT NOT NULL REFERENCES user_groups(id) ON DELETE CASCADE,
@@ -451,6 +449,7 @@ CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled, name)
 CREATE TABLE IF NOT EXISTS models (
 	protocol TEXT NOT NULL DEFAULT '',
   id                TEXT PRIMARY KEY,
+  denied_group_ids  TEXT NOT NULL DEFAULT '[]',
   channel_id        TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   kind              TEXT NOT NULL DEFAULT 'chat',   -- chat | image | embedding
   request_id        TEXT NOT NULL,                  -- ID sent to upstream

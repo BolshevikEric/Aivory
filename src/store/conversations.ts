@@ -57,6 +57,7 @@ import { resolveNewConversationFastMode } from '@/lib/chat-defaults'
 import { initialConversationTitle } from '@/lib/chat-message-input'
 import { ragInjectionFromEvent } from '@/lib/rag-injection'
 import { isToolFailureOutput, sanitizeToolErrorOutput, sanitizeUserVisibleError } from '@/lib/user-visible-error'
+import { publishReplyCompleted } from '@/lib/reply-notifications'
 
 // resolveArmedTurnFlags snapshots the CURRENT composer feature toggles for turns
 // started OUTSIDE the composer's own submit — regenerate, edit-and-resend, and
@@ -2386,6 +2387,7 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
               quotaExceeded: ev.stop_reason === 'quota_exceeded' ? true : m.quotaExceeded,
               stopped: ev.stop_reason === 'stopped' ? true : m.stopped,
             }))
+            if (!abort.signal.aborted) publishConversationReply(get, input.conversationId, serverAssistantId)
             break
         }
       }
@@ -2814,8 +2816,10 @@ export const useConversations = createWithEqualityFn<ConversationStore>((set, ge
               verify: m.verify?.status === 'running' ? undefined : m.verify,
               thinkingMs: ev.thinking_ms && ev.thinking_ms > 0 ? ev.thinking_ms : m.thinkingMs,
               moderation: ev.stop_reason === 'content_moderation' ? true : m.moderation,
+              quotaExceeded: ev.stop_reason === 'quota_exceeded' ? true : m.quotaExceeded,
               stopped: ev.stop_reason === 'stopped' ? true : m.stopped,
             }))
+            if (!abort.signal.aborted) publishConversationReply(get, conversationId, serverAssistantId)
             break
           case 'error':
             errored = true
@@ -3163,6 +3167,7 @@ async function consumeReplayStream(
       const ev = frame.data as ApiSseEvent
       applyReplayEvent(set, conversationId, assistantId, ev, state)
       if (ev.type === 'done') {
+        if (!abort.signal.aborted) publishConversationReply(get, conversationId, assistantId)
         await get().reloadActivePath(conversationId)
         return
       }
@@ -3185,6 +3190,11 @@ async function consumeReplayStream(
       errorCode: GENERATION_INTERRUPTED_ERROR_CODE,
     }))
   }
+}
+
+function publishConversationReply(get: () => ConversationStore, conversationId: string, assistantId: string) {
+  const conversation = get().conversations.find((item) => item.id === conversationId)
+  publishReplyCompleted(conversation, conversation?.messages.find((message) => message.id === assistantId))
 }
 
 function applyReplayEvent(
