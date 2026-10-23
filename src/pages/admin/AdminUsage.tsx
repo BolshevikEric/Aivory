@@ -346,6 +346,8 @@ export default function AdminUsage() {
                 <col className="w-[82px]" />
                 <col className="w-[82px]" />
                 <col className="w-[105px]" />
+                <col className="w-[105px]" />
+                <col className="w-[105px]" />
                 <col className="w-[92px]" />
                 <col className="w-[56px]" />
               </colgroup>
@@ -362,6 +364,8 @@ export default function AdminUsage() {
                   <th scope="col" data-column="duration" className="text-right py-2.5 px-4 font-medium">{t('usage.table.duration', { defaultValue: 'Duration' })}</th>
                   <th scope="col" data-column="input" className="text-right py-2.5 px-4 font-medium">{t('usage.table.in')}</th>
                   <th scope="col" data-column="output" className="text-right py-2.5 px-4 font-medium">{t('usage.table.out')}</th>
+                  <th scope="col" data-column="cache-read" className="text-right py-2.5 px-4 font-medium">{t('usage.table.cacheReadTokens')}</th>
+                  <th scope="col" data-column="cache-write" className="text-right py-2.5 px-4 font-medium">{t('usage.table.cacheWriteTokens')}</th>
                   <th scope="col" data-column="cost" className="text-right py-2.5 px-4 font-medium">{t('usage.table.cost')}</th>
                   <th scope="col" data-column="credits" className="text-right py-2.5 px-4 font-medium">{t('usage.table.credits', { defaultValue: 'Credits' })}</th>
                   <th scope="col" data-column="actions" className="text-right py-2.5 px-4 font-medium">{t('usage.table.actions', { defaultValue: 'Actions' })}</th>
@@ -475,8 +479,10 @@ export default function AdminUsage() {
                     </td>
                     <td data-column="first-byte" className="whitespace-nowrap py-2 px-4 text-right text-[12px] text-[var(--color-fg-muted)]">{formatDuration(r.first_byte_ms)}</td>
                     <td data-column="duration" className="whitespace-nowrap py-2 px-4 text-right text-[12px] text-[var(--color-fg-muted)]">{formatDuration(r.duration_ms)}</td>
-                    <td data-column="input" className="py-2 px-4 text-right">{r.input_tokens}</td>
-                    <td data-column="output" className="py-2 px-4 text-right">{r.output_tokens}</td>
+                    <td data-column="input" className="py-2 px-4 text-right">{r.input_tokens.toLocaleString()}</td>
+                    <td data-column="output" className="py-2 px-4 text-right">{r.output_tokens.toLocaleString()}</td>
+                    <td data-column="cache-read" className="py-2 px-4 text-right">{(r.cache_read_tokens ?? 0).toLocaleString()}</td>
+                    <td data-column="cache-write" className="py-2 px-4 text-right">{(r.cache_write_tokens ?? 0).toLocaleString()}</td>
                     <td data-column="cost" className="py-2 px-4 text-right">${r.cost.toFixed(4)}</td>
                     <td data-column="credits" className="py-2 px-4 text-right">
                       {r.credits > 0 ? (
@@ -545,6 +551,8 @@ export default function AdminUsage() {
               <DetailItem label={t('usage.detail.workspace', { defaultValue: 'Workspace' })} value={selectedRecord?.workspace_name || selectedRecord?.workspace_id || '—'} />
               <DetailItem label={t('usage.table.in')} value={selectedRecord ? selectedRecord.input_tokens.toLocaleString() : ''} />
               <DetailItem label={t('usage.table.out')} value={selectedRecord ? selectedRecord.output_tokens.toLocaleString() : ''} />
+              <DetailItem label={t('usage.table.cacheReadTokens')} value={selectedRecord ? (selectedRecord.cache_read_tokens ?? 0).toLocaleString() : ''} />
+              <DetailItem label={t('usage.table.cacheWriteTokens')} value={selectedRecord ? (selectedRecord.cache_write_tokens ?? 0).toLocaleString() : ''} />
               <DetailItem label={t('usage.table.cost')} value={selectedRecord ? `${selectedRecord.cost.toFixed(6)} ${selectedRecord.currency || 'USD'}` : ''} />
               <DetailItem label={t('usage.table.credits', { defaultValue: 'Credits' })} value={selectedRecord ? formatCredits(selectedRecord.credits) : ''} />
               <DetailItem label={t('usage.detail.fallback', { defaultValue: 'Fallback channel' })} value={selectedRecord?.fallback ? t('common.yes', { defaultValue: 'Yes' }) : t('common.no', { defaultValue: 'No' })} />

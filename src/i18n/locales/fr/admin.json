@@ -861,6 +861,8 @@
       "purpose": "Objet",
       "in": "Entrée",
       "out": "Sortie",
+      "cacheReadTokens": "Tokens lus du cache",
+      "cacheWriteTokens": "Tokens écrits en cache",
       "calls": "Appels",
       "cost": "Coût",
       "credits": "Crédits",

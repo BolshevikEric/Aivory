@@ -2045,6 +2045,9 @@ export interface ApiUsageRecord {
   purpose: string
   input_tokens: number
   output_tokens: number
+  /** Canonical provider-normalized prompt cache usage. */
+  cache_read_tokens: number
+  cache_write_tokens: number
   cost: number
   currency: string
   created_at: number

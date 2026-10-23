@@ -861,6 +861,8 @@
       "purpose": "Purpose",
       "in": "In",
       "out": "Out",
+      "cacheReadTokens": "Cache read tokens",
+      "cacheWriteTokens": "Cache write tokens",
       "calls": "Calls",
       "cost": "Cost",
       "credits": "Credits",

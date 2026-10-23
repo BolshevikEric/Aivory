@@ -865,6 +865,8 @@
       "purpose": "用途",
       "in": "输入",
       "out": "输出",
+      "cacheReadTokens": "缓存读取令牌",
+      "cacheWriteTokens": "缓存写入令牌",
       "calls": "调用",
       "cost": "费用",
       "credits": "积分",

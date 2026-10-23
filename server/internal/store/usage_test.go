@@ -24,9 +24,9 @@ func TestAdminUsageRecords(t *testing.T) {
 	if _, err := CreateConversation(ctx, db, Conversation{ID: "c1", UserID: "u1", Title: "Hello"}); err != nil {
 		t.Fatalf("conv: %v", err)
 	}
-	ins := `INSERT INTO usage_logs(user_id,conversation_id,model_id,purpose,input_tokens,output_tokens,cost,currency,created_at) VALUES(?,?,?,?,?,?,?,?,?)`
-	exec(t, db, ins, "u1", "c1", "m1", "chat", 10, 20, 0.1, "USD", 1000)                                                              // existing conv
-	exec(t, db, ins, "u1", "cGONE", "m1", "task.title", 5, 5, 0.2, "USD", 2000)                                                       // conv was deleted
+	ins := `INSERT INTO usage_logs(user_id,conversation_id,model_id,purpose,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,cost,currency,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+	exec(t, db, ins, "u1", "c1", "m1", "chat", 10, 20, 70, 10, 0.1, "USD", 1000)                                                      // existing conv
+	exec(t, db, ins, "u1", "cGONE", "m1", "task.title", 5, 5, 0, 0, 0.2, "USD", 2000)                                                  // conv was deleted
 	exec(t, db, `INSERT INTO usage_logs(user_id,model_id,purpose,cost,currency,created_at) VALUES('u2','m2','image',0.3,'USD',3000)`) // no conv
 
 	all, err := AdminUsageRecords(ctx, db, UsageFilter{}, 50, 0)
@@ -58,6 +58,9 @@ func TestAdminUsageRecords(t *testing.T) {
 	}
 	if byPurpose["chat"].UserName != "Alice Admin" {
 		t.Errorf("nickname join wrong: %q", byPurpose["chat"].UserName)
+	}
+	if byPurpose["chat"].CacheReadTokens != 70 || byPurpose["chat"].CacheWriteTokens != 10 {
+		t.Errorf("cache usage wrong: read=%d write=%d", byPurpose["chat"].CacheReadTokens, byPurpose["chat"].CacheWriteTokens)
 	}
 
 	// Filter by user (email substring).

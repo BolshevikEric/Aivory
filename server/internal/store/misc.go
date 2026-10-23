@@ -1170,20 +1170,26 @@ func SumUsageByUser(ctx context.Context, db *sql.DB, userID string, days int) (f
 // references a conversation that no longer exists — so the UI shows "deleted"
 // instead of a dangling id.
 type AdminUsageRecord struct {
-	ID                  int64   `json:"id"`
-	UserID              string  `json:"user_id"`
-	UserName            string  `json:"user_name"`
-	UserEmail           string  `json:"user_email"`
-	ConversationID      string  `json:"conversation_id"`
-	ConversationTitle   string  `json:"conversation_title"`
-	ConversationDeleted bool    `json:"conversation_deleted"`
-	ModelID             string  `json:"model_id"`
-	Purpose             string  `json:"purpose"`
-	InputTokens         int     `json:"input_tokens"`
-	OutputTokens        int     `json:"output_tokens"`
-	Cost                float64 `json:"cost"`
-	Currency            string  `json:"currency"`
-	CreatedAt           int64   `json:"created_at"`
+	ID                  int64  `json:"id"`
+	UserID              string `json:"user_id"`
+	UserName            string `json:"user_name"`
+	UserEmail           string `json:"user_email"`
+	ConversationID      string `json:"conversation_id"`
+	ConversationTitle   string `json:"conversation_title"`
+	ConversationDeleted bool   `json:"conversation_deleted"`
+	ModelID             string `json:"model_id"`
+	Purpose             string `json:"purpose"`
+	InputTokens         int    `json:"input_tokens"`
+	OutputTokens        int    `json:"output_tokens"`
+	// CacheReadTokens and CacheWriteTokens use the canonical usage fields written
+	// by every provider adapter. Keeping them here (rather than exposing raw
+	// provider response fields) makes the admin log consistent for Anthropic,
+	// Google, OpenAI-compatible, and fallback channels.
+	CacheReadTokens  int     `json:"cache_read_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	Cost             float64 `json:"cost"`
+	Currency         string  `json:"currency"`
+	CreatedAt        int64   `json:"created_at"`
 	// Credits is the credit amount this row actually moved (0 = nothing charged).
 	// For a purpose="ppt" row it is the settled price of that call.
 	Credits float64 `json:"credits"`
@@ -1284,7 +1290,7 @@ func AdminUsageRecords(ctx context.Context, db *sql.DB, f UsageFilter, limit, of
 	// Postgres (a bare boolean expression scans differently between them).
 	q := `SELECT u.id, u.user_id, COALESCE(usr.name,''), COALESCE(usr.email,''), COALESCE(u.conversation_id,''), CASE WHEN substr(u.message_id,1,8)='private_' THEN '匿名对话' ELSE COALESCE(c.title,'') END,
 	             CASE WHEN u.conversation_id IS NOT NULL AND u.conversation_id <> '' AND c.id IS NULL THEN 1 ELSE 0 END,
-	             u.model_id, u.purpose, u.input_tokens, u.output_tokens, u.cost, u.currency, u.created_at,
+	             u.model_id, u.purpose, COALESCE(u.input_tokens,0), COALESCE(u.output_tokens,0), COALESCE(u.cache_read_tokens,0), COALESCE(u.cache_write_tokens,0), u.cost, u.currency, u.created_at,
 	             COALESCE(u.credits,0), COALESCE(u.message_id,''),
 	             COALESCE(u.workspace_id,''), COALESCE(w.name,''),
 		             COALESCE(u.channel_id,''), COALESCE(ch.name,''), COALESCE(u.fallback,0), COALESCE(u.status,'ok'), COALESCE(u.error,''),
@@ -1307,7 +1313,7 @@ func AdminUsageRecords(ctx context.Context, db *sql.DB, f UsageFilter, limit, of
 		var r AdminUsageRecord
 		var gone, fb int
 		if err := rows.Scan(&r.ID, &r.UserID, &r.UserName, &r.UserEmail, &r.ConversationID, &r.ConversationTitle, &gone,
-			&r.ModelID, &r.Purpose, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Currency, &r.CreatedAt,
+			&r.ModelID, &r.Purpose, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens, &r.Cost, &r.Currency, &r.CreatedAt,
 			&r.Credits, &r.messageID,
 			&r.WorkspaceID, &r.WorkspaceName, &r.ChannelID, &r.ChannelName, &fb, &r.Status, &r.Error,
 			&r.RequestMethod, &r.RequestURL, &r.RequestHeaders, &r.RequestBody, &r.TTFTFallbackModel,

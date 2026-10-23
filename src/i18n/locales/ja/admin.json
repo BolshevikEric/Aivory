@@ -861,6 +861,8 @@
       "purpose": "目的",
       "in": "入力",
       "out": "出力",
+      "cacheReadTokens": "キャッシュ読み取りトークン",
+      "cacheWriteTokens": "キャッシュ書き込みトークン",
       "calls": "呼び出し",
       "cost": "コスト",
       "credits": "クレジット",

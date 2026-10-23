@@ -861,6 +861,8 @@
       "purpose": "用途",
       "in": "輸入",
       "out": "輸出",
+      "cacheReadTokens": "快取讀取令牌",
+      "cacheWriteTokens": "快取寫入令牌",
       "calls": "呼叫",
       "cost": "費用",
       "credits": "積分",
