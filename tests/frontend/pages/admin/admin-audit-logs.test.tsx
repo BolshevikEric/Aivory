@@ -62,7 +62,7 @@ describe('admin audit logs', () => {
 
     const row = container.querySelector<HTMLTableRowElement>('tbody tr')
     expect(row?.textContent).toContain(entry.id)
-    expect(row?.textContent).toContain(entry.action)
+    expect(row?.textContent).toContain('logs.actions.role_updated')
     expect(row?.textContent).not.toContain('previous_role')
 
     await act(async () => {

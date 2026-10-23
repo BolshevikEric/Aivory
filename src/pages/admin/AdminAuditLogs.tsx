@@ -194,7 +194,7 @@ export default function AdminAuditLogs() {
       {invalidRange && <p role="alert" className="mt-2 text-[12px] text-[var(--color-danger)]">{t('logs.invalidRange')}</p>}
 
       <section className="mt-5" aria-busy={loading}>
-        {loading ? <PanelFallback /> : loadError ? <div role="alert" className="py-10 text-center text-sm text-[var(--color-fg-muted)]"><p>{t('common.failed')}</p><Button variant="ghost" size="sm" onClick={refresh} className="mt-2"><RotateCw size={14} />{t('logs.refresh')}</Button></div> : logs.length === 0 ? <div className="px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">{t('logs.empty')}</div> : <AdminTable
+        {loading ? <PanelFallback /> : loadError ? <div role="alert" className="py-10 text-center text-sm text-[var(--color-fg-muted)]"><p>{t('common.failed')}</p><Button variant="ghost" size="sm" onClick={refresh} className="mt-2"><RotateCw size={14} />{t('logs.refresh')}</Button></div> : logs.length === 0 ? <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">{t('logs.empty')}</div> : <AdminTable
           items={logs} columns={columns} rowKey={(log) => log.id} label={t('logs.auditLogs')}
           renderRow={(log, _index, cells) => <tr key={log.id} role="button" tabIndex={0} aria-label={t('logs.openDetail', { id: log.id })}
             onClick={() => setSelectedLog(log)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSelectedLog(log) } }}
