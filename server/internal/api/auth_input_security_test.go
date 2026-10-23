@@ -137,9 +137,9 @@ func TestEveryPasswordSettingHandlerUsesCharacterAndBcryptLimits(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create user: %v", err)
 			}
-			d.Cache.Set("reset:"+user.Email, "123456", time.Minute)
+			token := cachePasswordResetForTest(t, d, user, time.Minute)
 			return runAuthJSONHandler(t, d, resetPasswordHandler, "/api/auth/reset-password",
-				fmt.Sprintf(`{"email":"user@example.test","code":"123456","new_password":%q}`, password))
+				fmt.Sprintf(`{"token":%q,"new_password":%q}`, token, password))
 		}},
 		{name: "change", run: func(t *testing.T, password string) *httptest.ResponseRecorder {
 			d := newAuthSecurityDeps(t, "password-change.db")

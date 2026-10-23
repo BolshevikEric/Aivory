@@ -21,6 +21,11 @@ import {
 import type { ApiAuthPolicy, ApiUser } from '@/api/types'
 import { getUserSettingsRevision } from '@/lib/user-settings-revision'
 
+const SUSPENDED_KEY = 'aivory.account-suspended'
+function rememberedSuspension(): boolean {
+  try { return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SUSPENDED_KEY) === '1' } catch { return false }
+}
+
 export const DEFAULT_AUTH_POLICY: ApiAuthPolicy = {
   password_login_enabled: true,
   passkey_login_enabled: true,
@@ -120,6 +125,7 @@ interface AuthState {
   /** First-run: create the initial admin account, then sign in. */
   setup: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
+  markSuspended: () => void
   updateProfile: (patch: { name?: string; email?: string }) => Promise<void>
   setUser: (user: ApiUser | null) => void
   setSignupOpen: (open: boolean) => void
@@ -134,7 +140,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   status: 'idle',
   error: null,
-  banned: false,
+  banned: rememberedSuspension(),
   signupOpen: true,
   authPolicy: DEFAULT_AUTH_POLICY,
   authPolicyLoaded: false,
@@ -146,12 +152,17 @@ export const useAuth = create<AuthState>((set, get) => ({
   pendingVerificationRetryAfter: 0,
   pendingTwoFactor: null,
 
+  markSuspended() {
+    beginAuthOp()
+    setAccessToken(null)
+    set({ user: null, status: 'unauthenticated', banned: true, error: null, pendingTwoFactor: null, pendingVerification: null, pendingVerificationRetryAfter: 0 })
+  },
   setUser(user) {
     // An authenticated user proves the deployment is past first-run setup, so
     // also resolve the probe — flows that sign in via setUser (email
     // verification, OAuth callback) must never leave the gate waiting on it.
     if (user) {
-      set({ user, status: 'authenticated', needsSetup: false, setupProbed: true })
+      set({ user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true })
     } else {
       set({ user: null, status: 'unauthenticated' })
     }
@@ -211,7 +222,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         // Authenticated ⇒ the deployment has users; resolve the setup probe
         // immediately so the gate can route without waiting on the sibling
         // /public/needs-setup call.
-        set({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true, error: null })
+        set({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true, error: null })
       } else {
         set({ user: null, status: 'unauthenticated' })
       }
@@ -295,7 +306,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (!isLatestAuthOp(seq)) return false
       resetAuthFailureState()
       setAccessToken(resp.access_token, resp.request_signing_key)
-      set({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true, error: null })
+      set({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true, error: null })
       return true
     } catch (e) {
       if (!isLatestAuthOp(seq)) return false
@@ -318,7 +329,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       }
       resetAuthFailureState()
       setAccessToken(resp.access_token, resp.request_signing_key)
-      set({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true, pendingTwoFactor: null, banned: false })
+      set({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true, pendingTwoFactor: null })
       return true
     } catch (e) {
       if (!isLatestAuthOp(seq)) return false
@@ -350,7 +361,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (!isLatestAuthOp(seq)) return false
       resetAuthFailureState()
       setAccessToken(resp.access_token, resp.request_signing_key)
-      set({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true, pendingTwoFactor: null })
+      set({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true, pendingTwoFactor: null })
       return true
     } catch (e) {
       if (!isLatestAuthOp(seq)) return false
@@ -375,7 +386,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (!isLatestAuthOp(seq)) return false
       resetAuthFailureState()
       setAccessToken(resp.access_token, resp.request_signing_key)
-      set({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true, pendingTwoFactor: null, banned: false })
+      set({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true, pendingTwoFactor: null })
       return true
     } catch (e) {
       if (!isLatestAuthOp(seq)) return false
@@ -408,7 +419,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       const auth = resp as { user: ApiUser; access_token: string; request_signing_key: string }
       resetAuthFailureState()
       setAccessToken(auth.access_token, auth.request_signing_key)
-      set({ user: auth.user, status: 'authenticated', needsSetup: false, setupProbed: true })
+      set({ user: auth.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true })
       return true
     } catch (e) {
       if (!isLatestAuthOp(seq)) return false
@@ -424,7 +435,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     // Clear the local identity immediately. The server request already holds
     // A's credentials; a slow logout must not keep A's transcript visible.
     setAccessToken(null)
-    set({ user: null, status: 'unauthenticated', pendingTwoFactor: null, authPolicyLoaded: false })
+    set({ user: null, status: 'unauthenticated', banned: false, error: null, pendingTwoFactor: null, pendingVerification: null, pendingVerificationRetryAfter: 0, authPolicyLoaded: false })
+    resetAuthFailureState()
     try {
       await logout
     } catch {
@@ -449,6 +461,12 @@ async function clearPrivateImageCaches(): Promise<void> {
 }
 
 useAuth.subscribe((state, previous) => {
+  if (state.banned !== previous.banned) {
+    try {
+      if (state.banned) sessionStorage.setItem(SUSPENDED_KEY, '1')
+      else sessionStorage.removeItem(SUSPENDED_KEY)
+    } catch { /* Storage may be unavailable in private browser contexts. */ }
+  }
   if (state.user?.id === previous.user?.id) return
   invalidateAccountRequests()
   void clearPrivateImageCaches().catch(() => {})
@@ -458,11 +476,9 @@ void clearPrivateImageCaches().catch(() => {})
 
 // Live ban: an admin banning a signed-in user makes their very next request
 // 403 with `account_suspended`. The api client calls this once — sign the user
-// out and flip `banned` so the login screen shows the suspended notice.
+// out and route to the independent account-status page.
 setBannedHandler(() => {
-  beginAuthOp()
-  setAccessToken(null)
-  useAuth.setState({ user: null, status: 'unauthenticated', banned: true, pendingTwoFactor: null, authPolicyLoaded: false })
+  useAuth.getState().markSuspended()
   void useAuth.getState().refreshAuthPolicy()
 })
 
@@ -501,7 +517,7 @@ setRefreshHandler(async () => {
     setAccessToken(resp.access_token, resp.request_signing_key)
     const current = useAuth.getState()
     if (current.status !== 'authenticated' || current.user?.id !== resp.user.id) {
-      useAuth.setState({ user: resp.user, status: 'authenticated', needsSetup: false, setupProbed: true })
+      useAuth.setState({ user: resp.user, status: 'authenticated', banned: false, needsSetup: false, setupProbed: true })
     }
     return true
   } catch {

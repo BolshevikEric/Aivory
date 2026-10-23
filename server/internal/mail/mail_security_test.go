@@ -11,7 +11,7 @@ import (
 	"aivory/server/internal/store"
 )
 
-func TestSendCodeNeverLogsVerificationSecretWhenSMTPIsUnavailable(t *testing.T) {
+func TestSendAuthNeverLogsSecretWhenSMTPIsUnavailable(t *testing.T) {
 	db, err := store.Open(filepath.Join(t.TempDir(), "mail-security.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -26,9 +26,9 @@ func TestSendCodeNeverLogsVerificationSecretWhenSMTPIsUnavailable(t *testing.T) 
 	store.InvalidateConfig()
 	var logs bytes.Buffer
 	sender := NewSMTPSender(db, log.New(&logs, "", 0))
-	err = sender.SendCode("victim@example.test", "123456", "reset")
+	err = sender.SendAuth("victim@example.test", AuthMessage{Purpose: "reset", ResetURL: "https://example.test/reset-password#token=123456", Locale: "zh"})
 	if err == nil {
-		t.Fatal("SendCode succeeded without SMTP configuration")
+		t.Fatal("SendAuth succeeded without SMTP configuration")
 	}
 	if strings.Contains(logs.String(), "123456") {
 		t.Fatalf("SMTP failure leaked verification code to logs: %s", logs.String())
@@ -52,7 +52,7 @@ func TestSMTPSenderRejectsMalformedConfiguration(t *testing.T) {
 	}
 	store.InvalidateConfig()
 	sender := NewSMTPSender(db, log.New(&bytes.Buffer{}, "", 0))
-	if err := sender.SendCode("victim@example.test", "654321", "verify"); err == nil {
-		t.Fatal("SendCode accepted malformed SMTP configuration")
+	if err := sender.SendAuth("victim@example.test", AuthMessage{Purpose: "verify", Code: "654321", Locale: "zh"}); err == nil {
+		t.Fatal("SendAuth accepted malformed SMTP configuration")
 	}
 }

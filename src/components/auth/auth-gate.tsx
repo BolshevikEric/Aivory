@@ -29,7 +29,7 @@ import { useUserSettingsRefresh } from '@/hooks/use-user-settings-refresh'
 import { pendingDesktopAuthorization, rememberDesktopAuthorization } from '@/lib/desktop'
 import { safeAuthRedirect } from '@/lib/auth-redirect'
 
-const PUBLIC_PATHS = ['/welcome', '/login', '/register', '/forgot-password', '/share', '/setup', '/privacy', '/terms']
+const PUBLIC_PATHS = ['/welcome', '/login', '/register', '/forgot-password', '/reset-password', '/account-suspended', '/share', '/setup', '/privacy', '/terms']
 
 function isPublic(path: string): boolean {
   return PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/'))
@@ -40,6 +40,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const status = useAuth((s) => s.status)
   const hydrate = useAuth((s) => s.hydrate)
   const user = useAuth((s) => s.user)
+  const banned = useAuth((s) => s.banned)
   const needsSetup = useAuth((s) => s.needsSetup)
   const setupProbed = useAuth((s) => s.setupProbed)
   const authPolicy = useAuth((s) => s.authPolicy)
@@ -52,17 +53,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const refreshProfile = useAuth((s) => s.refreshProfile)
   const syncUserSettings = useSettings((s) => s.syncUserSettings)
   const location = useLocation()
+  const suspensionPage = location.pathname === '/account-suspended'
   const navigate = useNavigate()
   const hydratedChatDataForUser = useRef<string | null>(null)
 
   const authQuery = new URLSearchParams(location.search)
   const emailVerificationInProgress =
     location.pathname === '/register' && (authQuery.has('verify_email') || Boolean(pendingVerification))
+  const resetLinkLocale = location.pathname === '/reset-password' ? toSupportedLanguage(authQuery.get('lang')) : null
   const callbackNeedsAttention =
     (location.pathname === '/login' && ['oauth_error', 'twofa'].some((key) => authQuery.has(key))) ||
-    emailVerificationInProgress
+    emailVerificationInProgress || location.pathname === '/reset-password'
   const shouldAutoRedirect =
     status === 'unauthenticated' &&
+    !banned &&
     setupProbed &&
     !needsSetup &&
     authPolicyLoaded &&
@@ -72,7 +76,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     Boolean(authPolicy.default_provider) &&
     !pendingTwoFactor &&
     !callbackNeedsAttention &&
-    !['/setup', '/privacy', '/terms'].some(
+    !['/account-suspended', '/setup', '/privacy', '/terms', '/forgot-password'].some(
       (path) => location.pathname === path || location.pathname.startsWith(path + '/'),
     ) &&
     !location.pathname.startsWith('/share/')
@@ -82,8 +86,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [location.pathname, location.search])
 
   useEffect(() => {
+    if (suspensionPage) return
     void hydrate()
-  }, [hydrate])
+  }, [hydrate, suspensionPage])
 
   useEffect(() => {
     if (!window.aivoryDesktop) return
@@ -107,7 +112,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (!shouldAutoRedirect || !authPolicy.default_provider) return
     // Full-page navigation is required for OAuth. replace() also prevents the
     // Back button from returning to a route that immediately redirects again.
-    window.location.replace(apiUrl(oauthStartPath(authPolicy.default_provider.id)))
+    window.location.replace(apiUrl(oauthStartPath(authPolicy.default_provider.id, undefined, useLanguage.getState().lang)))
   }, [authPolicy.default_provider, shouldAutoRedirect])
 
   // Keep local UI preferences in sync with the authenticated profile.
@@ -120,7 +125,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (status !== 'authenticated' || !user?.settings) {
       return
     }
-    const language = toSupportedLanguage(user.settings.language)
+    const language = resetLinkLocale ?? toSupportedLanguage(user.settings.language)
     if (language) {
       useLanguage.getState().applyLang(language)
     } else {
@@ -141,7 +146,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     // The deployment-wide administrator policy is the only global default.
     // Historical account-level tool settings are intentionally ignored.
     useComposerPrefs.getState().setDefaultToolMode(resolveDefaultToolMode(user.tool_mode_default))
-  }, [status, user, syncUserSettings])
+  }, [status, user, syncUserSettings, resetLinkLocale])
 
   // Hydrate chat-shell caches only on routes that render them. Admin, legal and
   // public pages must not pay for conversations/projects/workspaces/models they
@@ -213,6 +218,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [loadModels, refreshProfile, status, user?.group_expires_at, user?.id])
 
+  if (suspensionPage) return <>{children}</>
+  if (banned && !['/privacy', '/terms'].includes(location.pathname) && !location.pathname.startsWith('/share/')) {
+    return <Navigate to="/account-suspended" replace />
+  }
+
   // Reused while authentication and the first-run probe are unresolved so the
   // app never routes using incomplete state.
   const loadingFallback = <PanelFallback scope="screen" />
@@ -248,9 +258,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) {
     if (
-      (!authPolicy.password_login_enabled || (!window.aivoryDesktop && authPolicy.entry_mode !== 'login_page')) &&
-      ((location.pathname === '/register' && !emailVerificationInProgress) ||
-        location.pathname === '/forgot-password')
+      ((!authPolicy.password_login_enabled || (!window.aivoryDesktop && authPolicy.entry_mode !== 'login_page')) &&
+        location.pathname === '/register' && !emailVerificationInProgress) ||
+      (!authPolicy.password_login_enabled && ['/forgot-password', '/reset-password'].includes(location.pathname))
     ) {
       return <Navigate to="/login" replace />
     }
@@ -260,7 +270,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   // Authenticated user trying to access auth pages → redirect home.
   const desktopAuthorization = user ? pendingDesktopAuthorization() : null
-  if (desktopAuthorization && location.pathname !== '/desktop/authorize') {
+  if (desktopAuthorization && !['/desktop/authorize', '/reset-password'].includes(location.pathname)) {
     return <Navigate to={desktopAuthorization} replace />
   }
   if (user && (location.pathname === '/login' || location.pathname === '/register')) {

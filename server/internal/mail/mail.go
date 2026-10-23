@@ -11,11 +11,12 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html/template"
 	"log"
+	"mime"
+	"mime/quotedprintable"
 	"net"
+	stdmail "net/mail"
 	"net/smtp"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ import (
 // Sender is the surface the auth handlers use. Implementations must be safe
 // for concurrent use.
 type Sender interface {
-	SendCode(to, code, purpose string) error
+	SendAuth(to string, message AuthMessage) error
 }
 
 // smtpConfig is the resolved SMTP config read from admin settings.
@@ -51,117 +52,63 @@ func NewSMTPSender(db *sql.DB, logger *log.Logger) *SMTPSender {
 	return &SMTPSender{DB: db, Logger: logger}
 }
 
-func (s *SMTPSender) loadConfig() (smtpConfig, error) {
-	var cfg smtpConfig
-	readStr := func(key string, optional bool) (string, error) {
-		raw, err := store.GetSetting(s.DB, key)
-		if optional && errors.Is(err, sql.ErrNoRows) {
-			return "", nil
-		}
-		if err != nil {
-			return "", fmt.Errorf("read %s: %w", key, err)
-		}
-		var v string
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return "", fmt.Errorf("decode %s: %w", key, err)
-		}
-		return strings.TrimSpace(v), nil
-	}
-	readBool := func(key string, optional bool) (bool, error) {
-		raw, err := store.GetSetting(s.DB, key)
-		if optional && errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("read %s: %w", key, err)
-		}
-		var v bool
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return false, fmt.Errorf("decode %s: %w", key, err)
-		}
-		return v, nil
-	}
-	var err error
-	if cfg.Host, err = readStr("smtp_host", false); err != nil {
-		return cfg, err
-	}
-	// Optional settings were not seeded in older deployments. Treat a missing
-	// row as its documented zero value while continuing to reject malformed
-	// values from an existing row.
-	if cfg.Port, err = readStr("smtp_port", true); err != nil {
-		return cfg, err
-	}
-	if cfg.User, err = readStr("smtp_user", true); err != nil {
-		return cfg, err
-	}
-	if cfg.Password, err = readStr("smtp_password", true); err != nil {
-		return cfg, err
-	}
-	if cfg.From, err = readStr("smtp_from", true); err != nil {
-		return cfg, err
-	}
-	if cfg.TLS, err = readBool("smtp_tls", true); err != nil {
-		return cfg, err
-	}
-	if cfg.Host == "" {
-		return cfg, fmt.Errorf("smtp_host is not configured")
-	}
-	if cfg.Port == "" {
-		cfg.Port = "587"
-	}
-	if cfg.From == "" {
-		cfg.From = cfg.User
-	}
-	return cfg, nil
+// AuthMessage carries presentation options independently of SMTP delivery.
+// ResetURL is only used for password recovery; registration retains its code.
+type AuthMessage struct {
+	Purpose             string
+	Locale              string
+	Code                string
+	ResetURL            string
+	ExpiresIn           time.Duration
+	Name                string
+	AppURL              string
+	GroupName           string
+	MembershipExpiresAt int64
 }
 
-// SendCode sends a branded HTML email with a 6-digit verification code.
-// purpose is one of "verify" | "reset" — controls the subject line and body text.
-func (s *SMTPSender) SendCode(to, code, purpose string) error {
-	cfg, err := s.loadConfig()
+func (s *SMTPSender) SendAuth(to string, message AuthMessage) error {
+	cfg, enabled, err := s.configForPurpose(message.Purpose)
 	if err != nil {
-		// Never place a verification or reset secret in logs. In particular, a
-		// missing SMTP host must not turn the application log into a password-reset
-		// mailbox. Callers return a generic response where appropriate and can retry
-		// after an administrator fixes SMTP.
+		// Never log the code, reset URL or token on delivery failures.
 		return fmt.Errorf("load SMTP configuration: %w", err)
 	}
-
-	subject := "Your verification code"
-	heading := "Verify your email"
-	body := "Use the code below to verify your email address. It expires in 10 minutes."
-	if purpose == "reset" {
-		subject = "Password reset code"
-		heading = "Reset your password"
-		body = "Use the code below to reset your password. It expires in 10 minutes."
+	if !enabled {
+		return nil
 	}
-
-	html, err := renderEmail(emailData{
-		Heading: heading,
-		Body:    body,
-		Code:    code,
-		Year:    time.Now().Year(),
-	})
+	subject, body, err := renderAuthEmail(message)
 	if err != nil {
 		return fmt.Errorf("render email: %w", err)
 	}
-
-	return s.send(cfg, to, subject, html)
+	return s.send(cfg, to, subject, body)
 }
 
 func (s *SMTPSender) send(cfg smtpConfig, to, subject, htmlBody string) error {
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 
-	// Build the raw MIME message.
+	// Parse mailbox values before interpolating them into MIME headers.
+	from, err := stdmail.ParseAddress(cfg.From)
+	if err != nil {
+		return fmt.Errorf("invalid SMTP sender address")
+	}
+	recipient, err := stdmail.ParseAddress(to)
+	if err != nil {
+		return fmt.Errorf("invalid recipient address")
+	}
 	var msg bytes.Buffer
-	msg.WriteString("From: " + cfg.From + "\r\n")
-	msg.WriteString("To: " + to + "\r\n")
-	msg.WriteString("Subject: " + subject + "\r\n")
+	msg.WriteString("From: " + from.String() + "\r\n")
+	msg.WriteString("To: " + recipient.String() + "\r\n")
+	msg.WriteString("Subject: " + mime.QEncoding.Encode("UTF-8", subject) + "\r\n")
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-	msg.WriteString("Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n")
-	msg.WriteString("\r\n")
-	msg.WriteString(htmlBody)
+	msg.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+	msg.WriteString("Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n\r\n")
+	encoded := quotedprintable.NewWriter(&msg)
+	if _, err := encoded.Write([]byte(htmlBody)); err != nil {
+		return err
+	}
+	if err := encoded.Close(); err != nil {
+		return err
+	}
 
 	auth := smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host)
 	tlsCfg := &tls.Config{ServerName: cfg.Host}
@@ -217,10 +164,10 @@ func (s *SMTPSender) send(cfg smtpConfig, to, subject, htmlBody string) error {
 			}
 		}
 	}
-	if err := c.Mail(cfg.From); err != nil {
+	if err := c.Mail(from.Address); err != nil {
 		return fmt.Errorf("smtp mail: %w", err)
 	}
-	if err := c.Rcpt(to); err != nil {
+	if err := c.Rcpt(recipient.Address); err != nil {
 		return fmt.Errorf("smtp rcpt: %w", err)
 	}
 	w, err := c.Data()
@@ -234,55 +181,6 @@ func (s *SMTPSender) send(cfg smtpConfig, to, subject, htmlBody string) error {
 		return fmt.Errorf("smtp write close: %w", err)
 	}
 	return c.Quit()
-}
-
-type emailData struct {
-	Heading string
-	Body    string
-	Code    string
-	Year    int
-}
-
-var emailTmpl = template.Must(template.New("email").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F6F5FA;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F6F5FA;padding:40px 20px;">
-<tr><td align="center">
-<table role="presentation" width="460" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;border-radius:18px;border:1px solid #E4E2EC;overflow:hidden;">
-  <!-- Header -->
-  <tr><td style="padding:32px 36px 20px;text-align:center;">
-    <div style="display:inline-block;width:40px;height:40px;background:linear-gradient(135deg,#6A4DE6,#4A9B7F);border-radius:10px;margin-bottom:16px;"></div>
-    <h1 style="margin:0;font-size:22px;font-weight:600;color:#1B1830;letter-spacing:-0.02em;">{{.Heading}}</h1>
-    <p style="margin:12px 0 0;font-size:14px;color:#5F5677;line-height:1.6;">{{.Body}}</p>
-  </td></tr>
-  <!-- Code -->
-  <tr><td style="padding:8px 36px 28px;text-align:center;">
-    <div style="display:inline-block;background-color:#F6F5FA;border:2px solid #E4E2EC;border-radius:14px;padding:18px 40px;letter-spacing:0.35em;font-size:32px;font-weight:700;color:#1B1830;font-family:'SF Mono',Monaco,Consolas,monospace;">
-      {{.Code}}
-    </div>
-    <p style="margin:16px 0 0;font-size:12px;color:#8C87A0;">This code expires in 10 minutes. Do not share it with anyone.</p>
-  </td></tr>
-  <!-- Divider -->
-  <tr><td style="padding:0 36px;"><div style="height:1px;background-color:#E4E2EC;"></div></td></tr>
-  <!-- Footer -->
-  <tr><td style="padding:20px 36px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#8C87A0;">
-      &copy; {{.Year}} Aivory &middot; You received this because someone used your email to sign up or reset a password.
-    </p>
-  </td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`))
-
-func renderEmail(data emailData) (string, error) {
-	var buf bytes.Buffer
-	if err := emailTmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
 
 // CheckDomainWhitelist validates that the email's domain is in the admin-configured

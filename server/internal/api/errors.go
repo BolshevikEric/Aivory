@@ -99,6 +99,8 @@ var (
 	errTwofaInvalidCode       = errors.New("twofa_invalid_code")
 	errEmailCooldown          = errors.New("email_cooldown")
 
+	errInvalidOrExpiredResetLink = errors.New("invalid_or_expired_reset_link")
+
 	// Generic per-IP rate limit (rateLimitedIP — register/login/2FA/refresh/
 	// verify-email/send-code/forgot-reset/captcha/first-run-setup/oauth/public
 	// share links). Stable machine code, same reasoning as above.

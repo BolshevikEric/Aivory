@@ -322,7 +322,7 @@ func passkeyLoginVerifyHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 			return nil, errPasskeyLoginFailed
 		}
 		user, err := store.FindUserByID(r.Context(), d.DB, row.UserID)
-		if err != nil || user.Status != "active" {
+		if err != nil || (user.Status != "active" && user.Status != "banned") {
 			return nil, errPasskeyLoginFailed
 		}
 		// Compare against this credential's device-side identity, which a backup
@@ -360,6 +360,10 @@ func passkeyLoginVerifyHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Cache.Delete(failKey)
+	if verifiedUser.Status == "banned" {
+		writeError(w, http.StatusForbidden, errAccountBlocked)
+		return
+	}
 	if err := store.TouchPasskey(r.Context(), d.DB, verifiedRowID, credential.SignCount, credential.AuthenticatorFlags); err != nil && d.Logger != nil {
 		d.Logger.Printf("[passkey] touch failed row=%s err=%v", verifiedRowID, err)
 	}

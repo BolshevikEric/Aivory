@@ -14,6 +14,7 @@ import { apiUrl } from '@/api'
 import type { ApiPublicOAuthProvider } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useLanguage } from '@/store/language'
 import { oauthStartPath } from '@/lib/oauth'
 import { PuzzleCaptchaDialog } from './puzzle-captcha-dialog'
 import { OAuthBrandGlyph } from './oauth-glyph'
@@ -29,7 +30,7 @@ export function OAuthButtons({ providers, captchaRequired = false, compact = fal
   const [pendingProvider, setPendingProvider] = useState<ApiPublicOAuthProvider | null>(null)
 
   function start(provider: ApiPublicOAuthProvider, captchaToken?: string) {
-    window.location.href = apiUrl(oauthStartPath(provider.id, captchaToken))
+    window.location.href = apiUrl(oauthStartPath(provider.id, captchaToken, useLanguage.getState().lang))
   }
 
   function selectProvider(provider: ApiPublicOAuthProvider) {

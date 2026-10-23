@@ -483,11 +483,11 @@ func TestResetPasswordImmediatelyInvalidatesCachedAccessAndPublishesKill(t *test
 	} else {
 		d.Cache.Set(authUserCacheKey(d, user.ID), string(raw), time.Minute)
 	}
-	d.Cache.Set("reset:"+user.Email, "123456", time.Minute)
+	token := cachePasswordResetForTest(t, d, user, time.Minute)
 	kill, unsubscribe := d.Cache.Subscribe("user:" + user.ID + ":kill")
 	defer unsubscribe()
 
-	rec := runAuthJSONHandler(t, d, resetPasswordHandler, "/api/auth/reset-password", `{"email":"reset@example.test","code":"123456","new_password":"new-password-123"}`)
+	rec := runAuthJSONHandler(t, d, resetPasswordHandler, "/api/auth/reset-password", fmt.Sprintf(`{"token":%q,"new_password":"new-password-123"}`, token))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("reset status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -516,8 +516,8 @@ func TestResetPasswordImmediatelyInvalidatesCachedAccessAndPublishesKill(t *test
 		t.Fatalf("old access status=%d called=%v body=%s", accessRec.Code, called, accessRec.Body.String())
 	}
 
-	replay := runAuthJSONHandler(t, d, resetPasswordHandler, "/api/auth/reset-password", `{"email":"reset@example.test","code":"123456","new_password":"another-password-123"}`)
+	replay := runAuthJSONHandler(t, d, resetPasswordHandler, "/api/auth/reset-password", fmt.Sprintf(`{"token":%q,"new_password":"another-password-123"}`, token))
 	if replay.Code != http.StatusBadRequest {
-		t.Fatalf("reset-code replay status=%d body=%s", replay.Code, replay.Body.String())
+		t.Fatalf("reset-link replay status=%d body=%s", replay.Code, replay.Body.String())
 	}
 }

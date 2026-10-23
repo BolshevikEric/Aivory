@@ -42,6 +42,9 @@ func TestEPayUserGroupCheckoutAndWebhookFlow(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fx := newPaymentAPIFixture(t)
+			mailer := newRecordingCodeMailer()
+			fx.d.Mailer = mailer
+			saveSignupLocale(t.Context(), fx.d, fx.user, "fr")
 			group, err := store.CreateUserGroup(context.Background(), fx.db, store.UserGroup{
 				ID:                      "ug_epay_" + tc.name,
 				Name:                    "EPay Pro " + tc.name,
@@ -114,6 +117,9 @@ func TestEPayUserGroupCheckoutAndWebhookFlow(t *testing.T) {
 			beforeCallback := time.Now().UTC().Unix()
 			callbackRec := serveEPayCallback(t, fx, cloneStringMap(callbackParams))
 			afterCallback := time.Now().UTC().Unix()
+			if got := awaitAccountEmail(t, mailer, 1); got.purpose != "membership" || got.message.Locale != "fr" || got.message.GroupName != group.Name {
+				t.Fatalf("payment email = %+v", got)
+			}
 			if callbackRec.Code != http.StatusOK || strings.TrimSpace(callbackRec.Body.String()) != "success" {
 				t.Fatalf("%s callback = status %d body %q", tc.billingCycle, callbackRec.Code, callbackRec.Body.String())
 			}
@@ -170,6 +176,7 @@ func TestEPayUserGroupCheckoutAndWebhookFlow(t *testing.T) {
 				t.Fatalf("duplicate %s callback = status %d body %q",
 					tc.billingCycle, duplicateRec.Code, duplicateRec.Body.String())
 			}
+			noAdditionalAccountEmail(t, mailer, 1)
 			var duplicateGroupID, duplicatePreviousGroupID string
 			var duplicateExpiresAt int64
 			var duplicateTokenVersion int

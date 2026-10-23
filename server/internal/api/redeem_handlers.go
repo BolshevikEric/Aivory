@@ -97,6 +97,8 @@ func redeemCodeHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	queueMembershipEmail(d, r, updated)
+
 	// Resolve the group's display name so the success toast can say
 	// "You're now on VIP" without a second request.
 	group, _ := store.GetUserGroup(r.Context(), d.DB, red.GroupID)

@@ -16,12 +16,14 @@ import (
 
 	"aivory/server/internal/cache"
 	"aivory/server/internal/config"
+	"aivory/server/internal/mail"
 	"aivory/server/internal/store"
 )
 
 type recordedEmail struct {
 	to      string
 	purpose string
+	message mail.AuthMessage
 }
 
 type recordingCodeMailer struct {
@@ -34,9 +36,9 @@ func newRecordingCodeMailer() *recordingCodeMailer {
 	return &recordingCodeMailer{sent: make(chan struct{}, 8)}
 }
 
-func (m *recordingCodeMailer) SendCode(to, _ string, purpose string) error {
+func (m *recordingCodeMailer) SendAuth(to string, message mail.AuthMessage) error {
 	m.mu.Lock()
-	m.calls = append(m.calls, recordedEmail{to: to, purpose: purpose})
+	m.calls = append(m.calls, recordedEmail{to: to, purpose: message.Purpose, message: message})
 	m.mu.Unlock()
 	select {
 	case m.sent <- struct{}{}:
@@ -57,7 +59,7 @@ func newEmailCooldownDeps(t *testing.T) (Deps, *recordingCodeMailer) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() { _ = db.Close(); store.InvalidateConfig() })
 	if err := store.Migrate(db); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
@@ -68,6 +70,7 @@ func newEmailCooldownDeps(t *testing.T) (Deps, *recordingCodeMailer) {
 	mailer := newRecordingCodeMailer()
 	return Deps{
 		DB:     db,
+		Config: config.Config{AllowedOrigins: []string{"https://app.example.test"}},
 		Cache:  cache.NewMemory(),
 		Mailer: mailer,
 		Logger: log.New(io.Discard, "", 0),
@@ -210,7 +213,7 @@ func TestRegistrationEmailSharesVerifyCooldownWithResend(t *testing.T) {
 	}
 	store.InvalidateConfig()
 
-	register := runAuthJSONHandler(t, d, registerHandler, "/api/auth/register", `{"email":"new@example.test","password":"password123","name":"New User"}`)
+	register := runAuthJSONHandler(t, d, registerHandler, "/api/auth/register", `{"email":"new@example.test","password":"password123","name":"New User","locale":"zh-Hant"}`)
 	if register.Code != http.StatusOK {
 		t.Fatalf("register status=%d body=%s", register.Code, register.Body.String())
 	}
@@ -222,6 +225,9 @@ func TestRegistrationEmailSharesVerifyCooldownWithResend(t *testing.T) {
 	case <-mailer.sent:
 	case <-time.After(time.Second):
 		t.Fatal("registration verification email was not dispatched")
+	}
+	if message := mailer.calls[0].message; message.Locale != "zh-Hant" || message.ExpiresIn != emailVerificationCodeTTL || message.Purpose != "verify" {
+		t.Fatal("registration email did not carry the website language and configured expiry")
 	}
 
 	resend := runAuthJSONHandler(t, d, sendCodeHandler, "/api/auth/send-code", `{"email":"new@example.test","purpose":"verify"}`)

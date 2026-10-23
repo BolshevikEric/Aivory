@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"aivory/server/internal/envcfg"
+	"aivory/server/internal/mail"
 	"aivory/server/internal/requestheaders"
 	"aivory/server/internal/store"
 )
@@ -1639,7 +1640,7 @@ var settingsKeys = []string{
 	"max_image_upload_mb", "max_file_upload_mb",
 	// SMTP mail — live-reloaded on each send (see internal/mail).
 	"smtp_host", "smtp_port", "smtp_user", "smtp_password",
-	"smtp_from", "smtp_tls",
+	"smtp_from", "smtp_tls", mail.DeliverySettingKey,
 	"email_domain_whitelist",
 	// §4.20 Image Generation: the TEXT model used to optimize/expand a user's
 	// image prompt (and fold in the style's hidden prompt) before generation.
@@ -1725,6 +1726,15 @@ func normalizeSearchEnginesSetting(value string) (string, error) {
 func maskSensitiveSettings(out map[string]json.RawMessage) map[string]json.RawMessage {
 	const mask = `"••••••"`
 	for k, v := range out {
+		if k == mail.DeliverySettingKey {
+			var cfg mail.DeliveryConfig
+			if json.Unmarshal(v, &cfg) == nil {
+				out[k], _ = json.Marshal(mail.MaskDeliveryConfig(cfg))
+			} else {
+				out[k] = json.RawMessage("null")
+			}
+			continue
+		}
 		kl := strings.ToLower(k)
 		for _, kw := range sensitiveKeywords {
 			if strings.Contains(kl, kw) {
@@ -1748,6 +1758,12 @@ func adminSettingsGet(d Deps, w http.ResponseWriter, _ *http.Request) {
 		} else {
 			out[k] = json.RawMessage("null")
 		}
+	}
+	if cfg, err := mail.LoadDeliveryConfig(d.DB); err == nil {
+		out[mail.DeliverySettingKey], _ = json.Marshal(mail.MaskDeliveryConfig(cfg))
+	} else {
+		out[mail.DeliverySettingKey] = json.RawMessage("null")
+		out["email_delivery_invalid"] = json.RawMessage("true")
 	}
 	// Runtime defaults are displayed without persisting environment values.
 	if string(out["fetch_provider"]) == "null" {
@@ -1853,6 +1869,16 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 			// §4.7 numeric limits must be non-negative. Individual compaction
 			// settings below enforce their stricter runtime minimums as well.
 			switch k {
+			case mail.DeliverySettingKey:
+				previous, err := mail.LoadDeliveryConfig(d.DB)
+				if err != nil {
+					return 0, errInvalidInput
+				}
+				cfg, err := mail.NormalizeDeliveryConfig(v, previous)
+				if err != nil {
+					return 0, errInvalidInput
+				}
+				v, _ = json.Marshal(cfg)
 			case "announcement":
 				cfg, err := normalizePopupMessage(v)
 				if err != nil {

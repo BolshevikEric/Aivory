@@ -172,6 +172,7 @@ type oauthHandoff struct {
 }
 
 type oauthFlowState struct {
+	Locale        string `json:"locale,omitempty"`
 	ProviderID    string `json:"provider_id"`
 	Verifier      string `json:"verifier"`
 	Nonce         string `json:"nonce"`
@@ -203,6 +204,10 @@ func completeOAuthLoginWithGuard(
 ) {
 	fail := func(reason string) {
 		http.Redirect(w, r, base+"/login?oauth_error="+url.QueryEscape(reason), http.StatusFound)
+	}
+	if user.Status == "banned" {
+		http.Redirect(w, r, base+"/account-suspended", http.StatusFound)
+		return
 	}
 	if user.Status != "active" {
 		fail("account_disabled")
@@ -382,6 +387,7 @@ func oauthStartHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 
 	stash, _ := json.Marshal(oauthFlowState{
 		ProviderID: id, Verifier: verifier, Nonce: nonce, Origin: origin,
+		Locale:   authEmailLocale(r.URL.Query().Get("lang"), r, nil),
 		SignupIP: clientIP(r), BrowserBinding: browserBinding, CaptchaPassed: captchaPassed,
 	})
 	d.Cache.Set("oauth:state:"+state, string(stash), oauthStateCacheTTL)
@@ -545,7 +551,7 @@ func oauthCallbackHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := resolveOAuthUser(ctx, d, p, info, oauthSignupContext{
-		IP: st.SignupIP, CaptchaPassed: captchaPassed, ProviderGuard: &providerGuard,
+		IP: st.SignupIP, CaptchaPassed: captchaPassed, ProviderGuard: &providerGuard, Locale: st.Locale,
 	})
 	if err != nil {
 		switch {
@@ -576,6 +582,11 @@ func oauthCallbackHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		verifyURL := returnBase + "/register?verify_email=" + url.QueryEscape(user.Email) +
 			"&retry_after=" + strconv.Itoa(int(emailSendCooldown/time.Second))
 		http.Redirect(w, r, verifyURL, http.StatusFound)
+		return
+	}
+
+	if user.Status == "banned" {
+		http.Redirect(w, r, returnBase+"/account-suspended", http.StatusFound)
 		return
 	}
 
@@ -767,6 +778,7 @@ func adoptOAuthAvatar(ctx context.Context, d Deps, u *store.User, avatarURL stri
 }
 
 type oauthSignupContext struct {
+	Locale        string
 	IP            string
 	CaptchaPassed bool
 	ProviderGuard *store.OAuthProviderCallbackGuard
@@ -926,6 +938,12 @@ func resolveOAuthUser(ctx context.Context, d Deps, p *store.OAuthProvider, info 
 		return nil, err
 	}
 	adoptOAuthAvatar(ctx, d, u, info.AvatarURL)
+	locale := mail.NormalizeLocale(signup.Locale)
+	if locale == "" {
+		locale = "en"
+	}
+	saveSignupLocale(ctx, d, u, locale)
+	queueWelcomeEmail(d, nil, u, locale)
 	return u, nil
 }
 

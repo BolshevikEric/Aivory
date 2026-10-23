@@ -26,7 +26,6 @@ export default function Login() {
   const { t } = useTranslation('auth')
   const { compact, split, short } = useAuthFormLayout()
   const login = useAuth((s) => s.login)
-  const banned = useAuth((s) => s.banned)
   const loginTwoFactor = useAuth((s) => s.loginTwoFactor)
   const loginWithPasskey = useAuth((s) => s.loginWithPasskey)
   const pendingTwoFactor = useAuth((s) => s.pendingTwoFactor)
@@ -97,6 +96,10 @@ export default function Login() {
     const err = searchParams.get('oauth_error')
     if (!err || !authPolicyLoaded || handledOAuthError.current === err) return
     handledOAuthError.current = err
+    if (err === 'account_disabled' || err === 'account_suspended') {
+      useAuth.getState().markSuspended()
+      return
+    }
     toast.error(t('login.oauthFailed'), t(`login.oauthErrors.${err}`, { defaultValue: err }))
     // Preserve the failure marker in auto-redirect mode. AuthGate uses it to
     // avoid sending the browser straight back into the same failed provider.
@@ -157,7 +160,7 @@ export default function Login() {
         if (loginCaptchaRequired) setCaptchaOpen(true)
         return
       }
-      // Suspended account → the banned banner already explains it; don't also
+      // Suspended account → AuthGate opens the account-status page; don't also
       // show a generic error.
       if (useAuth.getState().banned) {
         setErrors({})
@@ -319,12 +322,6 @@ export default function Login() {
         <div className="login-divider">{t('login.emailDivider')}</div>
       ) : null}
 
-      {banned ? (
-        <div className="login-notice login-notice-error" role="alert">
-          <strong>{t('login.suspended.title')}</strong>
-          <p>{t('login.suspended.body')}</p>
-        </div>
-      ) : null}
       {formError ? (
         <p id="login-error" className="login-error" role="alert">{formError}</p>
       ) : null}

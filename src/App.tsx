@@ -30,12 +30,14 @@ const ProjectsList = lazy(() => import('@/pages/projects/ProjectsList'))
 const ProjectDetail = lazy(() => import('@/pages/projects/ProjectDetail'))
 const KnowledgeBasesList = lazy(() => import('@/pages/kb/KnowledgeBasesList'))
 const KnowledgeBaseDetail = lazy(() => import('@/pages/kb/KnowledgeBaseDetail'))
+const AccountSuspended = lazy(() => import('@/pages/auth/AccountSuspended'))
 const AuthLayout = lazy(() => import('@/pages/auth/AuthLayout'))
 const DesktopAuthorize = lazy(() => import('@/pages/auth/DesktopAuthorize'))
 const Login = lazy(() => import('@/pages/auth/Login'))
 const Register = lazy(() => import('@/pages/auth/Register'))
 const Setup = lazy(() => import('@/pages/auth/Setup'))
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'))
+const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'))
 const Privacy = lazy(() => import('@/pages/legal/Privacy'))
 const Terms = lazy(() => import('@/pages/legal/Terms'))
 const Subscription = lazy(() => import('@/pages/subscription/Subscription'))
@@ -265,7 +267,9 @@ export default function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
             </Route>
+            <Route path="/account-suspended" element={<AccountSuspended />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             {/* Settings is a dialog, not a page — these only catch old

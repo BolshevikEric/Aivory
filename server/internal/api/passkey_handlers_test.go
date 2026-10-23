@@ -331,3 +331,38 @@ func TestPasskeyDeleteScopedToOwner(t *testing.T) {
 		t.Fatalf("passkey not deleted: %d", count)
 	}
 }
+
+func TestPasskeyBannedAccountRequiresValidProofAndCannotCreateSession(t *testing.T) {
+	for _, valid := range []bool{false, true} {
+		t.Run(map[bool]string{false: "invalid-proof", true: "valid-proof"}[valid], func(t *testing.T) {
+			d, fake := newPasskeyDeps(t)
+			u := insertTestUser(t, d, "pk-banned", "banned@example.test", false)
+			if _, err := d.DB.Exec(`UPDATE users SET status='banned' WHERE id=?`, u.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.CreatePasskey(t.Context(), d.DB, &store.Passkey{UserID: u.ID, CredentialID: fake.loginRawID, PublicKey: []byte{1}, Name: "device"}); err != nil {
+				t.Fatal(err)
+			}
+			if !valid {
+				fake.loginErr = errors.New("invalid assertion")
+			}
+			rec := doRequest(passkeyLoginBeginHandler, d, "/api/auth/passkey/begin", `{}`, nil)
+			var begin passkeyLoginBeginResp
+			if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &begin) != nil {
+				t.Fatalf("begin: %s", rec.Body.String())
+			}
+			body, _ := json.Marshal(map[string]any{"ticket": begin.Ticket, "response": map[string]any{"id": "c0w"}})
+			rec = doRequest(passkeyLoginVerifyHandler, d, "/api/auth/passkey/verify", string(body), nil)
+			wantCode, wantError := 401, "passkey_login_failed"
+			if valid {
+				wantCode, wantError = 403, "account_suspended"
+			}
+			if rec.Code != wantCode || !strings.Contains(rec.Body.String(), wantError) || len(rec.Result().Cookies()) != 0 {
+				t.Fatalf("verify: %d %s", rec.Code, rec.Body.String())
+			}
+			if _, ok := d.Cache.Get("pkauth:" + begin.Ticket); valid && ok {
+				t.Fatal("assertion ticket was not consumed")
+			}
+		})
+	}
+}

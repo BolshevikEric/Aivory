@@ -10,6 +10,7 @@ import (
 
 	"aivory/server/internal/cache"
 	"aivory/server/internal/config"
+	"aivory/server/internal/mail"
 	"aivory/server/internal/oauth"
 	"aivory/server/internal/store"
 )
@@ -54,8 +55,8 @@ type oauthGateMail struct {
 	sent chan string
 }
 
-func (m *oauthGateMail) SendCode(to, _ string, purpose string) error {
-	m.sent <- purpose + ":" + to
+func (m *oauthGateMail) SendAuth(to string, message mail.AuthMessage) error {
+	m.sent <- message.Purpose + ":" + to
 	return nil
 }
 

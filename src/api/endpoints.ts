@@ -12,6 +12,7 @@ import {
   assertNetworkOnline,
   type UploadProgress,
 } from './client'
+import i18n, { normalizeLanguage } from '@/i18n'
 import { withRequestActivity, type RequestActivityMode } from '@/lib/request-activity'
 import { apiFetch } from '@/lib/api-fetch'
 import type {
@@ -311,7 +312,7 @@ export const authApi = {
   register: (email: string, password: string, name: string, captchaToken?: string) =>
     api<ApiAuthResponse | { verification_required: boolean; email: string; retry_after: number }>('/auth/register', {
       method: 'POST',
-      body: { email, password, name, captcha_token: captchaToken },
+      body: { email, password, name, captcha_token: captchaToken, locale: normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) },
     }),
   // Verify a slider-puzzle solution; on success returns a single-use,
   // purpose-bound pass token for the pending login or registration request.
@@ -363,14 +364,14 @@ export const authApi = {
     api<{ ok: true }>('/me', { method: 'DELETE', body: { password } }),
   // Email verification
   verifyEmail: (email: string, code: string) =>
-    api<ApiAuthResponse>('/auth/verify-email', { method: 'POST', body: { email, code } }),
-  sendCode: (email: string, purpose: 'verify' | 'reset') =>
-    api<{ ok: true; retry_after: number }>('/auth/send-code', { method: 'POST', body: { email, purpose } }),
+    api<ApiAuthResponse>('/auth/verify-email', { method: 'POST', body: { email, code, locale: normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) } }),
+  sendCode: (email: string, purpose: 'verify') =>
+    api<{ ok: true; retry_after: number }>('/auth/send-code', { method: 'POST', body: { email, purpose, locale: normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) } }),
   // Password reset
   forgotPassword: (email: string) =>
-    api<{ ok: true; retry_after: number }>('/auth/forgot-password', { method: 'POST', body: { email } }),
-  resetPassword: (email: string, code: string, new_password: string) =>
-    api<{ ok: true }>('/auth/reset-password', { method: 'POST', body: { email, code, new_password } }),
+    api<{ ok: true; retry_after: number }>('/auth/forgot-password', { method: 'POST', body: { email, locale: normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) } }),
+  resetPassword: (token: string, new_password: string) =>
+    api<{ ok: true }>('/auth/reset-password', { method: 'POST', body: { token, new_password } }),
   // Enabled social-login providers for the login screen (no secrets). Empty
   // array → the UI hides the OAuth section entirely.
   oauthProviders: () => api<ApiPublicOAuthProvider[]>('/public/oauth-providers'),
@@ -1769,6 +1770,8 @@ export const adminApi = {
     }),
 
   settings: () => api<Record<string, unknown>>('/admin/settings'),
+  emailPreview: (purpose: import('@/lib/email-delivery').EmailPurpose, locale: string) =>
+    api<{ subject: string; html: string }>(`/admin/email/preview?${new URLSearchParams({ purpose, locale })}`),
   /** Deployment-side Docmee balance (§ AI PPT): vendor credits left/used. */
   aipptVendor: () => api<{ available_count: number; used_count: number }>('/admin/aippt/vendor'),
   /**

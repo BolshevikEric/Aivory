@@ -23,6 +23,11 @@ describe('oauthStartPath', () => {
   it('does not add an empty captcha credential', () => {
     expect(oauthStartPath('oa_google')).toBe('/auth/oauth/oa_google/start')
   })
+
+  it('preserves the selected website language through the provider round trip', () => {
+    expect(oauthStartPath('oa_google', undefined, 'zh-Hant')).toBe('/auth/oauth/oa_google/start?lang=zh-Hant')
+    expect(oauthStartPath('oa_google', 'pass token', 'fr')).toBe('/auth/oauth/oa_google/start?captcha_token=pass+token&lang=fr')
+  })
 })
 
 describe('OAuth provider form capabilities', () => {

@@ -43,6 +43,7 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/api/client', () => ({
+  invalidateAccountRequests: vi.fn(),
   isAuthRefreshSuppressed: () => false,
   setAuthLostHandler: vi.fn(),
   setBannedHandler: vi.fn(),

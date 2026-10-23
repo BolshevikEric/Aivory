@@ -300,9 +300,14 @@ func setUserGroupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, errInvalidInput)
 		return
 	}
+	previous, _ := store.FindUserByID(r.Context(), d.DB, id)
 	if err := store.SetUserGroup(r.Context(), d.DB, id, req.GroupID, req.GroupExpiresAt); err != nil {
 		writeError(w, 400, err)
 		return
+	}
+	if updated, err := store.FindUserByID(r.Context(), d.DB, id); err == nil && previous != nil &&
+		(previous.GroupID != updated.GroupID || previous.GroupExpiresAt != updated.GroupExpiresAt) {
+		queueMembershipEmail(d, r, updated)
 	}
 	invalidateAuthUser(d, id)
 	revokeUserPermissionSnapshots(d, id)

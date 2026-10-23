@@ -709,6 +709,11 @@ func applyProviderEvent(r *http.Request, d Deps, provider, channelID string, eve
 			return nil, err
 		}
 		if result.Applied {
+			if result.Order.ProductType == store.PaymentProductUserGroup && d.Mailer != nil {
+				if user, err := store.FindUserByID(r.Context(), d.DB, result.Order.UserID); err == nil {
+					queueMembershipEmail(d, r, user)
+				}
+			}
 			return &result.Order, nil
 		}
 		return nil, nil

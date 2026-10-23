@@ -20,7 +20,7 @@ import (
 )
 
 // maxCodeAttempts is the number of wrong guesses allowed against a single
-// emailed verify/reset code before it is burned (§ brute-force). With the code
+// emailed verification code before it is burned (§ brute-force). With the code
 // burned after 5 misses, the 6-digit space can't be swept across rotating IPs.
 var maxCodeAttempts = envcfg.Int("AIVORY_API_MAX_CODE_ATTEMPTS", 5)
 
@@ -73,10 +73,10 @@ func writeEmailCooldown(w http.ResponseWriter, retryAfter int) {
 	})
 }
 
-// registerCodeFailure counts wrong guesses of a verify/reset code per email and,
+// registerCodeFailure counts wrong guesses of a verification code per email and,
 // once maxCodeAttempts is hit, deletes (burns) the code so it can no longer be
 // guessed — the user must request a fresh one. Mirrors the 2FA ticket-burn.
-// purpose is "verify" | "reset". The counter shares the code's 10-minute TTL.
+// Used for email verification. The counter has a separately configurable TTL.
 func registerCodeFailure(d Deps, purpose, email string) {
 	if n := d.Cache.Incr("codefail:"+purpose+":"+email, codeFailureCounterTTL); n >= int64(maxCodeAttempts) {
 		d.Cache.Delete(purpose + ":" + email)
@@ -201,6 +201,7 @@ func setupHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 }
 
 type registerReq struct {
+	Locale   string `json:"locale"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
@@ -370,6 +371,8 @@ func registerHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	locale := authEmailLocale(req.Locale, r, user)
+	saveSignupLocale(r.Context(), d, user, locale)
 	verifyRequired = user.Status == "pending"
 	if verifyRequired {
 		retryAfter, allowed := reserveEmailSend(d, req.Email, "verify")
@@ -381,8 +384,9 @@ func registerHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 			// cached, so the client can move to the code screen immediately; a failed
 			// send is logged and the user can retry after the cooldown.
 			email := req.Email
+			locale := authEmailLocale(req.Locale, r, user)
 			go func() {
-				if err := d.Mailer.SendCode(email, code, "verify"); err != nil {
+				if err := d.Mailer.SendAuth(email, mail.AuthMessage{Purpose: "verify", Code: code, Locale: locale, ExpiresIn: emailVerificationCodeTTL}); err != nil {
 					d.Logger.Printf("[mail] failed to send verification to %s: %v", email, err)
 				}
 			}()
@@ -394,16 +398,19 @@ func registerHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	queueWelcomeEmail(d, r, user, locale)
 	finaliseSession(d, w, r, user, 0)
 }
 
-// sendCodeHandler resends a 6-digit verification or password-reset code.
+// sendCodeHandler resends a registration code. Legacy reset requests send
+// the same reset link as forgot-password; no password-reset codes are issued.
 // The router's IP budget is supplemented by the authoritative recipient and
 // purpose cooldown shared with registration and forgotPasswordHandler.
 func sendCodeHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email   string `json:"email"`
 		Purpose string `json:"purpose"` // "verify" | "reset"
+		Locale  string `json:"locale"`
 	}
 	if err := decodeJSON(r, &req); err != nil || req.Email == "" {
 		writeError(w, 400, errInvalidInput)
@@ -436,18 +443,16 @@ func sendCodeHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := genCode6()
 	if req.Purpose == "reset" {
-		d.Cache.Set("reset:"+req.Email, code, passwordResetCodeTTL)
-	} else {
-		if user.Status != "pending" {
-			writeJSON(w, 200, map[string]any{"ok": true, "retry_after": retryAfter})
-			return
+		if err := sendPasswordResetLink(d, r, user, authEmailLocale(req.Locale, r, user)); err != nil {
+			d.Logger.Printf("[mail] failed to send password reset email: %v", err)
 		}
+	} else if user.Status == "pending" {
+		code := genCode6()
 		d.Cache.Set("verify:"+req.Email, code, emailVerificationCodeTTL)
-	}
-	if err := d.Mailer.SendCode(req.Email, code, req.Purpose); err != nil {
-		d.Logger.Printf("[mail] failed to send %s code to %s: %v", req.Purpose, req.Email, err)
+		if err := d.Mailer.SendAuth(req.Email, mail.AuthMessage{Purpose: "verify", Code: code, Locale: authEmailLocale(req.Locale, r, user), ExpiresIn: emailVerificationCodeTTL}); err != nil {
+			d.Logger.Printf("[mail] failed to send verification email: %v", err)
+		}
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "retry_after": retryAfter})
 }
@@ -455,8 +460,9 @@ func sendCodeHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 // verifyEmailHandler activates a pending account using a 6-digit code.
 func verifyEmailHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email string `json:"email"`
-		Code  string `json:"code"`
+		Email  string `json:"email"`
+		Code   string `json:"code"`
+		Locale string `json:"locale"`
 	}
 	if err := decodeJSON(r, &req); err != nil || req.Email == "" || req.Code == "" {
 		writeError(w, 400, errInvalidInput)
@@ -490,93 +496,10 @@ func verifyEmailHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user.Status = "active"
+	locale := authEmailLocale(req.Locale, r, user)
+	saveSignupLocale(r.Context(), d, user, locale)
+	queueWelcomeEmail(d, r, user, locale)
 	finaliseSession(d, w, r, user, 0)
-}
-
-// forgotPasswordHandler sends a 6-digit reset code to the email. Existing and
-// nonexistent recipients receive the same success or cooldown response so the
-// endpoint cannot be used to enumerate accounts.
-func forgotPasswordHandler(d Deps, w http.ResponseWriter, r *http.Request) {
-	if !requirePasswordLoginEnabled(d, w) {
-		return
-	}
-	var req struct {
-		Email string `json:"email"`
-	}
-	if err := decodeJSON(r, &req); err != nil || req.Email == "" {
-		writeError(w, 400, errInvalidInput)
-		return
-	}
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	retryAfter, allowed := reserveEmailSend(d, req.Email, "reset")
-	if !allowed {
-		writeEmailCooldown(w, retryAfter)
-		return
-	}
-
-	if user, err := store.FindUserByEmail(r.Context(), d.DB, req.Email); err == nil && user != nil {
-		code := genCode6()
-		d.Cache.Set("reset:"+req.Email, code, passwordResetCodeTTL)
-		if err := d.Mailer.SendCode(req.Email, code, "reset"); err != nil {
-			d.Logger.Printf("[mail] failed to send reset code to %s: %v", req.Email, err)
-		}
-	}
-	writeJSON(w, 200, map[string]any{"ok": true, "retry_after": retryAfter})
-}
-
-// resetPasswordHandler accepts email + code + new password and updates the
-// user's password hash.
-func resetPasswordHandler(d Deps, w http.ResponseWriter, r *http.Request) {
-	if !requirePasswordLoginEnabled(d, w) {
-		return
-	}
-	var req struct {
-		Email       string `json:"email"`
-		Code        string `json:"code"`
-		NewPassword string `json:"new_password"`
-	}
-	if err := decodeJSON(r, &req); err != nil || req.Email == "" || req.Code == "" || req.NewPassword == "" {
-		writeError(w, 400, errInvalidInput)
-		return
-	}
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if err := validateNewPassword(req.NewPassword, minimumPasswordLength); err != nil {
-		writeError(w, 400, err)
-		return
-	}
-
-	saved, ok := d.Cache.Get("reset:" + req.Email)
-	if !ok || !codeMatches(saved, req.Code) {
-		registerCodeFailure(d, "reset", req.Email)
-		writeError(w, 400, errInvalidOrExpiredCode)
-		return
-	}
-	user, err := store.FindUserByEmail(r.Context(), d.DB, req.Email)
-	if err != nil {
-		writeError(w, 400, errAccountNotFound)
-		return
-	}
-
-	hash, err := store.HashPassword(req.NewPassword)
-	if err != nil {
-		writeError(w, 500, err)
-		return
-	}
-	if !d.Cache.CompareAndDelete("reset:"+req.Email, saved) {
-		writeError(w, 400, errInvalidOrExpiredCode)
-		return
-	}
-	d.Cache.Delete("codefail:reset:" + req.Email)
-	if err := store.UpdateUserPassword(r.Context(), d.DB, user.ID, hash); err != nil {
-		writeError(w, 500, err)
-		return
-	}
-	setAuditActor(r, user)
-	invalidateAuthUser(d, user.ID)
-	if d.Cache != nil {
-		d.Cache.Publish("user:"+user.ID+":kill", "password_reset")
-	}
-	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
 type loginReq struct {

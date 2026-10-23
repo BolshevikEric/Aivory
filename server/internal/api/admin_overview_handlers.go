@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"aivory/server/internal/mail"
 	"aivory/server/internal/store"
 )
 
@@ -120,7 +121,7 @@ func adminOverviewHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	defaultModelID := overviewSettingString(d.DB, "default_model_id")
 	taskModelID := overviewSettingString(d.DB, "task_model_id")
 	emailVerification := overviewSettingBool(d.DB, "email_verification_required")
-	smtpReady := overviewSettingString(d.DB, "smtp_host") != "" && overviewSettingString(d.DB, "smtp_from") != ""
+	smtpReady := mail.SecurityReady(d.DB)
 	storageProvider := overviewSettingString(d.DB, "storage_provider")
 	storageReady := storageProvider == "local" ||
 		(storageProvider == "s3" && overviewSettingString(d.DB, "storage_s3_bucket") != "") ||

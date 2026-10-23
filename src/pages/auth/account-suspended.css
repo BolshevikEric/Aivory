@@ -1,0 +1,74 @@
+.account-suspended-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-fg);
+  background: var(--color-bg);
+}
+.account-suspended-header,
+.account-suspended-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 28px clamp(20px, 5vw, 72px);
+}
+.account-suspended-main {
+  width: min(100%, 600px);
+  margin: auto;
+  padding: 48px 28px 64px;
+}
+.account-suspended-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 28px;
+  border-radius: 16px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+}
+.account-suspended-label { margin: 0 0 12px; font-size: 14px; color: var(--color-fg-muted); }
+.account-suspended-main h1 {
+  margin: 0 0 20px;
+  font-size: clamp(30px, 4vw, 42px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.account-suspended-intro,
+.account-suspended-help p { font-size: 15px; line-height: 1.8; color: var(--color-fg-muted); text-wrap: pretty; }
+.account-suspended-intro { margin: 0 0 32px; }
+.account-suspended-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 32px;
+  padding: 18px 0;
+  border-block: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.account-suspended-status dt { color: var(--color-fg-muted); }
+.account-suspended-status dd { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 500; }
+.account-suspended-status dd span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-danger); }
+.account-suspended-help h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; text-wrap: balance; }
+.account-suspended-help p { margin: 0 0 12px; }
+.account-suspended-contact { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; overflow-wrap: anywhere; color: var(--color-accent); font-size: 15px; }
+.account-suspended-contact svg { flex-shrink: 0; }
+.account-suspended-contact:hover { text-decoration: underline; }
+.account-suspended-switch { margin-top: 28px; }
+.account-suspended-footer { font-size: 12px; color: var(--color-fg-muted); }
+.account-suspended-footer nav { display: flex; flex-wrap: wrap; gap: 20px; }
+.account-suspended-footer a:hover { color: var(--color-fg); text-decoration: underline; }
+.account-suspended-page a:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 4px; border-radius: 3px; }
+@media (max-width: 480px) {
+  .account-suspended-header { padding-block: 20px; }
+  .account-suspended-main { padding: 32px 20px 48px; }
+  .account-suspended-footer { align-items: flex-start; flex-direction: column; gap: 14px; padding-block: 20px; }
+  .account-suspended-switch { width: 100%; }
+}

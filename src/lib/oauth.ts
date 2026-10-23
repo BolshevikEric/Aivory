@@ -28,7 +28,11 @@ export function oauthProviderErrorTranslationKey(code: string) {
   return null
 }
 
-export function oauthStartPath(providerId: string, captchaToken?: string): string {
+export function oauthStartPath(providerId: string, captchaToken?: string, locale?: string): string {
   const base = `/auth/oauth/${encodeURIComponent(providerId)}/start`
-  return captchaToken ? `${base}?captcha_token=${encodeURIComponent(captchaToken)}` : base
+  const params = new URLSearchParams()
+  if (captchaToken) params.set('captcha_token', captchaToken)
+  if (locale) params.set('lang', locale)
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
 }

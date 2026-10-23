@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"aivory/server/internal/config"
+	"aivory/server/internal/mail"
 	"aivory/server/internal/store"
 )
 
@@ -388,7 +389,12 @@ func onboardingSettingStringWithFallback(db *sql.DB, key, fallback string) (stri
 }
 
 func onboardingSMTPReady(db *sql.DB) (bool, error) {
-	// Keep this shape in lockstep with mail.SMTPSender.loadConfig. Older
+	if _, err := store.GetSetting(db, mail.DeliverySettingKey); err == nil {
+		return mail.SecurityReady(db), nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	// Keep the legacy fallback in lockstep with mail.LoadDeliveryConfig. Older
 	// deployments may not have persisted the optional defaults, which the mailer
 	// now resolves as zero values. A malformed persisted value remains invalid:
 	// the guide must not promise mail delivery that will fail on first use.

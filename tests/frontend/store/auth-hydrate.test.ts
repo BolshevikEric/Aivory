@@ -7,6 +7,7 @@ const apiMocks = vi.hoisted(() => ({
   authPolicy: vi.fn(),
   signupOpen: vi.fn(),
   needsSetup: vi.fn(),
+  logout: vi.fn(),
 }))
 
 const clientMocks = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/api/client', () => ({
+  invalidateAccountRequests: vi.fn(),
   isAuthRefreshSuppressed: () => false,
   setAuthLostHandler: vi.fn(),
   setBannedHandler: vi.fn(),
@@ -67,10 +69,34 @@ describe('auth startup request coalescing', () => {
       needsSetup: false,
       setupProbed: false,
       error: null,
+      banned: false,
     })
     apiMocks.authPolicy.mockResolvedValue(policy)
     apiMocks.signupOpen.mockResolvedValue({ open: true, captcha_required: false, login_captcha_required: false })
     apiMocks.needsSetup.mockResolvedValue({ needs_setup: false })
+    apiMocks.logout.mockResolvedValue({ ok: true })
+  })
+
+  it('keeps a suspension through a signed-out probe and clears it when switching accounts', async () => {
+    useAuth.setState({ user, pendingTwoFactor: { ticket: 'old-ticket' }, pendingVerification: 'old@example.test' })
+    useAuth.getState().markSuspended()
+    expect(useAuth.getState()).toMatchObject({ user: null, banned: true, error: null, pendingTwoFactor: null, pendingVerification: null })
+    apiMocks.session.mockResolvedValue({ authenticated: false, auth_policy: policy })
+    await useAuth.getState().hydrate()
+    expect(useAuth.getState().banned).toBe(true)
+    await useAuth.getState().logout()
+    expect(apiMocks.logout).toHaveBeenCalledOnce()
+    expect(useAuth.getState()).toMatchObject({ user: null, banned: false, error: null, status: 'unauthenticated' })
+  })
+
+  it('clears a stale suspension when a valid session or verified account is restored', async () => {
+    useAuth.getState().markSuspended()
+    apiMocks.session.mockResolvedValue({ authenticated: true, user, access_token: 'access-token', request_signing_key: 'signing-key', auth_policy: policy })
+    await useAuth.getState().hydrate()
+    expect(useAuth.getState()).toMatchObject({ user, banned: false, status: 'authenticated' })
+    useAuth.getState().markSuspended()
+    useAuth.getState().setUser(user)
+    expect(useAuth.getState()).toMatchObject({ user, banned: false, status: 'authenticated' })
   })
 
   it('uses the policy embedded in an authenticated session without public probes', async () => {
