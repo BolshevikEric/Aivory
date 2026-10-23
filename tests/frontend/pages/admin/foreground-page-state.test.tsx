@@ -16,6 +16,7 @@ import { useAuth } from '@/store/auth'
 import type { ApiMessage, ApiUser } from '@/api/types'
 
 const mocks = vi.hoisted(() => ({
+  siteStatus: vi.fn(),
   me: vi.fn(), conversation: vi.fn(), conversationMessages: vi.fn(), users: vi.fn(),
   user: vi.fn(), userConversations: vi.fn(), models: vi.fn(), userProjects: vi.fn(),
   userKbs: vi.fn(), userImages: vi.fn(), kbDocuments: vi.fn(), channels: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('@/api', () => ({
   apiUrl: (path: string) => path, resetAuthFailureState: vi.fn(), setAccessToken: vi.fn(),
 }))
 vi.mock('@/api/client', () => ({
+  api: mocks.siteStatus,
   invalidateAccountRequests: vi.fn(), isAuthRefreshSuppressed: () => false,
   setAuthLostHandler: vi.fn(), setBannedHandler: vi.fn(),
   setInitialPasswordRequiredHandler: vi.fn(), setRefreshHandler: vi.fn(),
@@ -80,6 +82,7 @@ let now: number
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.clearAllMocks()
+  mocks.siteStatus.mockResolvedValue({ closed: false, message: '' })
   mocks.load.mockResolvedValue(undefined)
   now = 1_000_000
   visibility = 'visible'

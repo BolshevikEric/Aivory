@@ -18,7 +18,7 @@ import { sanitizeHtml } from '@/lib/markdown'
 
 const emptyDraft: NotificationDraft = { title: '', body: '', enabled: true }
 
-export default function AdminNotifications() {
+export default function AdminNotifications({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation(['admin', 'common'])
   const [items, setItems] = useState<SiteNotification[]>([])
   const [total, setTotal] = useState(0)
@@ -95,7 +95,7 @@ export default function AdminNotifications() {
   const date = (value: number) => new Date(value * 1000).toLocaleString(i18n.language, { dateStyle: 'medium', timeStyle: 'short' })
 
   return <div>
-    <AdminPageHeader title={t('notifications.title')} description={t('notifications.lead')} />
+    <AdminPageHeader headingLevel={embedded ? 2 : 1} title={t('notifications.title')} description={t('notifications.lead')} />
     <AdminListToolbar search={search} onSearchChange={setSearch} placeholder={t('notifications.search')} actions={<Button size="sm" leadingIcon={<Plus size={14} aria-hidden />} onClick={() => edit()}>{t('notifications.create')}</Button>} />
     {loading ? <PanelFallback /> : error ? <div role="alert" className="py-8 text-sm"><p>{t('common.failed')}</p><Button variant="secondary" size="sm" className="mt-3" onClick={refresh}>{t('common:actions.tryAgain')}</Button></div> : <>
       <AdminTable items={items} rowKey={(item) => item.id} label={t('notifications.title')} className="mt-4" emptyMessage={t('notifications.empty')} columns={[

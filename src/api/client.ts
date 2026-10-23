@@ -26,6 +26,15 @@ import {
 
 const API_BASE = typeof window !== 'undefined' && window.aivoryDesktop ? '/api' : (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api'
 
+function notifySiteClosed(status: number, parsed: unknown): void {
+  if (status !== 503 || typeof parsed !== 'object' || parsed === null) return
+  const body = parsed as { error?: unknown; message?: unknown }
+  if (body.error !== 'site_closed' || typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('aivory:site-closed', {
+    detail: { message: typeof body.message === 'string' ? body.message : '' },
+  }))
+}
+
 // Per-request HMAC proof. The server consumes every nonce once and binds the
 // proof to the HTTP method, complete request target, device id, and payload.
 //
@@ -285,6 +294,7 @@ async function apiRequest<T>(path: string, opts: ApiOptions, retried: boolean): 
     }
   }
   if (!res.ok) {
+    notifySiteClosed(res.status, parsed)
     const errBody = parsed as ApiErrorShape | undefined
     const message = errBody?.error ?? `Request failed with status ${res.status}`
     if (res.status === 401 && retried && accountBound && isAuthExpiredMessage(message)) {
@@ -316,6 +326,7 @@ async function apiUploadRequest<T>(
     if (refreshed) return apiUploadRequest<T>(path, body, opts, true)
   }
   if (!res.ok) {
+    notifySiteClosed(res.status, res.parsed)
     const errBody = res.parsed as ApiErrorShape | undefined
     const message = errBody?.error ?? `Request failed with status ${res.status}`
     if (res.status === 401 && retried && !isAuthPath(path) && isAuthExpiredMessage(message)) {
@@ -525,6 +536,7 @@ export async function* streamSSE(
     } catch {
       parsed = text
     }
+    notifySiteClosed(res.status, parsed)
     const e = parsed as ApiErrorShape | undefined
     const message = e?.error ?? `stream failed (${res.status})`
     if (message === 'initial_password_required') notifyInitialPasswordRequired()
@@ -607,6 +619,7 @@ export async function* streamSSEGet(
       } catch {
         parsed = text
       }
+      notifySiteClosed(res.status, parsed)
       const e = parsed as ApiErrorShape | undefined
       const message = e?.error ?? `stream failed (${res.status})`
       if (message === 'initial_password_required') notifyInitialPasswordRequired()

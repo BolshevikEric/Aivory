@@ -3228,5 +3228,14 @@
         "description": "Sends the membership group name and updated expiration after activation or renewal."
       }
     }
+  },
+  "siteAccess": {
+    "title": "Website access",
+    "groupTitle": "Website & notifications",
+    "description": "Manage website availability and the message shown while access is paused.",
+    "closed": "Close website",
+    "closedHint": "After enabling and saving, users and public shared pages cannot access the site. Administrators can still sign in and use the admin console.",
+    "message": "Custom message",
+    "messageHint": "Line breaks are supported, up to 2,000 characters. Leave blank to use the default message in the current site language."
   }
 }

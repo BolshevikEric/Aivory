@@ -9,6 +9,8 @@ import { CommandMenu } from '@/components/command-menu/command-menu'
 import { WelcomeCard } from '@/components/welcome/welcome-card'
 import { SetPasswordGate } from '@/components/welcome/set-password-gate'
 import { AuthGate } from '@/components/auth/auth-gate'
+import { useSiteStatus } from '@/store/site-status'
+import { useAuth } from '@/store/auth'
 import SettingsDialog from '@/pages/settings/SettingsLayout'
 import { useCommandMenu } from '@/hooks/use-command-menu'
 import { useHotkeys } from '@/hooks/use-hotkeys'
@@ -70,6 +72,7 @@ const AdminContextMemory = lazy(() => import('@/pages/admin/AdminContextMemory')
 const AdminRegistration = lazy(() => import('@/pages/admin/AdminRegistration'))
 const AdminSystemEmail = lazy(() => import('@/pages/admin/AdminSystemEmail'))
 const AdminSystemLegal = lazy(() => import('@/pages/admin/AdminSystemLegal'))
+const AdminSiteSettings = lazy(() => import('@/pages/admin/AdminSiteSettings'))
 const AdminSystemLogging = lazy(() => import('@/pages/admin/AdminSystemLogging'))
 const AdminDesktop = lazy(() => import('@/pages/admin/AdminDesktop'))
 const AdminSystemStorage = lazy(() => import('@/pages/admin/AdminSystemStorage'))
@@ -77,8 +80,6 @@ const AdminCreditSettings = lazy(() => import('@/pages/admin/AdminCreditSettings
 const AdminAiPPT = lazy(() => import('@/pages/admin/AdminAiPPT'))
 const AdminBackup = lazy(() => import('@/pages/admin/AdminBackup'))
 const AdminModeration = lazy(() => import('@/pages/admin/AdminModeration'))
-const AdminAnnouncement = lazy(() => import('@/pages/admin/AdminAnnouncement'))
-const AdminNotifications = lazy(() => import('@/pages/admin/AdminNotifications'))
 const AdminDocuments = lazy(() => import('@/pages/admin/AdminDocuments'))
 const AdminFiles = lazy(() => import('@/pages/admin/AdminFiles'))
 const AdminHTMLPreviews = lazy(() => import('@/pages/admin/AdminHTMLPreviews'))
@@ -195,6 +196,9 @@ function SettingsRedirect() {
 
 export default function App() {
   useAppViewport()
+  const siteClosed = useSiteStatus((s) => s.closed)
+  const siteLoaded = useSiteStatus((s) => s.loaded)
+  const isAdmin = useAuth((s) => s.user?.role === 'admin')
   const navigate = useNavigate()
   useEffect(() => startReplyNotifications(navigate), [navigate])
   const location = useLocation()
@@ -206,8 +210,8 @@ export default function App() {
     initAppUpdate()
   }, [])
   useEffect(() => {
-    setRealtimeEnabled(isChatShellPath(location.pathname))
-  }, [location.pathname])
+    setRealtimeEnabled(siteLoaded && (!siteClosed || isAdmin) && isChatShellPath(location.pathname))
+  }, [location.pathname, siteClosed, siteLoaded, isAdmin])
   // A visible route navigation can apply a pending upgrade once reload guards
   // allow it. App/tab switching only detects updates and preserves this page. The
   // settings dialog no longer navigates (pure UI state), so every pathname
@@ -314,8 +318,9 @@ export default function App() {
               <Route path="ai-ppt" element={<AdminAiPPT />} />
               <Route path="oauth" element={<AdminOAuth />} />
               <Route path="moderation" element={<AdminModeration />} />
-              <Route path="announcement" element={<AdminAnnouncement />} />
-              <Route path="notifications" element={<AdminNotifications />} />
+              <Route path="announcement" element={<AdminSiteSettings />} />
+              <Route path="notifications" element={<Navigate to="/admin/announcement" replace />} />
+              <Route path="settings/site" element={<Navigate to="/admin/announcement" replace />} />
               <Route path="settings" element={<Navigate to="/admin/settings/model-policy" replace />} />
               <Route path="settings/model-policy" element={<AdminModelPolicy />} />
               <Route path="settings/context-memory" element={<AdminContextMemory />} />

@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 
 interface AdminPageHeaderProps {
   title: ReactNode
+  headingLevel?: 1 | 2
   /** Supporting copy; routine page help is available to screen readers. */
   description?: ReactNode
   /** Show descriptions that identify the current item, such as its model ID. */
@@ -27,6 +28,7 @@ interface AdminPageHeaderProps {
  */
 export function AdminPageHeader({
   title,
+  headingLevel = 1,
   description,
   showDescription = false,
   actions,
@@ -37,6 +39,7 @@ export function AdminPageHeader({
   actionsClassName,
   children,
 }: AdminPageHeaderProps) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h1'
   return (
     <header
       className={cn(
@@ -46,12 +49,12 @@ export function AdminPageHeader({
     >
       <div className="min-w-[min(100%,8rem)] flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h1
+          <Heading
             aria-busy={titleBusy || undefined}
             className="min-w-0 break-words text-lg font-semibold leading-6 tracking-normal text-[var(--color-fg)]"
           >
             {title}
-          </h1>
+          </Heading>
           {titleAdornment}
         </div>
         {description ? (

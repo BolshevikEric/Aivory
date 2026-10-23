@@ -143,8 +143,12 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     labelKey: 'admin:menu.platform',
     defaultLabel: 'System',
     items: [
-      { to: '/admin/announcement', labelKey: 'admin:announcement.title', defaultLabel: 'Popup messages' },
-      { to: '/admin/notifications', labelKey: 'admin:notifications.title', defaultLabel: 'Notifications' },
+      {
+        to: '/admin/announcement',
+        labelKey: 'admin:siteAccess.groupTitle',
+        defaultLabel: 'Website & notifications',
+        also: ['/admin/notifications', '/admin/settings/site'],
+      },
       {
         to: '/admin/settings/email',
         labelKey: 'admin:menu.emailService',

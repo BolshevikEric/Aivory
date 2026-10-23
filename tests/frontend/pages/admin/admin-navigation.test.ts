@@ -64,6 +64,12 @@ describe('administrator navigation', () => {
     expect(activeItemPath('/admin/users/user-1/conversations/chat-1')).toBe('/admin/users')
   })
 
+  it('groups notifications, popup messages and website access under one destination', () => {
+    for (const path of ['/admin/announcement', '/admin/notifications', '/admin/settings/site']) {
+      expect(activeItemPath(path)).toBe('/admin/announcement')
+    }
+  })
+
   it('matches path segment boundaries instead of similarly prefixed routes', () => {
     const access = ADMIN_NAV_GROUPS.find((group) => group.key === 'access')
 

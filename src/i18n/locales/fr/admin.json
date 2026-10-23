@@ -3228,5 +3228,14 @@
         "description": "Envoie le nom du groupe d’abonnement et la nouvelle date d’expiration après activation ou renouvellement."
       }
     }
+  },
+  "siteAccess": {
+    "title": "Accès au site",
+    "groupTitle": "Site et notifications",
+    "description": "Gérez la disponibilité du site et le message affiché pendant sa fermeture.",
+    "closed": "Fermer le site",
+    "closedHint": "Une fois cette option activée et enregistrée, les utilisateurs et les pages partagées publiques ne sont plus accessibles. Les administrateurs peuvent toujours se connecter à la console.",
+    "message": "Message personnalisé",
+    "messageHint": "Les sauts de ligne sont acceptés, dans la limite de 2 000 caractères. Laissez ce champ vide pour afficher le message par défaut dans la langue actuelle du site."
   }
 }

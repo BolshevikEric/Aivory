@@ -1601,6 +1601,7 @@ var settingsKeys = []string{
 	// remember_dismiss/updated_at) shown to users on load. Edited via the admin
 	// announcement page.
 	"announcement",
+	siteAccessSettingKey,
 	// Voice transcription (whisper) — admin-configurable, live-reloaded per call.
 	// base_url defaults to https://api.openai.com; model defaults to whisper-1.
 	"audio_transcribe_base_url", "audio_transcribe_api_key", "audio_transcribe_model",
@@ -1869,6 +1870,12 @@ func applyAdminSettingsPatch(ctx context.Context, d Deps, body map[string]json.R
 			// §4.7 numeric limits must be non-negative. Individual compaction
 			// settings below enforce their stricter runtime minimums as well.
 			switch k {
+			case siteAccessSettingKey:
+				cfg, err := normalizeSiteAccess(v)
+				if err != nil {
+					return 0, err
+				}
+				v, _ = json.Marshal(cfg)
 			case mail.DeliverySettingKey:
 				previous, err := mail.LoadDeliveryConfig(d.DB)
 				if err != nil {

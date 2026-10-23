@@ -40,7 +40,7 @@ interface AnnouncementConfig {
   button_url: string
 }
 
-export default function AdminAnnouncement() {
+export default function AdminAnnouncement({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation(['admin', 'common'])
   const [enabled, setEnabled] = useState(false)
   const [title, setTitle] = useState('')
@@ -156,6 +156,7 @@ export default function AdminAnnouncement() {
   return (
     <div>
       <AdminPageHeader
+        headingLevel={embedded ? 2 : 1}
         title={t('admin:announcement.title')}
         description={t('admin:announcement.lead')}
       />
@@ -164,7 +165,7 @@ export default function AdminAnnouncement() {
         <PanelFallback />
       ) : (
         <div className="mt-8">
-          <SettingsSection title={t('admin:announcement.popupTitle')}>
+          <SettingsSection title={embedded ? undefined : t('admin:announcement.popupTitle')}>
             <SettingsRow
               label={t('admin:announcement.enabledLabel')}
               description={t('admin:announcement.enabledHint')}

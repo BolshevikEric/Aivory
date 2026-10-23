@@ -209,6 +209,7 @@ func NewRouter(d Deps) http.Handler {
 	// Public operator contact + optional policy overrides. The handler exposes a
 	// strict three-field DTO rather than the administrator settings map.
 	mux.handle("GET", "/api/public/legal-config", wrap(d, legalConfigPublicHandler))
+	mux.handle("GET", "/api/public/site-status", wrap(d, publicSiteStatus))
 	maps := newMapService(envcfg.Str("AIVORY_MAP_GEOCODER_URL", "https://photon.komoot.io/api/"))
 	mux.handle("GET", "/api/public/maps/config", wrap(d, publicMapConfig))
 	mux.handle("GET", "/api/public/maps/geocode", rateLimitedIP(d, "map_geocode", 60, time.Minute, wrap(d, maps.geocode)))
@@ -743,7 +744,7 @@ func NewRouter(d Deps) http.Handler {
 	// works without configuring PUBLIC_ORIGIN/ALLOWED_ORIGINS. Panic recovery
 	// surrounds the application; the response logger sits outside it so the 500
 	// written for a recovered panic is included in the common non-2xx log (§ FIX-7).
-	var handler http.Handler = corsMiddleware(d.Config.AllowedOrigins, mux)
+	var handler http.Handler = corsMiddleware(d.Config.AllowedOrigins, siteAccessMiddleware(d, mux))
 	if d.Config.StaticDir != "" {
 		handler = spaHandler(d.Config.StaticDir, handler)
 	}

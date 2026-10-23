@@ -28,6 +28,9 @@ import { PanelFallback } from '@/components/ui/panel-fallback'
 import { useUserSettingsRefresh } from '@/hooks/use-user-settings-refresh'
 import { pendingDesktopAuthorization, rememberDesktopAuthorization } from '@/lib/desktop'
 import { safeAuthRedirect } from '@/lib/auth-redirect'
+import { useSiteStatus } from '@/store/site-status'
+import { useSiteStatusRefresh } from '@/hooks/use-site-status'
+import SiteClosed from '@/pages/auth/SiteClosed'
 
 const PUBLIC_PATHS = ['/welcome', '/login', '/register', '/forgot-password', '/reset-password', '/account-suspended', '/share', '/setup', '/privacy', '/terms']
 
@@ -36,6 +39,9 @@ function isPublic(path: string): boolean {
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  useSiteStatusRefresh()
+  const siteLoaded = useSiteStatus((s) => s.loaded)
+  const siteClosed = useSiteStatus((s) => s.closed)
   useUserSettingsRefresh()
   const status = useAuth((s) => s.status)
   const hydrate = useAuth((s) => s.hydrate)
@@ -53,6 +59,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const refreshProfile = useAuth((s) => s.refreshProfile)
   const syncUserSettings = useSettings((s) => s.syncUserSettings)
   const location = useLocation()
+  const siteBlocked = siteClosed && user?.role !== 'admin' && !needsSetup
+  const maintenanceAuthPath = ['/login', '/forgot-password', '/reset-password', '/desktop/authorize', '/setup'].includes(location.pathname)
   const suspensionPage = location.pathname === '/account-suspended'
   const navigate = useNavigate()
   const hydratedChatDataForUser = useRef<string | null>(null)
@@ -65,6 +73,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     (location.pathname === '/login' && ['oauth_error', 'twofa'].some((key) => authQuery.has(key))) ||
     emailVerificationInProgress || location.pathname === '/reset-password'
   const shouldAutoRedirect =
+    siteLoaded && (!siteBlocked || location.pathname === '/login') &&
     status === 'unauthenticated' &&
     !banned &&
     setupProbed &&
@@ -158,6 +167,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       hydratedChatDataForUser.current = null
       return
     }
+    if (!siteLoaded || siteBlocked) {
+      hydratedChatDataForUser.current = null
+      return
+    }
     if (!isChatShellPath(location.pathname)) return
     if (pendingDesktopAuthorization()) return
     const passwordPolicy = user.oauth_initial_password_policy ?? authPolicy.oauth_initial_password_policy
@@ -182,6 +195,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
         void loadModels()
       })
   }, [
+    siteLoaded,
+    siteBlocked,
     authPolicy.oauth_initial_password_policy,
     location.pathname,
     status,
@@ -198,7 +213,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // is emitted. Refresh just after the deadline, then reconcile every cache
   // whose visible choices depend on the user's group.
   useEffect(() => {
-    if (status !== 'authenticated' || !user?.id || !user.group_expires_at) return
+    if (!siteLoaded || siteBlocked || status !== 'authenticated' || !user?.id || !user.group_expires_at) return
     const expiresAtMs = user.group_expires_at * 1000
     const schedule = () => {
       const remaining = expiresAtMs - Date.now() + 750
@@ -216,7 +231,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     const timer = schedule()
     return () => window.clearTimeout(timer)
-  }, [loadModels, refreshProfile, status, user?.group_expires_at, user?.id])
+  }, [siteLoaded, siteBlocked, loadModels, refreshProfile, status, user?.group_expires_at, user?.id])
 
   if (suspensionPage) return <>{children}</>
   if (banned && !['/privacy', '/terms'].includes(location.pathname) && !location.pathname.startsWith('/share/')) {
@@ -226,6 +241,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // Reused while authentication and the first-run probe are unresolved so the
   // app never routes using incomplete state.
   const loadingFallback = <PanelFallback scope="screen" />
+  if (!siteLoaded) return loadingFallback
+  if (siteBlocked && !maintenanceAuthPath) {
+    if (status === 'idle' || status === 'authenticating' || !setupProbed) return loadingFallback
+    return <SiteClosed />
+  }
   if (status === 'idle' || status === 'authenticating') {
     const policyRoute = ['/welcome', '/login', '/register', '/forgot-password'].includes(location.pathname)
     if (isPublic(location.pathname) && (!policyRoute || authPolicyLoaded)) return <>{children}</>
