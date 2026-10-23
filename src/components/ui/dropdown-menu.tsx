@@ -1,18 +1,56 @@
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu'
-import { Check, ChevronRight } from 'lucide-react'
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react'
+import { ArrowLeft, Check, ChevronRight } from 'lucide-react'
+import { createContext, forwardRef, useCallback, useContext, useRef, useState, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes, type RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useQuietSurface } from '@/contexts/quiet-surface'
+import { useSurfaceViewport } from '@/hooks/use-app-viewport'
+import { readAppViewport } from '@/lib/app-viewport'
 
 export const DropdownMenu = DropdownPrimitive.Root
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger
 export const DropdownMenuGroup = DropdownPrimitive.Group
 export const DropdownMenuPortal = DropdownPrimitive.Portal
-export const DropdownMenuSub = DropdownPrimitive.Sub
 export const DropdownMenuRadioGroup = DropdownPrimitive.RadioGroup
 
+const SubmenuContext = createContext<{
+  trigger: RefObject<HTMLDivElement | null>
+  close: () => void
+} | null>(null)
+
+export function DropdownMenuSub({ children, open, defaultOpen = false, onOpenChange, ...rest }: ComponentPropsWithoutRef<typeof DropdownPrimitive.Sub>) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
+  const trigger = useRef<HTMLDivElement>(null)
+  const setOpen = (next: boolean) => {
+    setInternalOpen(next)
+    onOpenChange?.(next)
+  }
+  return (
+    <SubmenuContext.Provider value={{ trigger, close: () => { setOpen(false); trigger.current?.focus() } }}>
+      <DropdownPrimitive.Sub {...rest} open={open ?? internalOpen} onOpenChange={setOpen}>
+        {children}
+      </DropdownPrimitive.Sub>
+    </SubmenuContext.Provider>
+  )
+}
+
+function useMenuViewport(padding: NonNullable<ComponentPropsWithoutRef<typeof DropdownPrimitive.Content>['collisionPadding']>) {
+  const surface = useSurfaceViewport()
+  const viewport = readAppViewport()
+  const edges = typeof padding === 'number' ? { top: padding, right: padding, bottom: padding, left: padding } : padding
+  return {
+    surface,
+    collisionPadding: {
+      top: (edges.top ?? 0) + Math.max(0, surface.top - viewport.top),
+      right: (edges.right ?? 0) + Math.max(0, viewport.right - surface.right),
+      bottom: (edges.bottom ?? 0) + Math.max(0, viewport.bottom - surface.bottom),
+      left: (edges.left ?? 0) + Math.max(0, surface.left - viewport.left),
+    },
+  }
+}
+
 const menuClass = cn(
-  'z-[70] min-w-[200px] overflow-hidden',
+  'viewport-menu z-[70] min-w-[200px] overflow-hidden',
   'rounded-popup border border-[var(--color-border)] bg-[var(--color-surface-raised)]',
   'shadow-[var(--shadow-popover)]',
   'p-1.5',
@@ -25,12 +63,14 @@ export const DropdownMenuContent = forwardRef<
   ComponentPropsWithoutRef<typeof DropdownPrimitive.Content>
 >(function DropdownMenuContent({ className, sideOffset = 6, collisionPadding = 8, ...rest }, ref) {
   const quiet = useQuietSurface()
+  const viewport = useMenuViewport(collisionPadding)
   return (
     <DropdownPrimitive.Portal>
       <DropdownPrimitive.Content
         ref={ref}
         sideOffset={sideOffset}
-        collisionPadding={collisionPadding}
+        collisionPadding={viewport.collisionPadding}
+        sticky="always"
         // Cap to the space Radix measured and scroll the overflow — a tall menu
         // opening upward from a bottom-anchored trigger (e.g. the sidebar avatar
         // menu) would otherwise clip past the viewport top with no way to reach
@@ -71,9 +111,16 @@ export const DropdownMenuSubTrigger = forwardRef<
   ElementRef<typeof DropdownPrimitive.SubTrigger>,
   ComponentPropsWithoutRef<typeof DropdownPrimitive.SubTrigger>
 >(function DropdownMenuSubTrigger({ className, children, ...rest }, ref) {
+  const submenu = useContext(SubmenuContext)
+  const trigger = submenu?.trigger
+  const composedRef = useCallback((node: HTMLDivElement | null) => {
+    if (trigger) trigger.current = node
+    if (typeof ref === 'function') ref(node)
+    else if (ref) ref.current = node
+  }, [trigger, ref])
   return (
     <DropdownPrimitive.SubTrigger
-      ref={ref}
+      ref={composedRef}
       className={cn(itemClass, 'data-[state=open]:bg-[var(--color-bg-muted)]', className)}
       {...rest}
     >
@@ -86,15 +133,39 @@ export const DropdownMenuSubTrigger = forwardRef<
 export const DropdownMenuSubContent = forwardRef<
   ElementRef<typeof DropdownPrimitive.SubContent>,
   ComponentPropsWithoutRef<typeof DropdownPrimitive.SubContent>
->(function DropdownMenuSubContent({ className, ...rest }, ref) {
+>(function DropdownMenuSubContent({ className, children, collisionPadding = 8, sideOffset = 0, style, ...rest }, ref) {
   const quiet = useQuietSurface()
+  const { t } = useTranslation('common')
+  const submenu = useContext(SubmenuContext)
+  const viewport = useMenuViewport(collisionPadding)
+  const narrow = viewport.surface.width > 0 && viewport.surface.width < 640
+  const triggerWidth = submenu?.trigger.current?.getBoundingClientRect().width ?? 0
+  // A phone cannot fit two menus side by side. Overlap the parent trigger's
+  // column while keeping Radix's positioning, focus and dismissal behavior.
+  const stacked = narrow && triggerWidth > 0
   return (
     <DropdownPrimitive.Portal>
       <DropdownPrimitive.SubContent
         ref={ref}
-        className={cn(menuClass, 'max-h-[min(60vh,22rem)] overflow-y-auto', quiet && 'border-0 shadow-[var(--shadow-popover-quiet)]', className)}
+        data-menu-stacked={stacked || undefined}
+        sideOffset={stacked ? -triggerWidth : sideOffset}
+        collisionPadding={viewport.collisionPadding}
+        sticky="always"
+        style={{ ...style, ...(stacked ? { width: triggerWidth, minWidth: 0 } : {}) }}
+        className={cn(menuClass, 'max-h-[min(var(--radix-dropdown-menu-content-available-height),22rem)] overflow-y-auto', quiet && 'border-0 shadow-[var(--shadow-popover-quiet)]', className)}
         {...rest}
-      />
+      >
+        {stacked && submenu ? (
+          <>
+            <DropdownPrimitive.Item data-menu-back className={cn(itemClass, 'min-h-11')} onSelect={(event) => { event.preventDefault(); submenu.close() }}>
+              <ArrowLeft size={15} aria-hidden />
+              {t('actions.back')}
+            </DropdownPrimitive.Item>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {children}
+      </DropdownPrimitive.SubContent>
     </DropdownPrimitive.Portal>
   )
 })

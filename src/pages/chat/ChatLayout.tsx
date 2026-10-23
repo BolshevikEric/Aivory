@@ -111,7 +111,7 @@ export default function ChatLayout() {
         <Sidebar variant="desktop" />
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent side="left" size="nav" label={t('sidebar.search')} className="bg-[var(--color-bg-muted)]">
+          <SheetContent side="left" size="nav" label={t('sidebar.search')} className="bg-[var(--color-sidebar-bg)]">
             <Sidebar variant="sheet" onClose={() => setDrawerOpen(false)} />
           </SheetContent>
         </Sheet>

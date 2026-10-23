@@ -65,6 +65,7 @@ export const SheetContent = forwardRef<ElementRef<typeof DialogPrimitive.Content
           ref={ref}
           data-slot="sheet-content"
           data-side={side}
+          data-size={size}
           data-scroll-mode={scrollMode}
           aria-describedby={undefined}
           className={cn(

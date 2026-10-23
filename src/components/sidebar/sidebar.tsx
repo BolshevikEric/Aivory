@@ -584,7 +584,7 @@ export function Sidebar({ variant = 'desktop', onClose }: SidebarProps) {
 
       {/* Actions — every entry is one SidebarNavItem so hover, selection and
           shortcut hints stay identical across the rail. */}
-      <div className="flex flex-col gap-px px-2">
+      <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col gap-px overflow-y-auto overscroll-contain px-2 [&>*]:shrink-0">
         <SidebarNavItem
           icon={Plus}
           iconClassName="text-[var(--color-accent)]"
@@ -964,7 +964,7 @@ export function Sidebar({ variant = 'desktop', onClose }: SidebarProps) {
           any workspace, so it works both in the personal space (pick one to
           enter) and inside a workspace (§workspaces 头像旁切换按钮). */}
       {/* The avatar keeps one x-position (10px) in both layouts. */}
-      <div className="mt-auto p-1">
+      <div className="mt-auto shrink-0 p-1">
         <div className={cn('flex items-center gap-1', compact && 'flex-col')}>
           <div className={cn('min-w-0', !compact && 'flex-1')}>
             <UserMenu collapsed={compact} />

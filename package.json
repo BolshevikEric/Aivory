@@ -35,6 +35,7 @@
     "test:composer-formula-upload": "node tests/browser/run-composer-formula-upload.mjs",
     "test:conversation-share": "node tests/browser/run-conversation-image.mjs",
     "test:mobile-layout": "node tests/browser/run-mobile-layout.mjs",
+    "test:mobile-navigation": "node tests/browser/run-mobile-navigation.mjs",
     "test:generative-ui": "node tests/browser/run-generative-ui.mjs",
     "test:generative-map": "node tests/browser/run-generative-map.mjs",
     "test:amap": "node tests/browser/run-amap.mjs"

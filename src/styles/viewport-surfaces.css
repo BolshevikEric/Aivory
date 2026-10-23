@@ -114,6 +114,31 @@
   bottom: calc(100dvh - var(--surface-viewport-top) - var(--surface-viewport-height));
 }
 
+/* Navigation backgrounds reach the screen edges; insets belong inside the
+   drawer so its controls stay clear of notches and the home indicator. */
+.viewport-sheet[data-size='nav'][data-side='left'],
+.viewport-sheet[data-size='nav'][data-side='right'] {
+  top: var(--app-viewport-top);
+  height: var(--app-viewport-height);
+  max-height: var(--app-viewport-height);
+  padding-top: max(0px, calc(var(--surface-viewport-top) - var(--app-viewport-top)));
+  padding-bottom: max(0px, calc(var(--app-viewport-top) + var(--app-viewport-height) - var(--surface-viewport-top) - var(--surface-viewport-height)));
+}
+
+.viewport-sheet[data-size='nav'][data-side='left'] {
+  left: var(--app-viewport-left);
+  padding-left: max(0px, calc(var(--surface-viewport-left) - var(--app-viewport-left)));
+}
+
+.viewport-sheet[data-size='nav'][data-side='right'] {
+  right: calc(100vw - var(--app-viewport-left) - var(--app-viewport-width));
+  padding-right: max(0px, calc(var(--app-viewport-left) + var(--app-viewport-width) - var(--surface-viewport-left) - var(--surface-viewport-width)));
+}
+
+.viewport-menu {
+  max-width: max(0px, min(var(--radix-dropdown-menu-content-available-width), calc(var(--surface-viewport-width) - 1rem)));
+}
+
 @media (max-width: 639px),
 (max-height: 520px),
 (pointer: coarse) {
