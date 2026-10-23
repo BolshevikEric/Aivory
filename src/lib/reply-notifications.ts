@@ -1,5 +1,6 @@
 import '@/lib/desktop'
 import i18n from '@/i18n'
+import { randomUUID } from '@/lib/random-uuid'
 import { useAuth } from '@/store/auth'
 import { useWorkspaces } from '@/store/workspaces'
 import { useReplyNotificationPreferences } from '@/store/reply-notification-preferences'
@@ -65,7 +66,7 @@ export async function replyNotificationPermission(request = false): Promise<Repl
 }
 
 export function startReplyNotifications(navigate: (path: string) => void) {
-  const owner = crypto.randomUUID()
+  const owner = randomUUID()
   const active = new Set<Notification>()
   const seen = new Set<string>()
   let disposed = false

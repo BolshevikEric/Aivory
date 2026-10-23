@@ -1,3 +1,5 @@
+import { randomUUID } from '@/lib/random-uuid'
+
 /** Keep desktop native requests cancellable; web fetch behavior is unchanged. */
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const bridge = typeof window !== 'undefined' ? window.aivoryDesktop : undefined
@@ -6,7 +8,7 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const target = new URL(input, window.location.href)
   if (target.origin !== window.location.origin || !target.pathname.startsWith('/api/')) return fetch(input, init)
   signal.throwIfAborted()
-  const id = crypto.randomUUID()
+  const id = randomUUID()
   const abort = () => bridge.abortApiRequest!(id)
   const cleanup = () => signal.removeEventListener('abort', abort)
   bridge.startApiRequest(id)

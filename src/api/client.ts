@@ -18,6 +18,7 @@ import { getClientInstanceId, getDeviceId } from '@/lib/device-id'
 import { blockReload } from '@/lib/sync-guards'
 import { hmacSha256, sha256 } from '@/lib/hmac-sha256'
 import { apiFetch } from '@/lib/api-fetch'
+import { randomUUID } from '@/lib/random-uuid'
 import {
   withRequestActivity,
   type RequestActivityMode,
@@ -360,7 +361,7 @@ async function xhrUpload(
   return new Promise<{ status: number; ok: boolean; parsed: unknown }>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const bridge = window.aivoryDesktop
-    const requestId = opts.signal && bridge?.startApiRequest && bridge.abortApiRequest ? crypto.randomUUID() : undefined
+    const requestId = opts.signal && bridge?.startApiRequest && bridge.abortApiRequest ? randomUUID() : undefined
     let settled = false
     const cleanup = () => {
       if (opts.signal) opts.signal.removeEventListener('abort', abort)

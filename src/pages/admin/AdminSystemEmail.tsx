@@ -13,6 +13,7 @@ import { PanelFallback } from '@/components/ui/panel-fallback'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { SettingsActions, SettingsBlock, SettingsRow, SettingsSection } from '@/components/settings/settings-section'
 import { EMAIL_PURPOSES, emailDeliveryFromSettings, isRequiredEmail, type EmailDeliveryConfig, type EmailPurpose, type SMTPAccount } from '@/lib/email-delivery'
+import { randomUUID } from '@/lib/random-uuid'
 
 export default function AdminSystemEmail() {
   const { t, i18n } = useTranslation(['admin', 'common'])
@@ -48,7 +49,7 @@ export default function AdminSystemEmail() {
   }
 
   function addAccount() {
-    const id = crypto.randomUUID()
+    const id = randomUUID()
     const account: SMTPAccount = { id, name: '', host: '', port: '587', user: '', password: '', from: '', tls: false }
     setDraft((current) => ({
       accounts: [...current.accounts, account],

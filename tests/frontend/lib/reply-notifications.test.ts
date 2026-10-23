@@ -55,6 +55,22 @@ afterEach(() => { stop?.(); delete window.aivoryDesktop; vi.restoreAllMocks(); v
 const enable = () => useReplyNotificationPreferences.getState().setEnabled('user-a', true)
 
 describe('reply completion notifications', () => {
+  it('starts on HTTP origins without native UUID support and keeps notifications unsupported', async () => {
+    stop?.()
+    const getRandomValues = crypto.getRandomValues.bind(crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    vi.stubGlobal('isSecureContext', false)
+
+    stop = startReplyNotifications(navigate)
+    enable()
+    publishReplyCompleted(conversation, message)
+    await flush()
+
+    expect(await replyNotificationPermission(true)).toBe('unsupported')
+    expect(notices).toHaveLength(0)
+    expect(FakeNotification.requestPermission).not.toHaveBeenCalled()
+  })
+
   it('defaults off, persists per account, and never requests permission on delivery', async () => {
     publishReplyCompleted(conversation, message)
     await flush()
