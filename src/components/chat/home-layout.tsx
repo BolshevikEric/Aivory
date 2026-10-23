@@ -475,7 +475,7 @@ export function HomeLayout({ variant, composer, notice, onSuggestion }: HomeLayo
       ref={root}
       className="relative min-h-0 flex-1 flex flex-col overflow-y-auto overflow-x-hidden"
     >
-      <div className="absolute inset-x-3 top-3 z-20 flex items-center justify-between gap-2 max-sm:inset-x-2 max-sm:top-2">
+      <div className="absolute inset-x-3 top-1 z-20 flex items-center justify-between gap-2 max-sm:inset-x-2">
         <div className="flex min-w-0 items-center gap-1">
           {/* Mobile home: a compact, direct way to reach the navigation drawer. */}
           <button
