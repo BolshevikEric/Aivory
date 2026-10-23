@@ -3180,5 +3180,49 @@
     "preview": "預覽",
     "deleteHint": "確定刪除這則通知？所有使用者將無法再查看，閱讀紀錄也會刪除。",
     "confirmDelete": "確認刪除"
+  },
+  "emailDelivery": {
+    "lead": "管理寄件信箱，為不同郵件類型選擇信箱並設定傳送狀態。",
+    "accounts": "寄件信箱",
+    "accountsHint": "每個信箱獨立設定 SMTP。儲存後立即生效，已有信箱密碼會隱藏顯示。",
+    "addAccount": "新增信箱",
+    "empty": "尚未設定寄件信箱。新增一個 SMTP 信箱後，即可為各類郵件選擇寄件者。",
+    "untitled": "信箱 {{number}}",
+    "notConfigured": "待設定寄件地址",
+    "accountName": "信箱名稱",
+    "namePlaceholder": "例如：帳戶安全、會員服務",
+    "passwordHint": "已儲存的密碼以圓點顯示。保持不變可保留，清空則移除密碼。",
+    "usedBy": "用於：{{types}}",
+    "unused": "尚未分配給任何郵件類型",
+    "removeHint": "刪除前，請先為使用此信箱的郵件類型選擇其他信箱。",
+    "typesTitle": "郵件類型與傳送設定",
+    "typesHint": "註冊驗證與找回密碼郵件一律保留傳送；歡迎與會員通知可個別關閉。",
+    "sender": "寄件信箱",
+    "chooseAccount": "選擇寄件信箱",
+    "sendEnabled": "啟用傳送",
+    "required": "一律傳送",
+    "preview": "檢視郵件內容",
+    "previewHint": "範例內容使用目前網站語言，實際郵件會替換為收件者的帳戶資訊。",
+    "previewFailed": "無法載入郵件內容，請關閉後重試。",
+    "loadFailed": "無法讀取郵件設定，請重試。",
+    "invalid": "請檢查信箱名稱、SMTP 主機、連接埠、寄件地址及各類郵件的信箱分配。",
+    "types": {
+      "verify": {
+        "title": "註冊驗證",
+        "description": "使用者註冊需要驗證信箱時，傳送驗證碼及有效期限。"
+      },
+      "reset": {
+        "title": "找回密碼",
+        "description": "使用者申請找回密碼時，傳送一次性密碼重設連結。"
+      },
+      "welcome": {
+        "title": "註冊歡迎",
+        "description": "註冊完成後傳送歡迎郵件，介紹 AI 對話、圖片生成、檔案處理等功能。"
+      },
+      "membership": {
+        "title": "會員訂閱通知",
+        "description": "會員使用者群組開通或續期後，傳送群組名稱及最新有效期限。"
+      }
+    }
   }
 }

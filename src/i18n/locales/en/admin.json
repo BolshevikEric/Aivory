@@ -3182,5 +3182,49 @@
     "preview": "Preview",
     "deleteHint": "Delete this notification for all users? This also removes its read history.",
     "confirmDelete": "Confirm deletion"
+  },
+  "emailDelivery": {
+    "lead": "Manage sending accounts and choose a sender and delivery status for each email type.",
+    "accounts": "Sending accounts",
+    "accountsHint": "Each account has its own SMTP settings. Changes apply after saving. Stored passwords are hidden.",
+    "addAccount": "Add account",
+    "empty": "No sending accounts yet. Add an SMTP account to choose a sender for each email type.",
+    "untitled": "Account {{number}}",
+    "notConfigured": "Sender address not configured",
+    "accountName": "Account name",
+    "namePlaceholder": "For example: Account security, Memberships",
+    "passwordHint": "Stored passwords appear as dots. Leave unchanged to keep the password, or clear it to remove it.",
+    "usedBy": "Used for: {{types}}",
+    "unused": "Not assigned to any email type",
+    "removeHint": "Choose another sender for the email types using this account before deleting it.",
+    "typesTitle": "Email types and delivery",
+    "typesHint": "Registration verification and password recovery emails remain enabled. Welcome and membership notifications can be turned off individually.",
+    "sender": "Sending account",
+    "chooseAccount": "Choose a sending account",
+    "sendEnabled": "Send emails",
+    "required": "Always enabled",
+    "preview": "View email content",
+    "previewHint": "This sample uses the current site language. Actual emails include the recipient’s account information.",
+    "previewFailed": "Could not load the email. Close this preview and try again.",
+    "loadFailed": "Could not load email settings. Please try again.",
+    "invalid": "Check account names, SMTP hosts, ports, sender addresses and the account assigned to each email type.",
+    "types": {
+      "verify": {
+        "title": "Registration verification",
+        "description": "Sends a verification code and expiry when registration requires email verification."
+      },
+      "reset": {
+        "title": "Password recovery",
+        "description": "Sends a single-use password reset link when a user requests password recovery."
+      },
+      "welcome": {
+        "title": "Welcome",
+        "description": "Welcomes newly registered users and introduces AI conversations, image generation, file tools and more."
+      },
+      "membership": {
+        "title": "Membership notifications",
+        "description": "Sends the membership group name and updated expiration after activation or renewal."
+      }
+    }
   }
 }

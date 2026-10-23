@@ -3182,5 +3182,49 @@
     "preview": "Aperçu",
     "deleteHint": "Supprimer cette notification pour tous les utilisateurs et effacer son historique de lecture ?",
     "confirmDelete": "Confirmer la suppression"
+  },
+  "emailDelivery": {
+    "lead": "Gérez les comptes d’envoi et choisissez un expéditeur et un état d’envoi pour chaque type d’e-mail.",
+    "accounts": "Comptes d’envoi",
+    "accountsHint": "Chaque compte possède ses propres paramètres SMTP. Les modifications s’appliquent après enregistrement. Les mots de passe enregistrés sont masqués.",
+    "addAccount": "Ajouter un compte",
+    "empty": "Aucun compte d’envoi. Ajoutez un compte SMTP pour choisir un expéditeur pour chaque type d’e-mail.",
+    "untitled": "Compte {{number}}",
+    "notConfigured": "Adresse d’expédition non configurée",
+    "accountName": "Nom du compte",
+    "namePlaceholder": "Par exemple : Sécurité du compte, Abonnements",
+    "passwordHint": "Les mots de passe enregistrés sont masqués par des points. Laissez-les inchangés pour les conserver ou effacez-les pour les supprimer.",
+    "usedBy": "Utilisé pour : {{types}}",
+    "unused": "Aucun type d’e-mail attribué",
+    "removeHint": "Choisissez un autre expéditeur pour les e-mails utilisant ce compte avant de le supprimer.",
+    "typesTitle": "Types d’e-mails et envoi",
+    "typesHint": "La vérification d’inscription et la récupération du mot de passe restent actives. Les messages de bienvenue et d’abonnement peuvent être désactivés séparément.",
+    "sender": "Compte d’envoi",
+    "chooseAccount": "Choisir un compte d’envoi",
+    "sendEnabled": "Envoyer les e-mails",
+    "required": "Toujours actif",
+    "preview": "Voir le contenu",
+    "previewHint": "Cet exemple utilise la langue actuelle du site. Les e-mails réels contiennent les informations du destinataire.",
+    "previewFailed": "Impossible de charger l’e-mail. Fermez cet aperçu et réessayez.",
+    "loadFailed": "Impossible de charger les paramètres d’e-mail. Veuillez réessayer.",
+    "invalid": "Vérifiez les noms des comptes, hôtes SMTP, ports, adresses d’expédition et comptes attribués à chaque type d’e-mail.",
+    "types": {
+      "verify": {
+        "title": "Vérification d’inscription",
+        "description": "Envoie un code et sa durée de validité lorsque l’inscription exige une vérification de l’adresse e-mail."
+      },
+      "reset": {
+        "title": "Récupération du mot de passe",
+        "description": "Envoie un lien de réinitialisation à usage unique lorsqu’un utilisateur le demande."
+      },
+      "welcome": {
+        "title": "Bienvenue",
+        "description": "Accueille les nouveaux utilisateurs et présente les conversations IA, la génération d’images, les outils de fichiers et plus encore."
+      },
+      "membership": {
+        "title": "Notifications d’abonnement",
+        "description": "Envoie le nom du groupe d’abonnement et la nouvelle date d’expiration après activation ou renouvellement."
+      }
+    }
   }
 }

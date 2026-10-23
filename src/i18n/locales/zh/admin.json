@@ -3184,5 +3184,49 @@
     "preview": "预览",
     "deleteHint": "确定删除这条通知？所有用户将无法再查看，阅读记录也会删除。",
     "confirmDelete": "确认删除"
+  },
+  "emailDelivery": {
+    "lead": "管理发信邮箱，为不同邮件类型选择邮箱并设置发送状态。",
+    "accounts": "发信邮箱",
+    "accountsHint": "每个邮箱独立配置 SMTP。保存后立即生效，已有邮箱密码会隐藏显示。",
+    "addAccount": "添加邮箱",
+    "empty": "还没有发信邮箱。添加一个 SMTP 邮箱后，即可为各类邮件选择发件人。",
+    "untitled": "邮箱 {{number}}",
+    "notConfigured": "待配置发件地址",
+    "accountName": "邮箱名称",
+    "namePlaceholder": "例如：账户安全、会员服务",
+    "passwordHint": "已保存的密码以圆点显示。保持不变可保留，清空则移除密码。",
+    "usedBy": "用于：{{types}}",
+    "unused": "未分配给任何邮件类型",
+    "removeHint": "删除前，请先为使用此邮箱的邮件类型选择其他邮箱。",
+    "typesTitle": "邮件类型与发送设置",
+    "typesHint": "注册验证和找回密码邮件始终保留发送；欢迎和会员通知可以单独关闭。",
+    "sender": "发信邮箱",
+    "chooseAccount": "选择发信邮箱",
+    "sendEnabled": "开启发送",
+    "required": "始终发送",
+    "preview": "查看邮件内容",
+    "previewHint": "示例内容使用当前网站语言，真实邮件会替换为收件人的账户信息。",
+    "previewFailed": "无法加载邮件内容，请关闭后重试。",
+    "loadFailed": "无法读取邮件配置，请重试。",
+    "invalid": "请检查邮箱名称、SMTP 主机、端口、发件地址和各类邮件的邮箱分配。",
+    "types": {
+      "verify": {
+        "title": "注册验证",
+        "description": "用户注册需要验证邮箱时，发送验证码与有效期。"
+      },
+      "reset": {
+        "title": "找回密码",
+        "description": "用户申请找回密码时，发送一次性密码重置链接。"
+      },
+      "welcome": {
+        "title": "注册欢迎",
+        "description": "注册完成后发送欢迎邮件，介绍 AI 对话、图片生成、文件处理等功能。"
+      },
+      "membership": {
+        "title": "会员订阅通知",
+        "description": "会员用户组开通或续期后，发送用户组名称和最新有效期。"
+      }
+    }
   }
 }

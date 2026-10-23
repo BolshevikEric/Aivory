@@ -1,3 +1,5 @@
+import { emailSecurityReady } from '@/lib/email-delivery'
+
 export interface AdminOverviewHealthInput {
   settings: Record<string, unknown>
   enabledChannelCount: number
@@ -15,7 +17,7 @@ export function getOverviewHealth(data: AdminOverviewHealthInput) {
   const defaultModel = readString(data.settings, 'default_model_id')
   const taskModel = readString(data.settings, 'task_model_id')
   const emailVerification = data.settings.email_verification_required === true
-  const smtpReady = Boolean(readString(data.settings, 'smtp_host') && readString(data.settings, 'smtp_from'))
+  const smtpReady = emailSecurityReady(data.settings)
   const storageProvider = readString(data.settings, 'storage_provider')
   const storageReady =
     storageProvider === 'local' ||
