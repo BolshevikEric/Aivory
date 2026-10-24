@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -353,7 +354,16 @@ func prepareBackupQdrantRestore(ctx context.Context, d Deps, zr *zip.Reader) (*b
 		return nil, nil
 	}
 
-	tmp, err := os.CreateTemp("", "aivory-qdrant-rollback-*.zip")
+	// Compensation must survive replacing the application container, just like
+	// the file-tree recovery journal. The upload root's parent is persisted.
+	storageRoot, err := filepath.Abs(d.Config.UploadDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(storageRoot), 0o700); err != nil {
+		return nil, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(storageRoot), ".aivory-qdrant-rollback-*.zip")
 	if err != nil {
 		return nil, fmt.Errorf("create Qdrant rollback archive: %w", err)
 	}
@@ -372,6 +382,9 @@ func prepareBackupQdrantRestore(ctx context.Context, d Deps, zr *zip.Reader) (*b
 	}
 	if err := zw.Close(); err != nil {
 		return nil, fmt.Errorf("close Qdrant rollback archive: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return nil, fmt.Errorf("persist Qdrant rollback archive: %w", err)
 	}
 	info, err := tmp.Stat()
 	if err != nil {

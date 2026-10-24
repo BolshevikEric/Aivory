@@ -143,6 +143,8 @@ const configArchiveVersion = 2
 type backupArchiveOptions struct {
 	IncludeFiles  bool
 	IncludeQdrant bool
+	UploadDir     string // Optional pinned trees; manifest paths remain the live roots.
+	ArtifactDir   string
 }
 
 type backupArchiveResult struct {
@@ -162,12 +164,12 @@ func exportBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 
 	// A read transaction gives a consistent point-in-time snapshot. Open it before
 	// writing response headers so a connection failure can still return JSON.
-	tx, err := beginBackupSnapshot(ctx, d.DB)
+	snapshot, err := prepareBackupExport(ctx, d, includeFiles)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer snapshot.release()
 
 	ts := time.Now().Unix()
 	w.Header().Set("content-type", "application/zip")
@@ -177,7 +179,10 @@ func exportBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-disposition", fmt.Sprintf(`attachment; filename="%s-%d.zip"`, name, ts))
 	w.Header().Set("x-content-type-options", "nosniff")
-	if _, err := writeBackupArchive(ctx, d, tx, w, backupArchiveOptions{IncludeFiles: includeFiles, IncludeQdrant: includeQdrant}); err != nil {
+	if _, err := writeBackupArchive(ctx, d, snapshot.tx, w, backupArchiveOptions{
+		IncludeFiles: includeFiles, IncludeQdrant: includeQdrant,
+		UploadDir: snapshot.uploadDir, ArtifactDir: snapshot.artifactDir,
+	}); err != nil {
 		// Headers/stream may already be committed. Log and let the truncated zip
 		// fail manifest validation for the importer.
 		d.Logger.Printf("backup export: %v", err)
@@ -214,10 +219,17 @@ func writeBackupArchive(ctx context.Context, d Deps, tx *sql.Tx, w io.Writer, op
 
 	// On-disk files (optional).
 	if opts.IncludeFiles {
-		if err := addRequiredDirToZip(tracked, d.Config.UploadDir, backupZipUploads); err != nil {
+		uploadDir, artifactDir := opts.UploadDir, opts.ArtifactDir
+		if uploadDir == "" {
+			uploadDir = d.Config.UploadDir
+		}
+		if artifactDir == "" {
+			artifactDir = d.Config.ArtifactDir
+		}
+		if err := addRequiredDirToZip(tracked, uploadDir, backupZipUploads); err != nil {
 			return backupArchiveResult{}, fmt.Errorf("uploads: %w", err)
 		}
-		if err := addRequiredDirToZip(tracked, d.Config.ArtifactDir, backupZipArtifacts); err != nil {
+		if err := addRequiredDirToZip(tracked, artifactDir, backupZipArtifacts); err != nil {
 			return backupArchiveResult{}, fmt.Errorf("artifacts: %w", err)
 		}
 	}
@@ -533,6 +545,12 @@ func importConfigAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, errConfigImportAdminUnauthorized)
 		return
 	}
+	unlockStorage, err := fileguard.LockStorage(ctx, false, d.Config.UploadDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer unlockStorage()
 	// Assets are restored before the merge commits so the authorization lock
 	// remains held until the last persistent write has completed.
 	assetsRestored := 0
@@ -665,11 +683,16 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("prepare file restore: %w", err))
 		return
 	}
-	if fileRestore != nil {
-		defer func() { _ = fileRestore.Rollback() }()
-	}
 	unlockQdrant := lockQdrantArchiveIfNeeded(d, man.IncludesQdrant)
 	defer unlockQdrant()
+	unlockStorage, err := fileguard.LockStorage(ctx, true, d.Config.UploadDir, d.Config.ArtifactDir)
+	if err != nil {
+		_ = fileRestore.Rollback() // only unpublished staging trees exist here
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("lock restore storage: %w", err))
+		return
+	}
+	defer unlockStorage()
+	defer func() { _ = fileRestore.Rollback() }()
 	qdrantRestore, err := prepareBackupQdrantRestore(ctx, d, zr)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("prepare Qdrant restore: %w", err))
@@ -679,7 +702,11 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			rollbackCtx, cancel := context.WithTimeout(context.Background(), qdrantArchiveRequestTimeout)
 			defer cancel()
-			_ = qdrantRestore.Rollback(rollbackCtx)
+			if rollbackErr := qdrantRestore.Rollback(rollbackCtx); rollbackErr != nil {
+				retainBackupRestoreState(nil, qdrantRestore)
+				d.Logger.Printf("backup import: Qdrant rollback failed; recovery archive retained at %s: %v", qdrantRestore.previousPath, rollbackErr)
+				return
+			}
 			_ = qdrantRestore.Commit()
 		}()
 	}
@@ -689,7 +716,28 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		filesRestored = fileRestore.files
 	}
 	var qdrantRestored int64
+	restoreToken := store.GenID("restore")
+	ctx = context.WithValue(ctx, backupRestoreTokenKey{}, restoreToken)
+	var recoveryDetails []byte
 	counts, err := restoreDatabase(ctx, d, zr, man, importingAdmin.ID, func() error {
+		if fileRestore != nil {
+			for _, tree := range fileRestore.trees {
+				if err := tree.reservePrevious(); err != nil {
+					return err
+				}
+			}
+		}
+		var journalErr error
+		recoveryDetails, journalErr = backupRestoreRecoveryDetails(fileRestore, qdrantRestore, restoreToken)
+		if journalErr != nil {
+			return journalErr
+		}
+		// Persist the recovery plan BEFORE the first live directory rename.
+		// A hard process/container stop must not permit later cleanup to prune
+		// records against a half-published restore.
+		if err := fileguard.RequireStorageRecovery(recoveryDetails, d.Config.UploadDir, d.Config.ArtifactDir); err != nil {
+			return err
+		}
 		if err := fileRestore.Apply(); err != nil {
 			return fmt.Errorf("publish restored files: %w", err)
 		}
@@ -702,6 +750,17 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
+		var uncertain *backupCommitUncertainError
+		if errors.As(err, &uncertain) {
+			err = preserveUncertainBackupRestore(d, fileRestore, qdrantRestore, uncertain)
+			bumpAuthCacheEpoch(d)
+			broadcastConfigInvalidate(d)
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"error": "restore outcome could not be verified; original and restored files retained; storage writes paused pending recovery",
+				"code":  "backup_restore_recovery_required",
+			})
+			return
+		}
 		var rollbackErrs []error
 		if qdrantRestore != nil {
 			rollbackCtx, cancel := context.WithTimeout(context.Background(), qdrantArchiveRequestTimeout)
@@ -713,7 +772,13 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		if rollbackErr := fileRestore.Rollback(); rollbackErr != nil {
 			rollbackErrs = append(rollbackErrs, fmt.Errorf("file rollback failed: %w", rollbackErr))
 		}
+		if len(rollbackErrs) == 0 && recoveryDetails != nil {
+			if journalErr := fileguard.ClearStorageRecovery(recoveryDetails, d.Config.UploadDir, d.Config.ArtifactDir); journalErr != nil {
+				rollbackErrs = append(rollbackErrs, journalErr)
+			}
+		}
 		if len(rollbackErrs) > 0 {
+			retainBackupRestoreState(fileRestore, qdrantRestore)
 			err = errors.Join(append([]error{err}, rollbackErrs...)...)
 		}
 		if errors.Is(err, errBackupImportAdminUnauthorized) {
@@ -730,6 +795,10 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 	}
 	if cleanupErr := qdrantRestore.Commit(); cleanupErr != nil {
 		d.Logger.Printf("backup import: clean Qdrant rollback archive: %v", cleanupErr)
+	}
+
+	if journalErr := fileguard.ClearStorageRecovery(recoveryDetails, d.Config.UploadDir, d.Config.ArtifactDir); journalErr != nil {
+		d.Logger.Printf("backup import: clear recovery journal: %v", journalErr)
 	}
 
 	// The settings cache (and the admin's own session) now reflect wiped data.
@@ -787,7 +856,7 @@ func restoreDatabase(ctx context.Context, d Deps, zr *zip.Reader, man backupMani
 		if err := runImportBeforeCommit(beforeCommit); err != nil {
 			return nil, err
 		}
-		if err := tx.Commit(); err != nil {
+		if err := commitBackupRestore(ctx, tx, d.DB); err != nil {
 			return nil, err
 		}
 		return counts, nil
@@ -809,6 +878,7 @@ func restoreDatabase(ctx context.Context, d Deps, zr *zip.Reader, man backupMani
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback() //nolint:errcheck
 	var admin *backupImportAdminSnapshot
 	if strings.TrimSpace(importingAdminID) != "" {
 		admin, err = loadBackupImportAdmin(ctx, tx, importingAdminID)
@@ -826,7 +896,7 @@ func restoreDatabase(ctx context.Context, d Deps, zr *zip.Reader, man backupMani
 		_ = tx.Rollback()
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitBackupRestore(ctx, tx, conn); err != nil {
 		return nil, err
 	}
 	return counts, nil
@@ -877,6 +947,20 @@ func restoreInto(ctx context.Context, ex store.RowExecer, zr *zip.Reader, man ba
 			return nil, err
 		}
 		counts[t] = n
+	}
+	// Generation/compaction workers belong to the process that produced the
+	// snapshot. They cannot resume from an archive. Terminal states also fence
+	// old handlers still unwinding on this server after the restored rows commit.
+	if _, err := ex.ExecContext(ctx, `UPDATE messages SET status='error',stop_reason='generation_interrupted',error='Generation interrupted by backup restore. Please try again.' WHERE role='assistant' AND status IN ('streaming','stopping')`); err != nil {
+		return nil, fmt.Errorf("settle restored generations: %w", err)
+	}
+	for _, table := range []string{"conversation_generation_leases", "conversation_compaction_leases"} {
+		if _, err := ex.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+			return nil, err
+		}
+		if _, present := counts[table]; present {
+			counts[table] = 0
+		}
 	}
 	// Archives produced before multi-domain rules do not contain the match
 	// table. Recreate each legacy rule's original one-domain match in the same

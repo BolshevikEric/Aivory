@@ -274,12 +274,12 @@ func runBackupExportJob(d Deps, job *backupExportJob, origins ...*store.AuditCon
 	adminBackupExports.update(job.ID, func(j *backupExportJob) { j.Progress = "reading_database" })
 	unlockQdrant := lockQdrantArchiveIfNeeded(d, job.IncludeQdrant)
 	defer unlockQdrant()
-	tx, err := beginBackupSnapshot(ctx, d.DB)
+	snapshot, err := prepareBackupExport(ctx, d, job.IncludeFiles)
 	if err != nil {
 		adminBackupExports.finish(job.ID, "failed", "", err.Error(), 0, 0)
 		return
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer snapshot.release()
 
 	out, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -287,9 +287,11 @@ func runBackupExportJob(d Deps, job *backupExportJob, origins ...*store.AuditCon
 		return
 	}
 	adminBackupExports.update(job.ID, func(j *backupExportJob) { j.Progress = "writing_archive" })
-	res, err := writeBackupArchive(ctx, d, tx, out, backupArchiveOptions{
+	res, err := writeBackupArchive(ctx, d, snapshot.tx, out, backupArchiveOptions{
 		IncludeFiles:  job.IncludeFiles,
 		IncludeQdrant: job.IncludeQdrant,
+		UploadDir:     snapshot.uploadDir,
+		ArtifactDir:   snapshot.artifactDir,
 	})
 	closeErr := out.Close()
 	if err == nil {

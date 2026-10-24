@@ -20,11 +20,12 @@ type backupFileRestore struct {
 }
 
 type stagedBackupTree struct {
-	target    string
-	stage     string
-	previous  string
-	hadTarget bool
-	applied   bool
+	target        string
+	stage         string
+	previous      string
+	hadTarget     bool
+	applied       bool
+	previousMoved bool
 }
 
 func prepareBackupFileRestore(d Deps, zr *zip.Reader, man backupManifest) (*backupFileRestore, error) {
@@ -148,8 +149,7 @@ func (r *backupFileRestore) Apply() error {
 	}
 	for _, tree := range r.trees {
 		if err := tree.apply(); err != nil {
-			_ = r.Rollback()
-			return err
+			return errors.Join(err, r.Rollback())
 		}
 	}
 	r.applied = true
@@ -192,17 +192,13 @@ func (t *stagedBackupTree) apply() error {
 			return fmt.Errorf("restore target is not a regular directory: %s", t.target)
 		}
 		t.hadTarget = true
-		placeholder, err := os.MkdirTemp(filepath.Dir(t.target), ".aivory-restore-previous-")
-		if err != nil {
+		if err := t.reservePrevious(); err != nil {
 			return err
 		}
-		if err := os.Remove(placeholder); err != nil {
-			return err
-		}
-		t.previous = placeholder
 		if err := os.Rename(t.target, t.previous); err != nil {
 			return err
 		}
+		t.previousMoved = true
 	case os.IsNotExist(err):
 		t.hadTarget = false
 	default:
@@ -210,12 +206,37 @@ func (t *stagedBackupTree) apply() error {
 	}
 
 	if err := os.Rename(t.stage, t.target); err != nil {
-		if t.hadTarget {
-			_ = os.Rename(t.previous, t.target)
-		}
-		return err
+		return errors.Join(err, t.rollback())
 	}
 	t.applied = true
+	return nil
+}
+
+// Reserve rollback names before publishing anything, so a durable recovery
+// journal can describe every rename even if the process dies mid-restore.
+func (t *stagedBackupTree) reservePrevious() error {
+	if t.previous != "" {
+		return nil
+	}
+	info, err := os.Lstat(t.target)
+	switch {
+	case os.IsNotExist(err):
+		t.hadTarget = false
+	case err != nil:
+		return err
+	case info.Mode()&os.ModeSymlink != 0 || !info.IsDir():
+		return fmt.Errorf("restore target is not a regular directory: %s", t.target)
+	default:
+		t.hadTarget = true
+	}
+	placeholder, err := os.MkdirTemp(filepath.Dir(t.target), ".aivory-restore-previous-")
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(placeholder); err != nil {
+		return err
+	}
+	t.previous = placeholder
 	return nil
 }
 
@@ -223,14 +244,15 @@ func (t *stagedBackupTree) rollback() error {
 	var errs []error
 	if t.applied {
 		if err := os.RemoveAll(t.target); err != nil {
-			errs = append(errs, err)
-		}
-		if t.hadTarget {
-			if err := os.Rename(t.previous, t.target); err != nil {
-				errs = append(errs, err)
-			}
+			return err // preserve retry state; do not rename onto a partial tree
 		}
 		t.applied = false
+	}
+	if t.previousMoved {
+		if err := os.Rename(t.previous, t.target); err != nil {
+			return err // the original tree still exists at previous
+		}
+		t.previousMoved = false
 	}
 	if t.stage != "" {
 		if err := os.RemoveAll(t.stage); err != nil && !os.IsNotExist(err) {

@@ -1703,6 +1703,10 @@ func FinishMessageForUser(ctx context.Context, db *sql.DB, id, expectedConvID, u
 		return err
 	}
 
+	p, err = cleanFinishingStorageRefs(ctx, tx, id, p)
+	if err != nil {
+		return err
+	}
 	res, err := execMessageFinish(ctx, tx, id, p,
 		` AND conversation_id=? AND role='assistant' AND COALESCE(author_id,'')=? AND status IN ('streaming','stopping')`, expectedConvID, userID)
 	if err != nil {
