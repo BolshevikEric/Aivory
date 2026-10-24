@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"aivory/server/internal/store"
 )
 
 const youComFixture = `{"results":{"web":[{"title":"Go release notes","url":"https://go.dev/doc/go1.26","description":"Release   summary","snippets":["First excerpt.","Second excerpt."],"page_age":"2026-02-10T00:00:00","thumbnail_url":"https://go.dev/thumb.png"},{"title":"Docs","url":"https://go.dev/doc/","snippets":["Only a snippet."]}]},"metadata":{"query":"go"}}`
@@ -27,7 +30,8 @@ func mockYouComHTTP(t *testing.T, handler http.HandlerFunc) {
 }
 
 func TestYouComKeylessRequest(t *testing.T) {
-	t.Setenv("YDC_API_KEY", "")
+	// An explicitly resolved empty key must not reactivate an environment key.
+	t.Setenv("YDC_API_KEY", "unused-env-key")
 	mockYouComHTTP(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || "https://"+r.Host+r.URL.Path != youComKeylessEndpoint {
 			t.Errorf("keyless request = %s %s", r.Method, r.URL)
@@ -62,9 +66,9 @@ func TestYouComKeylessRequest(t *testing.T) {
 }
 
 func TestYouComKeyedRequestUsesPOST(t *testing.T) {
-	for name, tc := range map[string]struct{ setting, env, want string }{
-		"setting": {"setting-key", "env-key", "setting-key"},
-		"env":     {"", "env-key", "env-key"},
+	for name, tc := range map[string]struct{ fallback, env, want string }{
+		"search_env": {"search-env-key", "env-key", "search-env-key"},
+		"ydc_env":    {"", "env-key", "env-key"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("YDC_API_KEY", tc.env)
@@ -82,8 +86,58 @@ func TestYouComKeyedRequestUsesPOST(t *testing.T) {
 				}
 				fmt.Fprint(w, youComFixture)
 			})
-			if _, _, err := newSearcher("you", tc.setting, "", "", "").Search(t.Context(), "q", 3); err != nil {
+			if _, _, err := newSettingsSearcher(nil, "you", tc.fallback, "").Search(t.Context(), "q", 3); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestYouComSettingsKeyChangesApplyImmediately(t *testing.T) {
+	for _, provider := range []string{"youcom", "you"} {
+		t.Run(provider, func(t *testing.T) {
+			t.Setenv("YDC_API_KEY", "ydc-env-key")
+			store.InvalidateConfig()
+			t.Cleanup(store.InvalidateConfig)
+			db, err := store.Open(filepath.Join(t.TempDir(), "youcom-settings.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+			if err := store.Migrate(db); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.SetSetting(db, "search_provider", provider); err != nil {
+				t.Fatal(err)
+			}
+			searcher := newSettingsSearcher(db, "", "search-env-key", "")
+			var method, endpoint, key string
+			mockYouComHTTP(t, func(w http.ResponseWriter, r *http.Request) {
+				method, endpoint, key = r.Method, r.URL.Scheme+"://"+r.URL.Host+r.URL.Path, r.Header.Get("X-API-Key")
+				fmt.Fprint(w, youComFixture)
+			})
+			checkSearch := func(wantKey string) {
+				t.Helper()
+				if _, _, err := searcher.Search(t.Context(), "query", 1); err != nil {
+					t.Fatal(err)
+				}
+				wantMethod, wantEndpoint := http.MethodPost, youComKeyedEndpoint
+				if wantKey == "" {
+					wantMethod, wantEndpoint = http.MethodGet, youComKeylessEndpoint
+				}
+				if method != wantMethod || endpoint != wantEndpoint || key != wantKey {
+					t.Fatalf("wrong credential resolution: method=%s endpoint=%s keyMatches=%t; want method=%s endpoint=%s", method, endpoint, key == wantKey, wantMethod, wantEndpoint)
+				}
+			}
+			// No saved row: SEARCH_API_KEY takes priority over YDC_API_KEY.
+			checkSearch("search-env-key")
+			for _, savedKey := range []string{"saved-key", "", "new-saved-key"} {
+				if err := store.SetSetting(db, "search_api_key", savedKey); err != nil {
+					t.Fatal(err)
+				}
+				// Clearing a key must switch this same live resolver to the
+				// keyless endpoint, even when both environment keys remain set.
+				checkSearch(savedKey)
 			}
 		})
 	}
@@ -138,7 +192,7 @@ func TestYouComRetriesShortRetryAfter(t *testing.T) {
 
 func TestYouComIsNotPickedByAuto(t *testing.T) {
 	t.Setenv("YDC_API_KEY", "env-key")
-	if _, ok := newSearcher("auto", "", "", "", "").(*youComSearcher); ok {
-		t.Fatal("auto must not select You.com")
+	if backend := newSettingsSearcher(nil, "auto", "", "").backend(); backend != nil {
+		t.Fatalf("YDC_API_KEY must not configure auto search; got %T", backend)
 	}
 }

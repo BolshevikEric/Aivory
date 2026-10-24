@@ -24,8 +24,8 @@ type Searcher interface {
 // newSearcher builds the configured searcher. Serper/Brave/Tavily require a
 // key, DeepSeek an API key, SearXNG a base URL, and Yuanbao a Tencent Cloud SecretId/SecretKey pair.
 // DuckDuckGo needs no configuration; AnySearch supports anonymous requests
-// through its fixed official endpoint. You.com uses a key when one is set
-// (search_api_key, else YDC_API_KEY) and its keyless endpoint otherwise.
+// through its fixed official endpoint. You.com uses the resolved API key when
+// present and its keyless endpoint otherwise.
 func newSearcher(provider, apiKey, baseURL, secretID, secretKey string, selectedEngines ...[]string) Searcher {
 	switch strings.ToLower(provider) {
 	case "serper":

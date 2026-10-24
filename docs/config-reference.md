@@ -507,7 +507,7 @@ Search and web reading are configured independently in **Admin → Tools**. Deep
 
 | Setting / environment | Default | Behavior |
 | --- | --- | --- |
-| `search_provider` / `SEARCH_PROVIDER` | deployment default | `deepseek` uses the independent search key (`search_api_key` / `SEARCH_API_KEY`). `youcom` uses `search_api_key`, else `YDC_API_KEY`, with `POST https://ydc-index.io/v1/search`; with no key it calls the keyless `GET https://api.you.com/v1/agents/search` (100 searches a day, counted per IP). |
+| `search_provider` / `SEARCH_PROVIDER` | deployment default | `deepseek` uses the independent search key (`search_api_key` / `SEARCH_API_KEY`). `youcom` uses the saved `search_api_key`; when never saved, it falls back to `SEARCH_API_KEY`, then `YDC_API_KEY`. With a key it calls `POST https://ydc-index.io/v1/search`; explicitly clearing the saved key disables both environment fallbacks and selects the keyless `GET https://api.you.com/v1/agents/search` (100 searches a day, counted per IP). |
 | `fetch_provider` / `FETCH_PROVIDER` | `builtin` | `builtin`: direct HTML with optional Jina fallback; `deepseek`: DeepSeek Fetch; `anysearch`: AnySearch Extract. |
 | `fetch_api_key` / `FETCH_API_KEY` | empty | Reader credential, independent of search. Required for DeepSeek; optional for anonymous AnySearch extraction. Saved keys are masked; explicitly clearing a saved key disables its environment fallback. |
 | `fetch_jina_base_url` / `AIVORY_TOOLS_WEB_FETCH_JINA_BASE` | `https://r.jina.ai` | Built-in fallback Reader URL. Empty admin value inherits the environment default. |

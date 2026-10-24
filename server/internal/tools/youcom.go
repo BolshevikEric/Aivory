@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,9 +16,9 @@ import (
 	"aivory/server/internal/tooldiagnostics"
 )
 
-// You.com search. With an API key (search_api_key, else YDC_API_KEY) it uses
-// the keyed POST endpoint; without one it uses the keyless endpoint, which
-// allows 100 searches a day counted per IP.
+// You.com search. The settings resolver supplies the effective API key after
+// applying saved settings over environment defaults. Without a key it uses the
+// keyless endpoint, which allows 100 searches a day counted per IP.
 const (
 	youComKeyedEndpoint   = "https://ydc-index.io/v1/search"
 	youComKeylessEndpoint = "https://api.you.com/v1/agents/search"
@@ -35,11 +34,7 @@ var youComMaxRetryAfter = 10 * time.Second
 type youComSearcher struct{ apiKey string }
 
 func newYouComSearcher(apiKey string) *youComSearcher {
-	apiKey = strings.TrimSpace(apiKey)
-	if apiKey == "" {
-		apiKey = strings.TrimSpace(os.Getenv("YDC_API_KEY"))
-	}
-	return &youComSearcher{apiKey: apiKey}
+	return &youComSearcher{apiKey: strings.TrimSpace(apiKey)}
 }
 
 func (y *youComSearcher) Search(ctx context.Context, query string, topK int) (string, []llm.Citation, error) {
