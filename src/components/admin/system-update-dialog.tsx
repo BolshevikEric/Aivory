@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
+import { useForegroundPolling } from '@/hooks/use-foreground-polling'
 
 const ACTIVE_STATUSES = new Set(['pulling', 'restarting', 'checking'])
 
@@ -72,11 +73,15 @@ export function SystemUpdateDialog({ open, onOpenChange, onSummaryChange }: Prop
     })
   }, [onSummaryChange])
 
-  const load = useCallback(async (foreground = false) => {
+  const load = useCallback(async (foreground = false, signal?: AbortSignal) => {
     try {
-      applyState(await systemUpdateApi.state(foreground ? 'foreground' : 'background'))
+      const next = await systemUpdateApi.state(foreground ? 'foreground' : 'background', signal)
+      if (signal?.aborted) return false
+      applyState(next)
       return true
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) return false
+      if (signal) throw error
       if (foreground && mounted.current) toast.error(t('userMenu.systemUpdate.loadFailed'))
       return false
     } finally {
@@ -86,20 +91,16 @@ export function SystemUpdateDialog({ open, onOpenChange, onSummaryChange }: Prop
 
   useEffect(() => {
     mounted.current = true
-    void load(false)
-    const interval = window.setInterval(() => void load(false), 5 * 60 * 1000)
     return () => {
       mounted.current = false
-      window.clearInterval(interval)
     }
-  }, [load])
+  }, [])
 
   const active = ACTIVE_STATUSES.has(state?.job?.status ?? '')
-  useEffect(() => {
-    if (!active) return
-    const interval = window.setInterval(() => void load(false), 3000)
-    return () => window.clearInterval(interval)
-  }, [active, load])
+  useForegroundPolling(async (signal) => { await load(false, signal) }, {
+    intervalMs: active ? 3000 : 5 * 60_000,
+    immediate: !active,
+  })
 
   async function checkNow() {
     setChecking(true)

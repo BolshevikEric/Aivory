@@ -39,8 +39,8 @@ export interface SystemUpdateState {
 }
 
 export const systemUpdateApi = {
-  state: (activity: 'foreground' | 'background' = 'background') =>
-    api<SystemUpdateState>('/admin/system-update', { activity }),
+  state: (activity: 'foreground' | 'background' = 'background', signal?: AbortSignal) =>
+    api<SystemUpdateState>('/admin/system-update', { activity, signal }),
   check: () => api<SystemUpdateState>('/admin/system-update/check', { method: 'POST' }),
   start: (version: string) =>
     api<{ job: SystemUpdateJob }>('/admin/system-update/start', {

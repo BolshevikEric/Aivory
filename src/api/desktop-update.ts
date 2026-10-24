@@ -33,7 +33,7 @@ export interface DesktopUpdateState {
 }
 
 export const desktopUpdateApi = {
-  state: () => api<DesktopUpdateState>('/admin/desktop-update', { activity: 'background' }),
+  state: (signal?: AbortSignal) => api<DesktopUpdateState>('/admin/desktop-update', { activity: 'background', signal }),
   check: () => api<DesktopUpdateState>('/admin/desktop-update/check', { method: 'POST', activity: 'background' }),
 }
 

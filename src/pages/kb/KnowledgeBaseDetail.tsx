@@ -41,6 +41,7 @@ import { toastStorageQuotaFull } from '@/lib/quota-toast'
 import { formatRelativeDate, formatBytes, cn } from '@/lib/utils'
 import { fileTypeIcon, fileTypeTileClass } from '@/lib/file-icon'
 import { envNum } from '@/lib/env-config'
+import { useForegroundPolling } from '@/hooks/use-foreground-polling'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initials } from '@/components/ui/avatar.utils'
@@ -147,6 +148,7 @@ export default function KnowledgeBaseDetail() {
   const [workspaceMembersOpen, setWorkspaceMembersOpen] = useState(false)
   const [accessRevoked, setAccessRevoked] = useState(false)
   const loadEpochRef = useRef(0)
+  const fullLoadControllerRef = useRef<AbortController | null>(null)
   const unfilteredSummaryRef = useRef<DocumentSummary | null>(null)
   const uploadControllerRef = useRef<AbortController | null>(null)
   const uploadAttemptRef = useRef(0)
@@ -175,30 +177,35 @@ export default function KnowledgeBaseDetail() {
     }
   }
 
-  // load(silent) refreshes the KB + its docs. Only the FIRST load toggles the
-  // page-level skeleton; the background status poll passes silent=true so the
-  // list refreshes in place without flipping the whole page to "loading…"
-  // every ~2s (which read as a flicker).
-  const load = useCallback(async (silent = false) => {
+  // Explicit loads refresh metadata too; progress probes only fetch documents.
+  const load = useCallback(async (silent = false, signal?: AbortSignal, documentsOnly = false) => {
     if (!id) return
     const epoch = ++loadEpochRef.current
+    if (!documentsOnly) {
+      fullLoadControllerRef.current?.abort()
+      fullLoadControllerRef.current = new AbortController()
+    }
+    const requestSignal = signal ?? fullLoadControllerRef.current!.signal
+    const options = { signal: requestSignal, activity: silent ? 'background' as const : 'foreground' as const }
     if (!silent) {
       setLoading(true)
       setLoadError('')
     }
     try {
       const [current, d, uploaderResult] = await Promise.all([
-        kbsApi.get(id),
+        documentsOnly ? Promise.resolve(null) : kbsApi.get(id, options),
         kbsApi.listDocs(id, {
           search: debouncedSearch,
           uploaded_by_user_id: uploaderID === 'all' ? undefined : uploaderID,
-        }),
-        kbsApi.uploaders(id).then(
+        }, options),
+        documentsOnly ? Promise.resolve(null) : kbsApi.uploaders(id, options).then(
           (rows) => ({ ok: true as const, rows }),
           (error: unknown) => ({ ok: false as const, error }),
         ),
       ])
+      if (requestSignal.aborted) return
       if (
+        uploaderResult &&
         !uploaderResult.ok &&
         uploaderResult.error instanceof ApiError &&
         (uploaderResult.error.status === 403 || uploaderResult.error.status === 404)
@@ -206,15 +213,16 @@ export default function KnowledgeBaseDetail() {
         throw uploaderResult.error
       }
       if (epoch === loadEpochRef.current) {
-        setKB(current)
+        if (current) setKB(current)
         setDocs(d)
         // The uploader list is auxiliary filter metadata. A transient failure
         // must not replace a usable knowledge-base page with a fatal error.
-        if (uploaderResult.ok) setUploaders(uploaderResult.rows)
+        if (uploaderResult?.ok) setUploaders(uploaderResult.rows)
         setAccessRevoked(false)
         setLoadError('')
       }
     } catch (e) {
+      if (requestSignal.aborted) return
       if (epoch === loadEpochRef.current && e instanceof ApiError && (e.status === 403 || e.status === 404)) {
         setKB(null)
         setDocs([])
@@ -244,6 +252,8 @@ export default function KnowledgeBaseDetail() {
         setLoadError(message)
         toast.error(message)
       }
+      // The scheduler backs off transient probe failures and stops on lost access.
+      if (signal) throw e
     } finally {
       if (!silent && epoch === loadEpochRef.current) setLoading(false)
     }
@@ -328,6 +338,10 @@ export default function KnowledgeBaseDetail() {
       return
     }
     void load()
+    return () => {
+      loadEpochRef.current += 1
+      fullLoadControllerRef.current?.abort()
+    }
   }, [canUseKnowledgeBases, load, workspacePolicyPending])
 
   useEffect(() => {
@@ -374,16 +388,14 @@ export default function KnowledgeBaseDetail() {
     }
   }, [loading, uploaderID, uploaders])
 
-  // Poll silently while any document is mid-pipeline.
-  useEffect(() => {
-    if (!id) return
-    const pending = docs.some(
-      (d) => d.status === 'pending' || d.status === 'parsing' || d.status === 'embedding',
-    )
-    if (!pending) return
-    const handle = setInterval(() => void load(true), kbDocStatusPollInterval)
-    return () => clearInterval(handle)
-  }, [docs, id, load])
+  const hasProcessingDocs = docs.some(
+    (d) => d.status === 'pending' || d.status === 'parsing' || d.status === 'embedding',
+  )
+  useForegroundPolling((signal) => load(true, signal, true), {
+    enabled: Boolean(id && canUseKnowledgeBases && !workspacePolicyPending && !loading && hasProcessingDocs),
+    intervalMs: kbDocStatusPollInterval,
+    resourceKey: `${user?.id}:${id}:${debouncedSearch}:${uploaderID}`,
+  })
 
   async function addPasted() {
     if (!id || !canUploadRef.current) return

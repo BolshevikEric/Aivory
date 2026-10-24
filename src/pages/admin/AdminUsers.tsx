@@ -43,6 +43,7 @@ import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/store/auth'
 import { formatDateTime, cn } from '@/lib/utils'
 import { envNum } from '@/lib/env-config'
+import { useForegroundPolling } from '@/hooks/use-foreground-polling'
 import { PanelFallback } from '@/components/ui/panel-fallback'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -135,17 +136,17 @@ export default function AdminUsers() {
   const groupsLoadedRef = useRef(false)
   const loadRequestRef = useRef(0)
 
-  const load = useCallback(async (search: string, p: number, opts?: { silent?: boolean }) => {
+  const load = useCallback(async (search: string, p: number, opts?: { silent?: boolean; signal?: AbortSignal }) => {
     const request = ++loadRequestRef.current
     if (!opts?.silent) setLoading(true)
     try {
       const offset = (p - 1) * PAGE_SIZE
       const activity = opts?.silent ? 'background' : 'foreground'
       const [resp, gs] = await Promise.all([
-        adminApi.users(search, PAGE_SIZE, offset, activity, groupFilter === 'all' ? '' : groupFilter),
+        adminApi.users(search, PAGE_SIZE, offset, activity, groupFilter === 'all' ? '' : groupFilter, opts?.signal),
         groupsLoadedRef.current ? Promise.resolve(null) : adminApi.userGroups(),
       ])
-      if (request !== loadRequestRef.current) return
+      if (opts?.signal?.aborted || request !== loadRequestRef.current) return
       setRows(resp.users)
       setTotal(resp.total)
       if (gs) {
@@ -155,6 +156,8 @@ export default function AdminUsers() {
       const lastPage = Math.max(1, Math.ceil(resp.total / PAGE_SIZE))
       if (p > lastPage) setPage(lastPage)
     } catch (e) {
+      if (opts?.signal?.aborted) return
+      if (opts?.signal) throw e
       if (request === loadRequestRef.current) toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
     } finally {
       if (request === loadRequestRef.current) setLoading(false)
@@ -177,22 +180,19 @@ export default function AdminUsers() {
   // and surface each job's progress text on the badge.
   const [deletionProgress, setDeletionProgress] = useState<Record<string, string>>({})
   const hasDeleting = rows.some((u) => u.status === 'deleting')
-  useEffect(() => {
-    if (!hasDeleting) return
-    const tick = async () => {
-      await load(committedQuery, page, { silent: true })
-      try {
-        const resp = await adminApi.userDeletions('background')
-        setDeletionProgress(
-          Object.fromEntries(resp.jobs.map((j) => [j.user_id, j.status === 'failed' ? `failed: ${j.error ?? ''}` : j.progress])),
-        )
-      } catch {
-        /* polling is best-effort */
-      }
-    }
-    const id = window.setInterval(() => void tick(), 4000)
-    return () => window.clearInterval(id)
-  }, [hasDeleting, committedQuery, page, load])
+  useForegroundPolling(async (signal) => {
+    await load(committedQuery, page, { silent: true, signal })
+    if (signal.aborted) return
+    const resp = await adminApi.userDeletions('background', signal)
+    if (signal.aborted) return
+    setDeletionProgress(
+      Object.fromEntries(resp.jobs.map((j) => [j.user_id, j.status === 'failed' ? `failed: ${j.error ?? ''}` : j.progress])),
+    )
+  }, {
+    enabled: hasDeleting,
+    intervalMs: 4000,
+    resourceKey: `${committedQuery}:${page}:${groupFilter}`,
+  })
 
   async function reload() {
     await load(committedQuery, page)
@@ -325,7 +325,7 @@ export default function AdminUsers() {
     void loadInfo(u)
   }
 
-  async function loadInfo(u: ApiUser, silent = false) {
+  async function loadInfo(u: ApiUser, silent = false, signal?: AbortSignal) {
     const requestID = ++infoRequestRef.current
     if (!silent) {
       setInfoDetails(null)
@@ -333,10 +333,12 @@ export default function AdminUsers() {
       setInfoLoadFailed(false)
     }
     try {
-      const detail = await adminApi.user(u.id, silent ? 'background' : 'foreground')
-      if (requestID !== infoRequestRef.current) return
+      const detail = await adminApi.user(u.id, silent ? 'background' : 'foreground', signal)
+      if (signal?.aborted || requestID !== infoRequestRef.current) return
       setInfoDetails(detail)
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) return
+      if (signal) throw error
       if (requestID !== infoRequestRef.current) return
       if (!silent) setInfoLoadFailed(true)
     } finally {
@@ -344,13 +346,9 @@ export default function AdminUsers() {
     }
   }
 
-  useEffect(() => {
-    if (!infoRow) return
-    const timer = window.setInterval(() => {
-      void loadInfo(infoRow, true)
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [infoRow])
+  useForegroundPolling(async (signal) => {
+    if (infoRow) await loadInfo(infoRow, true, signal)
+  }, { enabled: Boolean(infoRow), intervalMs: 5000, resourceKey: infoRow?.id })
 
   async function submitEdit() {
     if (!editRow) return

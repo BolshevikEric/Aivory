@@ -123,6 +123,11 @@ import type {
 import { envNum } from '@/lib/env-config'
 import type { FeedbackReason, MessageFeedbackInput } from '@/types/chat'
 
+interface ReadOptions {
+  signal?: AbortSignal
+  activity?: RequestActivityMode
+}
+
 export interface AdminAnalyticsParams {
   days?: number
   user?: string
@@ -1023,8 +1028,8 @@ export const conversationsApi = {
     }),
   // Conversation-scoped documents + their ingest status — polled by the composer
   // to show upload/parse progress and block the first send until 'ready'.
-  listDocs: (id: string) =>
-    api<ApiDocument[]>(`/conversations/${encodeURIComponent(id)}/documents`),
+  listDocs: (id: string, options: ReadOptions = {}) =>
+    api<ApiDocument[]>(`/conversations/${encodeURIComponent(id)}/documents`, options),
   // Conversation files drawer (§ conversation files): the authoritative set of
   // files the conversation references, and remove (detach + drop RAG).
   listFiles: (id: string) =>
@@ -1062,20 +1067,20 @@ export const sharedApi = {
 export const kbsApi = {
   list: (workspaceId?: string) =>
     api<ApiKnowledgeBase[]>(`/kbs${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`),
-  get: (id: string) => api<ApiKnowledgeBase>(`/kbs/${encodeURIComponent(id)}`),
+  get: (id: string, options: ReadOptions = {}) => api<ApiKnowledgeBase>(`/kbs/${encodeURIComponent(id)}`, options),
   create: (body: { name: string; description?: string; workspace_id?: string; is_public?: boolean }) =>
     api<ApiKnowledgeBase>('/kbs', { method: 'POST', body }),
   update: (id: string, body: { is_public: boolean }) =>
     api<ApiKnowledgeBase>(`/kbs/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
   remove: (id: string) => api<{ ok: true }>(`/kbs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  listDocs: (id: string, params: { search?: string; uploaded_by_user_id?: string } = {}) => {
+  listDocs: (id: string, params: { search?: string; uploaded_by_user_id?: string } = {}, options: ReadOptions = {}) => {
     const query = new URLSearchParams()
     if (params.search?.trim()) query.set('search', params.search.trim())
     if (params.uploaded_by_user_id?.trim()) query.set('uploaded_by_user_id', params.uploaded_by_user_id.trim())
     const suffix = query.toString() ? `?${query}` : ''
-    return api<ApiDocument[]>(`/kbs/${encodeURIComponent(id)}/documents${suffix}`)
+    return api<ApiDocument[]>(`/kbs/${encodeURIComponent(id)}/documents${suffix}`, options)
   },
-  uploaders: (id: string) => api<ApiKnowledgeBaseUploader[]>(`/kbs/${encodeURIComponent(id)}/uploaders`),
+  uploaders: (id: string, options: ReadOptions = {}) => api<ApiKnowledgeBaseUploader[]>(`/kbs/${encodeURIComponent(id)}/uploaders`, options),
   shares: (id: string) => api<ApiKnowledgeBaseShare[]>(`/kbs/${encodeURIComponent(id)}/shares`),
   shareCandidates: (id: string, search: string) =>
     api<ApiKnowledgeBaseShare[]>(
@@ -1469,13 +1474,14 @@ export const adminApi = {
     offset = 0,
     activity: RequestActivityMode = 'foreground',
     groupId = '',
+    signal?: AbortSignal,
   ) =>
     api<{ users: ApiUser[]; total: number; limit: number; offset: number }>(
       `/admin/users?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}${groupId ? `&group_id=${encodeURIComponent(groupId)}` : ''}`,
-      { activity },
+      { activity, signal },
     ),
-  user: (id: string, activity: RequestActivityMode = 'foreground') =>
-    api<ApiUser>(`/admin/users/${encodeURIComponent(id)}`, { activity }),
+  user: (id: string, activity: RequestActivityMode = 'foreground', signal?: AbortSignal) =>
+    api<ApiUser>(`/admin/users/${encodeURIComponent(id)}`, { activity, signal }),
   /** Successful sign-in audit trail for one user (newest first). */
   userLoginHistory: (id: string, limit = 50, offset = 0) =>
     api<ApiAdminLoginHistoryPage>(
@@ -1501,10 +1507,10 @@ export const adminApi = {
   deleteUser: (id: string) =>
     api<{ ok: true; status?: string }>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Background deletion jobs (§async user delete) — poll while a purge runs. */
-  userDeletions: (activity: RequestActivityMode = 'foreground') =>
+  userDeletions: (activity: RequestActivityMode = 'foreground', signal?: AbortSignal) =>
     api<{ jobs: Array<{ user_id: string; email: string; status: string; progress: string; error?: string }> }>(
       '/admin/users/deletions',
-      { activity },
+      { activity, signal },
     ),
   /** Reset (turn off) a user's 2FA — recovery for a lost authenticator (§ 2FA). */
   disableUser2fa: (id: string) =>
@@ -1847,8 +1853,8 @@ export const adminApi = {
       method: 'POST',
       body: { include_files: includeFiles },
     }),
-  backupExportState: (activity: RequestActivityMode = 'foreground') =>
-    api<BackupExportState>('/admin/backup/export-jobs', { activity }),
+  backupExportState: (activity: RequestActivityMode = 'foreground', signal?: AbortSignal) =>
+    api<BackupExportState>('/admin/backup/export-jobs', { activity, signal }),
   backupArchiveDownload: (name: string): Promise<Blob> =>
     withRequestActivity(async () => {
       assertNetworkOnline()
@@ -1911,8 +1917,8 @@ export const adminApi = {
 
   // Vector index maintenance. Checks DB chunks against Qdrant and can rebuild
   // missing/empty vectors asynchronously.
-  vectorMaintenanceState: (activity: RequestActivityMode = 'foreground') =>
-    api<VectorMaintenanceState>('/admin/vectors/jobs', { activity }),
+  vectorMaintenanceState: (activity: RequestActivityMode = 'foreground', signal?: AbortSignal) =>
+    api<VectorMaintenanceState>('/admin/vectors/jobs', { activity, signal }),
   vectorCheckStart: () => api<VectorMaintenanceState>('/admin/vectors/check', { method: 'POST' }),
   vectorRebuildMissingStart: () =>
     api<VectorMaintenanceState>('/admin/vectors/rebuild-missing', { method: 'POST' }),

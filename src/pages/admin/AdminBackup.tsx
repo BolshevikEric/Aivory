@@ -44,6 +44,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/store/auth'
 import { envNum } from '@/lib/env-config'
+import { useForegroundPolling } from '@/hooks/use-foreground-polling'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 // The literal an admin must type to authorise a destructive restore. Kept as a
@@ -181,15 +182,17 @@ export default function AdminBackup() {
   const [cfgConfirmOpen, setCfgConfirmOpen] = useState(false)
   const [importingConfig, setImportingConfig] = useState(false)
 
-  const refreshExportState = useCallback(async () => {
-    const state = normalizeBackupState(await adminApi.backupExportState('background'))
+  const refreshExportState = useCallback(async (signal: AbortSignal) => {
+    const state = normalizeBackupState(await adminApi.backupExportState('background', signal))
+    if (signal.aborted) return
     setRunningExport(state.running)
     setArchives(state.archives)
     setRecentJobs(state.jobs)
   }, [])
 
-  const refreshVectorState = useCallback(async () => {
-    const state = normalizeVectorState(await adminApi.vectorMaintenanceState('background'))
+  const refreshVectorState = useCallback(async (signal: AbortSignal) => {
+    const state = normalizeVectorState(await adminApi.vectorMaintenanceState('background', signal))
+    if (signal.aborted) return
     setRunningVector(state.running)
     setVectorJobs(state.jobs)
   }, [])
@@ -225,25 +228,17 @@ export default function AdminBackup() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!runningExportID) return
-    const timer = window.setInterval(() => {
-      void refreshExportState().catch(() => {
-        /* keep polling; transient admin requests can fail during deploys */
-      })
-    }, ADMIN_BACKUP_EXPORT_JOB_POLL_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [refreshExportState, runningExportID])
+  useForegroundPolling(refreshExportState, {
+    enabled: Boolean(runningExportID),
+    intervalMs: ADMIN_BACKUP_EXPORT_JOB_POLL_INTERVAL_MS,
+    resourceKey: runningExportID,
+  })
 
-  useEffect(() => {
-    if (!runningVectorID) return
-    const timer = window.setInterval(() => {
-      void refreshVectorState().catch(() => {
-        /* keep polling; the job continues server-side */
-      })
-    }, ADMIN_VECTOR_MAINTENANCE_JOB_POLL_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [refreshVectorState, runningVectorID])
+  useForegroundPolling(refreshVectorState, {
+    enabled: Boolean(runningVectorID),
+    intervalMs: ADMIN_VECTOR_MAINTENANCE_JOB_POLL_INTERVAL_MS,
+    resourceKey: runningVectorID,
+  })
 
   async function onExport() {
     if (runningExport || runningVector) return

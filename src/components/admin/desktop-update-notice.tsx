@@ -3,19 +3,22 @@ import { Link, useLocation } from 'react-router-dom'
 import { MonitorUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { desktopUpdateApi, type DesktopUpdateState } from '@/api/desktop-update'
+import { useForegroundPolling } from '@/hooks/use-foreground-polling'
 
 export function DesktopUpdateNotice() {
   const { t } = useTranslation('admin')
   const { pathname } = useLocation()
   const [state, setState] = useState<DesktopUpdateState | null>(null)
+  useForegroundPolling(async (signal) => {
+    const next = await desktopUpdateApi.state(signal)
+    if (!signal.aborted) setState(next)
+  }, { intervalMs: 5 * 60_000, immediate: true })
 
   useEffect(() => {
     let active = true
     const load = () => { void desktopUpdateApi.state().then((next) => { if (active) setState(next) }).catch(() => {}) }
-    load()
-    const timer = window.setInterval(load, 5 * 60 * 1000)
     window.addEventListener('aivory:desktop-update-changed', load)
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('aivory:desktop-update-changed', load) }
+    return () => { active = false; window.removeEventListener('aivory:desktop-update-changed', load) }
   }, [])
 
   if (!state?.update_available || pathname === '/admin/settings/desktop') return null

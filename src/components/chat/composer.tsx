@@ -55,7 +55,7 @@ import {
   type ToolModeCapabilities,
   visibleToolModes,
 } from '@/lib/tool-mode'
-import { DOCUMENT_PARSER_NOT_CONFIGURED } from '@/lib/document-errors'
+import { useAttachmentIngest } from '@/hooks/use-attachment-ingest'
 import { conversationDraftErrorMessage } from '@/lib/pending-conversation'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -307,10 +307,6 @@ function browserSpeechErrorKey(error: BrowserSpeechError): string {
 const DEFAULT_UPLOAD_LIMITS = { max_image_bytes: 5 * 1024 * 1024, max_file_bytes: 50 * 1024 * 1024 }
 let uploadLimitsCache: Promise<{ max_image_bytes: number; max_file_bytes: number }> | null = null
 
-// INGEST_POLL_MS: status poll cadence. Do not fake-ready after a timer: the
-// send button must stay blocked until parsing, embedding and vector upsert
-// really finished, otherwise the model falls back to tool-side PDF parsing.
-const INGEST_POLL_MS = envNum('VITE_AIVORY_INGEST_POLL_MS', 1200)
 function getUploadLimits() {
   if (!uploadLimitsCache) {
     uploadLimitsCache = api<{ max_image_bytes?: number; max_file_bytes?: number }>('/me/upload-policy')
@@ -324,6 +320,8 @@ function getUploadLimits() {
 }
 
 interface PendingAttachment extends Attachment {
+  /** Wait for a retry to be accepted before probing its new ingest status. */
+  ingestRetrying?: boolean
   /**
    * Path of this file inside an uploaded folder ("my-project/src/main.ts").
    * Empty/absent for a single-file upload. The chip rail groups by its first
@@ -859,6 +857,7 @@ export function Composer({
   const valueRef = useRef(value)
   const draftScopeRef = useRef(draftScope)
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  useAttachmentIngest(attachments, setAttachments, canUploadFiles, `${user?.id ?? ''}:${conversationId ?? draftScope ?? ''}`)
   const attachmentsRef = useRef<PendingAttachment[]>([])
   const attachmentScopeRef = useRef(conversationId)
   const [restoringAttachments, setRestoringAttachments] = useState(Boolean(conversationId))
@@ -1046,10 +1045,8 @@ export function Composer({
   const submittingRef = useRef(false)
   // §2.7 re-entry guard for the long-draft → .txt conversion in handleSubmit.
   const convertingRef = useRef(false)
-  // Active ingest-status pollers, keyed by attachment id, so they can be
-  // cancelled on remove / submit / unmount.
-  const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const activeUploadControllers = useRef<Map<string, AbortController>>(new Map())
+  const ingestRetries = useRef(new Set<string>())
   // Local ids explicitly removed while an upload is still in flight. If the
   // request completes after removal, immediately delete the backend file/doc.
   const removedAttachmentIds = useRef<Set<string>>(new Set())
@@ -1234,13 +1231,6 @@ export function Composer({
     return () => window.removeEventListener('paste', onWindowPaste)
   }, [canUploadFiles])
   useEffect(() => {
-    const timers = pollTimers.current
-    return () => {
-      timers.forEach((tm) => clearTimeout(tm))
-      timers.clear()
-    }
-  }, [])
-  useEffect(() => {
     attachmentsRef.current = attachments
   }, [attachments])
   useEffect(() => {
@@ -1249,8 +1239,6 @@ export function Composer({
     setDragOver(false)
     activeUploadControllers.current.forEach((controller) => controller.abort())
     activeUploadControllers.current.clear()
-    pollTimers.current.forEach((timer) => clearTimeout(timer))
-    pollTimers.current.clear()
     draftFilesLoadedRef.current = false
     setAttachments((items) => {
       if (items.length === 0) return items
@@ -1922,8 +1910,6 @@ export function Composer({
     updateValue('')
     // Queued attachments are reserved for the future turn just like immediately
     // sent files: a late draft restore must not add them back into the composer.
-    pollTimers.current.forEach((timer) => clearTimeout(timer))
-    pollTimers.current.clear()
     committed.forEach((attachment) => {
       committedAttachmentIds.current.add(attachment.id)
       markFileCommitted(attachment.id)
@@ -2182,9 +2168,6 @@ export function Composer({
           .filter((item) => item.id !== res.id)
           .map((item) => (item.id === local.id ? updated : item)),
       )
-      if (res.document_id && scopeId) {
-        startIngestPoll(scopeId, res.document_id, res.id)
-      }
       return updated
     } catch (e) {
       setAttachments((s) => {
@@ -2217,44 +2200,6 @@ export function Composer({
     }
   }
 
-  const startIngestPoll = useCallback((scopeId: string, docId: string, attId: string) => {
-    const previous = pollTimers.current.get(attId)
-    if (previous) clearTimeout(previous)
-    const tick = async () => {
-      pollTimers.current.delete(attId)
-      let done = false
-      try {
-        const docs = await conversationsApi.listDocs(scopeId)
-        const doc = docs.find((dd) => dd.id === docId)
-        if (doc) {
-          if (doc.status === 'ready') {
-            setAttachments((s) => s.map((a) => (a.id === attId ? { ...a, ingest: 'ready' } : a)))
-            done = true
-          } else if (doc.status === 'failed') {
-            const parserMissing = doc.error_code === DOCUMENT_PARSER_NOT_CONFIGURED
-            setAttachments((s) => s.map((a) => (
-              a.id === attId ? { ...a, ingest: 'failed', ingestErrorCode: doc.error_code } : a
-            )))
-            toast.error(
-              parserMissing
-                ? t('composer.parserNotConfiguredToast', { defaultValue: 'Document parsing (OCR) is not configured on this server' })
-                : t('composer.ingestFailed', { defaultValue: 'Could not read this file' }),
-            )
-            done = true
-          } else {
-            const ing: 'embedding' | 'parsing' = doc.status === 'embedding' ? 'embedding' : 'parsing'
-            setAttachments((s) => s.map((a) => (a.id === attId ? { ...a, ingest: ing } : a)))
-          }
-        }
-      } catch {
-        /* transient network error — keep polling */
-      }
-      if (done) return
-      pollTimers.current.set(attId, setTimeout(() => void tick(), INGEST_POLL_MS))
-    }
-    pollTimers.current.set(attId, setTimeout(() => void tick(), INGEST_POLL_MS))
-  }, [t])
-
   // The backend is authoritative for unsent attachments. Rehydrate composer
   // drafts after refresh and resume status polling; committed historical files
   // are excluded by the endpoint and remain available in the files drawer only.
@@ -2262,8 +2207,6 @@ export function Composer({
     const previousScope = attachmentScopeRef.current
     attachmentScopeRef.current = conversationId
     if (previousScope && previousScope !== conversationId) {
-      pollTimers.current.forEach((tm) => clearTimeout(tm))
-      pollTimers.current.clear()
       committedAttachmentIds.current.clear()
       setAttachments([])
     }
@@ -2307,17 +2250,6 @@ export function Composer({
             ),
           ]
         })
-        for (const file of files) {
-          if (
-            file.document_id &&
-            file.document_status !== 'ready' &&
-            file.document_status !== 'failed'
-          ) {
-            const existing = pollTimers.current.get(file.id)
-            if (existing) clearTimeout(existing)
-            startIngestPoll(conversationId, file.document_id, file.id)
-          }
-        }
       })
       .catch((error) => {
         if (!cancelled) {
@@ -2333,27 +2265,26 @@ export function Composer({
     return () => {
       cancelled = true
     }
-  }, [canUploadFiles, conversationId, startIngestPoll, t])
+  }, [canUploadFiles, conversationId, t])
 
   async function retryAttachmentIngest(a: AttachmentChipAttachment) {
-    if (!a.uploadScopeId || !a.documentId) return
-    const tm = pollTimers.current.get(a.id)
-    if (tm) {
-      clearTimeout(tm)
-      pollTimers.current.delete(a.id)
-    }
-    setAttachments((s) => s.map((x) => (x.id === a.id ? { ...x, ingest: 'parsing', ingestErrorCode: undefined } : x)))
+    if (!a.uploadScopeId || !a.documentId || ingestRetries.current.has(a.id)) return
+    ingestRetries.current.add(a.id)
+    setAttachments((s) => s.map((x) => (x.id === a.id
+      ? { ...x, ingest: 'parsing', ingestErrorCode: undefined, ingestRetrying: true } : x)))
     try {
       await conversationsApi.retryDoc(a.uploadScopeId, a.documentId)
       if (!attachmentsRef.current.some((x) => x.id === a.id)) return
-      startIngestPoll(a.uploadScopeId, a.documentId, a.id)
+      setAttachments((s) => s.map((x) => (x.id === a.id ? { ...x, ingestRetrying: false } : x)))
     } catch (e) {
       if (!attachmentsRef.current.some((x) => x.id === a.id)) return
-      setAttachments((s) => s.map((x) => (x.id === a.id ? { ...x, ingest: 'failed' } : x)))
+      setAttachments((s) => s.map((x) => (x.id === a.id ? { ...x, ingest: 'failed', ingestRetrying: false } : x)))
       toast.error(
         t('composer.ingestRetryFailed', { defaultValue: 'Retry failed' }),
         e instanceof Error ? e.message : undefined,
       )
+    } finally {
+      ingestRetries.current.delete(a.id)
     }
   }
 
@@ -2703,11 +2634,6 @@ export function Composer({
   }
 
   function removeAttachment(id: string) {
-    const tm = pollTimers.current.get(id)
-    if (tm) {
-      clearTimeout(tm)
-      pollTimers.current.delete(id)
-    }
     const target = attachments.find((a) => a.id === id)
     if (target?.uploading) {
       removedAttachmentIds.current.add(id)
