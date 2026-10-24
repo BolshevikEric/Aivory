@@ -420,7 +420,6 @@ Map providers are selected in **Admin → Tools → Maps**. `map_provider` defau
 | `AIVORY_API_BACKUP_EXPORT_JOB_HISTORY_RETENTION` | `int` | `20` | `api/admin_backup_async.go:26` | Number of past backup-export job records kept in the in-memory history before the oldest are pruned. |
 | `AIVORY_API_BACKUP_EXPORT_JOB_RUNTIME` | `duration` | `12*time.Hour` | `api/admin_backup_async.go:27` | Maximum wall-clock runtime allowed for a background backup-export job before it is cancelled. |
 | `AIVORY_API_CONFIG_IMPORT_MULTIPART_MEMORY_BUFFER` | `int64` | `16<<20` | `api/admin_backup_handlers.go:25` | In-memory buffer for parsing the multipart admin-config import upload; larger parts spill to temp files. |
-| `AIVORY_API_BACKUP_IMPORT_MULTIPART_MEMORY_BUFFER` | `int64` | `32<<20` | `api/admin_backup_handlers.go:26` | In-memory buffer for parsing the multipart full-backup import upload; larger parts spill to temp files. |
 | `AIVORY_API_MAX_CONFIG_SIZE` | `int64` | `512<<20` | `api/admin_backup_handlers.go:373` | Maximum request-body size accepted when importing an admin-configuration archive. |
 | `AIVORY_API_QDRANT_ARCHIVE_REQUEST_TIMEOUT` | `duration` | `5*time.Minute` | `api/admin_backup_qdrant.go:26` | Per-request HTTP timeout for Qdrant calls while exporting or importing a backup archive. |
 | `AIVORY_API_QDRANT_EXPORT_SCROLL_PAGE_SIZE` | `int` | `256` | `api/admin_backup_qdrant.go:28` | Points fetched per /points/scroll page when exporting a Qdrant collection to the archive. |

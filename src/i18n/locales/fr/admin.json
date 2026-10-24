@@ -1966,6 +1966,17 @@
       }
     },
     "import": {
+      "uploading": "Envoi de la sauvegarde",
+      "restoring": "Vérification et restauration",
+      "uploadBytes": "{{loaded}} / {{total}} envoyés",
+      "restoringHint": "Envoi terminé. Le serveur vérifie l’archive et restaure les données. Cela peut prendre du temps ; gardez cette page ouverte.",
+      "reconnecting": "Impossible de récupérer l’état de la tâche. Reconnexion en cours. La restauration peut continuer sur le serveur ; ne relancez pas l’import.",
+      "sizeLimit": "Taille maximale de l’archive : {{limit}}. Les envois par blocs sont pris en charge.",
+      "tooLarge": "L’archive dépasse la limite du serveur de {{limit}}. Choisissez une archive plus petite ou ajustez MAX_BACKUP_BYTES.",
+      "requestTooLarge": "Le serveur ou le proxy a refusé l’envoi (413). Vérifiez la limite de taille des requêtes Nginx/CDN.",
+      "storageFull": "Le disque de données du serveur est plein ou son quota est épuisé. Libérez de l’espace et réessayez.",
+      "connectionFailed": "La requête n’a pas abouti. Vérifiez votre connexion et réessayez.",
+      "statusLost": "Le résultat de la restauration est inconnu. Le serveur a peut-être redémarré ou nécessite une récupération. Vérifiez les journaux du serveur et de récupération avant de réimporter pour éviter d’écraser les données deux fois.",
       "title": "Importer et restaurer",
       "lead": "Téléversez une archive exportée ci-dessus pour la charger dans ce déploiement.",
       "warning": "Remplace TOUTES les données. Irréversible — sauvegardez d'abord.",

@@ -23,6 +23,7 @@ import {
   type BackupExportJob,
   type BackupExportState,
   type BackupImportResult,
+  type UploadProgress,
   type VectorAuditReport,
   type VectorMaintenanceJob,
   type VectorMaintenanceState,
@@ -85,6 +86,7 @@ function tableRowCount(tables: Record<string, number> | null | undefined): numbe
 
 function normalizeBackupState(state: BackupExportState | null | undefined): BackupExportState {
   return {
+    max_import_bytes: state?.max_import_bytes,
     running: state?.running ?? null,
     archives: safeArray(state?.archives),
     jobs: safeArray(state?.jobs),
@@ -171,6 +173,12 @@ export default function AdminBackup() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [importing, setImporting] = useState(false)
+  const [maxImportBytes, setMaxImportBytes] = useState<number | undefined>()
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ loaded: 0 })
+  const [importPhase, setImportPhase] = useState<'uploading' | 'restoring'>('uploading')
+  const [importReconnecting, setImportReconnecting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importUncertain, setImportUncertain] = useState(false)
   const [result, setResult] = useState<BackupImportResult | null>(null)
 
   // Configuration archive export/import. Session-safe, so no typed confirmation
@@ -188,6 +196,7 @@ export default function AdminBackup() {
     setRunningExport(state.running)
     setArchives(state.archives)
     setRecentJobs(state.jobs)
+    setMaxImportBytes(state.max_import_bytes)
   }, [])
 
   const refreshVectorState = useCallback(async (signal: AbortSignal) => {
@@ -207,6 +216,7 @@ export default function AdminBackup() {
           setRunningExport(state.running)
           setArchives(state.archives)
           setRecentJobs(state.jobs)
+          setMaxImportBytes(state.max_import_bytes)
         }
         if (vectorRes.status === 'fulfilled') {
           const state = normalizeVectorState(vectorRes.value)
@@ -239,6 +249,16 @@ export default function AdminBackup() {
     intervalMs: ADMIN_VECTOR_MAINTENANCE_JOB_POLL_INTERVAL_MS,
     resourceKey: runningVectorID,
   })
+
+  useEffect(() => {
+    if (!importing) return
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [importing])
 
   async function onExport() {
     if (runningExport || runningVector) return
@@ -294,13 +314,28 @@ export default function AdminBackup() {
   function onPick(e: ChangeEvent<HTMLInputElement>) {
     setPicked(e.target.files?.[0] ?? null)
     setResult(null)
+    setImportError(null)
   }
 
   async function onConfirmImport() {
-    if (!picked || confirmText !== CONFIRM_WORD || runningExport || runningVector) return
+    if (!picked || confirmText !== CONFIRM_WORD || runningExport || runningVector || importing || importUncertain) return
+    if (maxImportBytes && picked.size > maxImportBytes) {
+      setImportError(t('admin:backup.import.tooLarge', { limit: formatBytes(maxImportBytes) }))
+      return
+    }
     setImporting(true)
+    setResult(null)
+    setImportError(null)
+    setImportPhase('uploading')
+    setImportReconnecting(false)
+    setUploadProgress({ loaded: 0, total: picked.size, percent: 0 })
+    let uploaded = false
     try {
-      const res = await adminApi.backupImport(picked)
+      const res = await adminApi.backupImport(picked, {
+        onProgress: setUploadProgress,
+        onUploaded: () => { uploaded = true; setImportPhase('restoring') },
+        onReconnecting: setImportReconnecting,
+      })
       setResult(res)
       setConfirmOpen(false)
       toast.success(t('admin:backup.import.done'))
@@ -311,7 +346,16 @@ export default function AdminBackup() {
         void logout().finally(() => navigate('/login', { replace: true }))
       }, 2600)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      let message = e instanceof ApiError ? e.message : t('admin:backup.import.connectionFailed')
+      if (e instanceof ApiError && e.status === 413) message = t('admin:backup.import.requestTooLarge')
+      if (e instanceof ApiError && e.status === 507) message = t('admin:backup.import.storageFull')
+      const code = e instanceof ApiError ? (e.body as { code?: string } | null)?.code : undefined
+      if (uploaded && (!(e instanceof ApiError) || e.status === 0 || e.status === 404 || code === 'backup_restore_recovery_required')) {
+        message = t('admin:backup.import.statusLost')
+        setImportUncertain(true)
+      }
+      setImportError(message)
+      toast.error(message)
     } finally {
       setImporting(false)
     }
@@ -401,7 +445,7 @@ export default function AdminBackup() {
   const vectorReport = normalizeVectorReport(runningVector?.report ?? latestVectorJob?.report)
   const vectorMissing = vectorReport ? vectorReport.missing + vectorReport.empty : 0
   const vectorBusy = Boolean(runningVector)
-  const fullBackupBusy = exportBusy || vectorBusy
+  const fullBackupBusy = exportBusy || vectorBusy || importing
   const failedVectorJob = !runningVector && latestVectorJob?.status === 'failed' ? latestVectorJob : null
 
   return (
@@ -817,9 +861,10 @@ export default function AdminBackup() {
             <Button
               size="sm"
               variant="destructive"
-              disabled={!picked || fullBackupBusy}
+              disabled={!picked || fullBackupBusy || importUncertain || Boolean(maxImportBytes && picked.size > maxImportBytes)}
               onClick={() => {
                 setConfirmText('')
+                setImportError(null)
                 setConfirmOpen(true)
               }}
               leadingIcon={<Upload size={14} aria-hidden />}
@@ -827,6 +872,19 @@ export default function AdminBackup() {
               {t('admin:backup.import.action')}
             </Button>
           </div>
+          {maxImportBytes && (
+            <p className="text-xs text-[var(--color-fg-muted)]">
+              {t('admin:backup.import.sizeLimit', { limit: formatBytes(maxImportBytes) })}
+            </p>
+          )}
+          {picked && maxImportBytes && picked.size > maxImportBytes && (
+            <p role="alert" className="text-sm text-[var(--color-danger)]">
+              {t('admin:backup.import.tooLarge', { limit: formatBytes(maxImportBytes) })}
+            </p>
+          )}
+          {importError && !confirmOpen && (
+            <p role="alert" className="text-sm text-[var(--color-danger)]">{importError}</p>
+          )}
           {result && (
             <div className="mt-5 rounded-[8px] bg-[var(--color-success-soft)] p-4" role="status" aria-live="polite">
               <div className="flex items-center gap-2">
@@ -906,7 +964,7 @@ export default function AdminBackup() {
       </Dialog>
 
       <Dialog open={confirmOpen} onOpenChange={(o) => !importing && setConfirmOpen(o)}>
-        <DialogContent size="sm">
+        <DialogContent size="sm" closeDisabled={importing}>
           <DialogHeader>
             <DialogTitle>{t('admin:backup.confirm.title')}</DialogTitle>
             <DialogDescription>{t('admin:backup.confirm.lead')}</DialogDescription>
@@ -919,11 +977,44 @@ export default function AdminBackup() {
               className="mt-3"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
+              disabled={importing || importUncertain}
+              aria-label={t('admin:backup.confirm.instruction', { word: CONFIRM_WORD })}
               placeholder={CONFIRM_WORD}
               autoFocus
               autoComplete="off"
               spellCheck={false}
             />
+            {importing && (
+              <div className="mt-5 space-y-3" aria-busy="true">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <p id="backup-import-progress-label" role="status" className="font-medium text-[var(--color-fg)]">
+                    {t(importPhase === 'restoring' ? 'admin:backup.import.restoring' : 'admin:backup.import.uploading')}
+                  </p>
+                  {importPhase === 'uploading' && uploadProgress.percent !== undefined && (
+                    <span className="shrink-0 tabular-nums text-[var(--color-fg-muted)]">{uploadProgress.percent}%</span>
+                  )}
+                </div>
+                <div
+                  role="progressbar"
+                  aria-labelledby="backup-import-progress-label"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={importPhase === 'uploading' ? uploadProgress.percent : undefined}
+                  className="h-1.5 overflow-hidden rounded-full bg-[var(--color-border)]"
+                >
+                  <div
+                    className={`h-full rounded-full bg-[var(--color-accent)] ${importPhase === 'restoring' ? 'w-full motion-safe:animate-pulse' : 'transition-[width] duration-200 motion-reduce:transition-none'}`}
+                    style={importPhase === 'uploading' ? { width: `${uploadProgress.percent ?? 0}%` } : undefined}
+                  />
+                </div>
+                <p className="text-xs leading-relaxed text-[var(--color-fg-muted)]">
+                  {importPhase === 'uploading'
+                    ? t('admin:backup.import.uploadBytes', { loaded: formatBytes(uploadProgress.loaded), total: formatBytes(uploadProgress.total ?? picked?.size ?? 0) })
+                    : t(importReconnecting ? 'admin:backup.import.reconnecting' : 'admin:backup.import.restoringHint')}
+                </p>
+              </div>
+            )}
+            {importError && <p role="alert" className="mt-4 text-sm leading-relaxed text-[var(--color-danger)]">{importError}</p>}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={importing}>
@@ -933,7 +1024,7 @@ export default function AdminBackup() {
               variant="destructive"
               onClick={onConfirmImport}
               loading={importing}
-              disabled={confirmText !== CONFIRM_WORD || Boolean(runningExport) || Boolean(runningVector)}
+              disabled={importUncertain || confirmText !== CONFIRM_WORD || Boolean(runningExport) || Boolean(runningVector)}
             >
               {t('admin:backup.confirm.action')}
             </Button>

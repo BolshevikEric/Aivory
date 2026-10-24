@@ -68,6 +68,11 @@ func publicSiteStatus(d Deps, w http.ResponseWriter, _ *http.Request) {
 // (including public shares, files and map proxies) is closed by default.
 func siteAccessExempt(r *http.Request) bool {
 	p := r.URL.Path
+	// A restore may import a closed-site setting and replace all login sessions.
+	// Job status still requires its dedicated capability in the route handler.
+	if r.Method == http.MethodGet && strings.HasPrefix(p, "/api/public/backup-import-jobs/") {
+		return true
+	}
 	if strings.HasPrefix(p, "/api/auth/") {
 		return p != "/api/auth/register"
 	}

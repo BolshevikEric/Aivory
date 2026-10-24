@@ -26,7 +26,6 @@ import (
 // Tunable knobs — envcfg overrides; defaults preserve original behaviour.
 var (
 	configImportMultipartMemoryBuffer = envcfg.Int64("AIVORY_API_CONFIG_IMPORT_MULTIPART_MEMORY_BUFFER", 16<<20)
-	backupImportMultipartMemoryBuffer = envcfg.Int64("AIVORY_API_BACKUP_IMPORT_MULTIPART_MEMORY_BUFFER", 32<<20)
 	errInvalidPaymentConfigArchive    = errors.New("invalid payment configuration in config archive")
 	errInvalidOAuthConfigArchive      = errors.New("invalid OAuth configuration in config archive")
 	errInvalidBillingConfigArchive    = errors.New("invalid billing configuration in config archive")
@@ -598,7 +597,6 @@ func importConfigAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 // an explicit `confirm=REPLACE` form field (the UI sends it after a typed
 // confirmation).
 func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	if running := adminBackupExports.running(); running != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":   "backup export already running",
@@ -613,36 +611,36 @@ func importBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	// Hard cap on total upload size to prevent DoS via huge archives (H-6). Full
-	// Docker migration archives can legitimately be large once Qdrant vectors are
-	// included, so operators can raise/lower it with MAX_BACKUP_BYTES.
-	maxBackupSize := d.Config.MaxBackupBytes
-	if maxBackupSize <= 0 {
-		maxBackupSize = 20 * 1024 * 1024 * 1024
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxBackupSize)
-	// Large parts stream to temp files automatically. 32 MiB stays in memory.
-	if err := r.ParseMultipartForm(backupImportMultipartMemoryBuffer); err != nil {
-		if err.Error() == "http: request body too large" {
-			http.Error(w, fmt.Sprintf("backup file too large (max %s)", humanBackupBytes(maxBackupSize)), http.StatusRequestEntityTooLarge)
-			return
-		}
-		writeError(w, http.StatusBadRequest, errors.New("invalid multipart form"))
+	if err := prepareBackupImportResponse(w); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if r.FormValue("confirm") != "REPLACE" {
-		writeError(w, http.StatusBadRequest, errors.New("import requires confirm=REPLACE"))
-		return
-	}
-	file, header, err := r.FormFile("file")
+	file, size, err := receiveBackupUpload(d, w, r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("missing archive file"))
+		writeBackupUploadError(w, err)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+	}()
+	restoreUploadedBackupAdmin(d, w, r, file, size)
+}
 
-	// multipart.File is an io.ReaderAt + io.Seeker, exactly what zip.NewReader needs.
-	zr, err := zip.NewReader(file, header.Size)
+// Both the legacy direct upload and the asynchronous import use the same
+// validation, commit reconciliation and recovery/rollback implementation.
+func restoreUploadedBackupAdmin(d Deps, w http.ResponseWriter, r *http.Request, file *os.File, size int64) {
+	ctx := r.Context()
+	if !backupRestoreMu.TryLock() {
+		writeError(w, http.StatusConflict, errors.New("backup import already running"))
+		return
+	}
+	defer backupRestoreMu.Unlock()
+	if adminBackupExports.running() != nil || adminVectorMaintenance.running() != nil {
+		writeError(w, http.StatusConflict, errors.New("backup export or vector maintenance already running"))
+		return
+	}
+	zr, err := zip.NewReader(file, size)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("not a valid backup archive: %w", err))
 		return
@@ -2496,28 +2494,44 @@ func validateImportedContextCompactionModel(ctx context.Context, ex store.RowExe
 // normalizeConversationRAGModeArchiveRows prevents a legacy full backup from
 // restoring the removed model-driven document-search mode. The rag_mode column
 // remains because auto and inject are still supported.
+// Conversations can be a very large table. Normalize one row at a time so a
+// large migration never needs a second, full-table copy in memory.
 func normalizeConversationRAGModeArchiveRows(r io.Reader) (io.Reader, error) {
-	var out bytes.Buffer
-	dec := json.NewDecoder(r)
-	enc := json.NewEncoder(&out)
-	for {
-		var row map[string]json.RawMessage
-		if err := dec.Decode(&row); err == io.EOF {
-			return bytes.NewReader(out.Bytes()), nil
-		} else if err != nil {
-			return nil, fmt.Errorf("decode conversations row: %w", err)
-		}
-		mode, present, err := backupStringField(row, "rag_mode")
-		if err != nil {
-			return nil, fmt.Errorf("invalid conversations.rag_mode: %w", err)
-		}
-		if present {
-			row["rag_mode"], _ = json.Marshal(store.NormalizeConversationRAGMode(mode))
-		}
-		if err := enc.Encode(row); err != nil {
-			return nil, fmt.Errorf("encode conversations row: %w", err)
-		}
+	return &backupConversationReader{dec: json.NewDecoder(r)}, nil
+}
+
+type backupConversationReader struct {
+	dec     *json.Decoder
+	pending bytes.Reader
+}
+
+func (r *backupConversationReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
 	}
+	if r.pending.Len() > 0 {
+		return r.pending.Read(p)
+	}
+	var row map[string]json.RawMessage
+	if err := r.dec.Decode(&row); err != nil {
+		if err == io.EOF {
+			return 0, io.EOF
+		}
+		return 0, fmt.Errorf("decode conversations row: %w", err)
+	}
+	mode, present, err := backupStringField(row, "rag_mode")
+	if err != nil {
+		return 0, fmt.Errorf("invalid conversations.rag_mode: %w", err)
+	}
+	if present {
+		row["rag_mode"], _ = json.Marshal(store.NormalizeConversationRAGMode(mode))
+	}
+	data, err := json.Marshal(row)
+	if err != nil {
+		return 0, fmt.Errorf("encode conversations row: %w", err)
+	}
+	r.pending.Reset(append(data, '\n'))
+	return r.pending.Read(p)
 }
 
 // normalizeLegacyUserGroupPriceArchiveRows upgrades both previous price shapes:

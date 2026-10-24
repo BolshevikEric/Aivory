@@ -338,4 +338,67 @@ partial compensation by checking which recorded directories still exist.
 Remove the journals and restart only after rows, files and vectors agree.
 Simply deleting a journal does not resolve an interrupted restore.
 
-Backup import accepts up to `MAX_BACKUP_BYTES` bytes (default 20 GiB).
+Backup import accepts up to `MAX_BACKUP_BYTES` **archive bytes** (default 20 GiB;
+independent of multipart overhead). The UI checks the configured limit before
+upload and sends the archive sequentially in chunks of at most **4 MiB**, with
+real byte/percentage progress. A failed chunk is retried at the same offset;
+the server checks the previous chunk's digest to prevent duplicate appends.
+If both an upload and its cleanup lose the network, retrying with the same
+selected file on the same page reuses the job ID and acknowledged offset.
+Once all chunks are acknowledged, a short request starts a background restore.
+The page polls for the result and shows validation/restoration separately from
+upload progress. Upload reaching 100% does not mean restoration succeeded.
+
+This avoids a single archive exceeding Cloudflare Free/Pro's usual 100 MB
+request limit, and avoids waiting for the entire restore in one HTTP request.
+Older service workers forwarded every request through `respondWith(fetch(...))`.
+An upload or restore response taking longer than Chromium's default 5-minute
+event deadline could be interrupted even without Cloudflare and with Nginx
+timeouts set to 600 seconds. The worker now intercepts only private file reads
+to bypass old HTTP caches; uploads, restores, exports and event streams use the
+browser's network stack directly. Refresh after upgrading to activate the new
+worker. To diagnose an old deployment, enable **Bypass for network** under
+DevTools → Application → Service Workers and compare behavior. Confirm the
+previous restore's outcome before submitting another import.
+
+Effective origin-proxy timeouts still apply; the API server's default write
+timeout is 90 minutes. Inspect the failing request's status and proxy/API
+logs to identify the layer. Cloudflare 413 means the request was too large;
+524 means the origin response/write timed out. Raising `MAX_BACKUP_BYTES`
+alone does not change proxy limits. Qdrant archive operations also have a
+**per-request** 5-minute default timeout
+(`AIVORY_API_QDRANT_ARCHIVE_REQUEST_TIMEOUT`), independent of the total restore
+runtime. These requests begin only after the ZIP has been fully received and
+validated. `upstream timed out` in Nginx logs points to a proxy timeout;
+Qdrant/`Client.Timeout exceeded` in API logs points to a vector-service request
+failure. Background jobs avoid tying restoration to the browser connection;
+they still report an actual database, disk or Qdrant failure.
+
+For Nginx/Baota, allow at least **8 MiB per request** on
+`/api/admin/backup/import-jobs/` (the chunk plus multipart headers), preserve
+your existing upstream/proxy headers, and consider `proxy_request_buffering off`
+on that location to stream directly to the API. The JSON creation endpoint
+`/api/admin/backup/import-jobs` and polling endpoint
+`/api/public/backup-import-jobs/` must also reach the same API instance. Custom
+CDN/WAF request limits and timeouts still apply to each chunk and poll.
+
+The uploaded ZIP and temporary chunks are streamed onto the data disk beside
+`UPLOAD_DIR`, outside the upload/artifact trees that restoration replaces.
+Plan free space for the compressed archive, extracted staging trees, existing
+live trees, and any Qdrant rollback ZIP; compressed ZIP size alone is not a
+sufficient estimate. Disk/quota exhaustion while receiving an archive returns
+507 before restore. Successful and failed jobs remove their uploaded ZIP.
+Abandoned uploads and retained job results expire after 24 hours of inactivity
+while the process remains running.
+
+Import jobs are currently tracked by one API process. Keep the page open and
+route all job requests to that instance; automatic application reload is blocked
+throughout import. A browser disconnect does not cancel a started restore.
+Only the initiating administrator can upload/start/cancel a pending upload.
+Polling uses a separate random capability so it still works after restoration
+invalidates login sessions, including if the imported site policy closes access.
+Process restarts do not resume a restore or preserve its job status. If status
+is lost after a restart, the UI does not resubmit automatically: inspect the
+logs and recovery journals described above first. Interrupted upload files
+(`.aivory-backup-upload-*.zip`) may remain on the data disk; remove them only
+after confirming that no API instance is receiving or restoring them.

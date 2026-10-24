@@ -705,6 +705,11 @@ func NewRouter(d Deps) http.Handler {
 	mux.handle("GET", "/api/admin/backup/archives/:name", requireAdmin(d, downloadBackupArchiveAdmin))
 	mux.handle("DELETE", "/api/admin/backup/archives/:name", requireAdmin(d, deleteBackupArchiveAdmin))
 	mux.handle("POST", "/api/admin/backup/import", requireAdmin(d, importBackupAdmin))
+	mux.handle("POST", "/api/admin/backup/import-jobs", requireAdmin(d, createBackupImportJobAdmin))
+	mux.handle("POST", "/api/admin/backup/import-jobs/:id/chunks", requireAdmin(d, uploadBackupImportChunkAdmin))
+	mux.handle("POST", "/api/admin/backup/import-jobs/:id/start", requireAdmin(d, startBackupImportJobAdmin))
+	mux.handle("DELETE", "/api/admin/backup/import-jobs/:id", requireAdmin(d, cancelBackupImportUploadAdmin))
+	mux.handle("GET", "/api/public/backup-import-jobs/:id", wrap(d, backupImportJobStatus))
 	// Configuration migration. Exports/imports admin configuration tables and
 	// admin assets (icons / skill-assets), deliberately leaving users,
 	// conversations, user uploads, KBs, sessions, workspaces, and logs untouched.

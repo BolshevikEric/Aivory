@@ -53,9 +53,10 @@ type backupArchiveFile struct {
 }
 
 type backupExportState struct {
-	Running  *backupExportJob    `json:"running"`
-	Jobs     []backupExportJob   `json:"jobs"`
-	Archives []backupArchiveFile `json:"archives"`
+	Running        *backupExportJob    `json:"running"`
+	Jobs           []backupExportJob   `json:"jobs"`
+	Archives       []backupArchiveFile `json:"archives"`
+	MaxImportBytes int64               `json:"max_import_bytes"`
 }
 
 type backupExportManager struct {
@@ -154,9 +155,10 @@ func deleteBackupArchiveAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 
 func buildBackupExportState(d Deps) backupExportState {
 	return backupExportState{
-		Running:  adminBackupExports.running(),
-		Jobs:     adminBackupExports.recentJobs(),
-		Archives: listBackupArchiveFiles(d.Config.BackupDir),
+		Running:        adminBackupExports.running(),
+		Jobs:           adminBackupExports.recentJobs(),
+		Archives:       listBackupArchiveFiles(d.Config.BackupDir),
+		MaxImportBytes: maxBackupImportBytes(d),
 	}
 }
 

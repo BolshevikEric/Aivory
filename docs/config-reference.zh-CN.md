@@ -419,7 +419,6 @@ SSE 心跳、流恢复窗口、生成时长上限、分页与搜索上限、消�
 | `AIVORY_API_BACKUP_EXPORT_JOB_HISTORY_RETENTION` | `int` | `20` | `api/admin_backup_async.go:26` | 内存历史中保留的过往备份导出任务记录数量，超出后修剪最旧的记录。 |
 | `AIVORY_API_BACKUP_EXPORT_JOB_RUNTIME` | `duration` | `12*time.Hour` | `api/admin_backup_async.go:27` | 后台备份导出任务被取消前允许的最长实际运行时间。 |
 | `AIVORY_API_CONFIG_IMPORT_MULTIPART_MEMORY_BUFFER` | `int64` | `16<<20` | `api/admin_backup_handlers.go:25` | 解析管理员配置导入 multipart 上传的内存缓冲区；超出部分溢写到临时文件。 |
-| `AIVORY_API_BACKUP_IMPORT_MULTIPART_MEMORY_BUFFER` | `int64` | `32<<20` | `api/admin_backup_handlers.go:26` | 解析完整备份导入 multipart 上传的内存缓冲区；超出部分溢写到临时文件。 |
 | `AIVORY_API_MAX_CONFIG_SIZE` | `int64` | `512<<20` | `api/admin_backup_handlers.go:373` | 导入管理员配置归档时接受的最大请求体大小。 |
 | `AIVORY_API_QDRANT_ARCHIVE_REQUEST_TIMEOUT` | `duration` | `5*time.Minute` | `api/admin_backup_qdrant.go:26` | 导出或导入备份归档时调用 Qdrant 的单次 HTTP 请求超时。 |
 | `AIVORY_API_QDRANT_EXPORT_SCROLL_PAGE_SIZE` | `int` | `256` | `api/admin_backup_qdrant.go:28` | 导出 Qdrant 集合到归档时每个 /points/scroll 页拉取的点数。 |
