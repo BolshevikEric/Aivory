@@ -22,7 +22,11 @@ self.addEventListener('fetch', (event) => {
   // images. Bypass it as well as Cache API, including after upgrading the SW.
   const privateResource = url.origin === self.location.origin &&
     /^\/api\/(files|artifacts)\//.test(url.pathname)
-  event.respondWith(fetch(event.request, privateResource ? { cache: 'no-store' } : undefined))
+  // Let other requests use the browser's network stack directly. Wrapping a
+  // long upload or restore in respondWith(fetch(...)) makes it subject to the
+  // service worker fetch-event deadline (five minutes in Chromium).
+  if (event.request.method !== 'GET' || !privateResource) return
+  event.respondWith(fetch(event.request, { cache: 'no-store' }))
 })
 
 self.addEventListener('notificationclick', (event) => {

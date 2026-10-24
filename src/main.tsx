@@ -45,8 +45,9 @@ createRoot(root).render(
 
 // Register the service worker so the app is installable to the home screen and
 // opens in standalone (fullscreen) mode. Production only — in dev a SW would
-// interfere with Vite's HMR. The SW itself is a no-cache passthrough (see
-// public/sw.js), so there is no stale-build risk after a deploy.
+// interfere with Vite's HMR. The SW only intercepts private file reads to
+// bypass old HTTP caches (see public/sw.js); other requests use the browser's
+// network stack directly, keeping long uploads outside the SW event deadline.
 if (import.meta.env.PROD && !window.aivoryDesktop && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {
