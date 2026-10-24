@@ -153,7 +153,7 @@ func replaceModelChannelsAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 }
 
 func listChannelModelsAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
-	rows, err := store.ListChannelModels(r.Context(), d.DB, pathParam(r, "id"), false)
+	rows, err := store.ListChannelModels(r.Context(), d.DB, pathParam(r, "id"), true)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

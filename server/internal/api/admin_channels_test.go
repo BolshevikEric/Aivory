@@ -31,6 +31,12 @@ func newChannelAdminFixture(t *testing.T) channelAdminFixture {
 	mx.handle(http.MethodPatch, "/api/admin/channels/:id", func(w http.ResponseWriter, r *http.Request) {
 		updateChannelAdmin(d, w, r)
 	})
+	mx.handle(http.MethodGet, "/api/admin/channels/:id/models", func(w http.ResponseWriter, r *http.Request) {
+		listChannelModelsAdmin(d, w, r)
+	})
+	mx.handle(http.MethodPut, "/api/admin/channels/:id/models", func(w http.ResponseWriter, r *http.Request) {
+		replaceChannelModelsAdmin(d, w, r)
+	})
 	mx.handle(http.MethodGet, "/api/admin/channels/:id/health", func(w http.ResponseWriter, r *http.Request) {
 		channelHealthAdmin(d, w, r)
 	})
@@ -77,6 +83,68 @@ func TestChannelAutoDisablePolicyAndRecoveryAPI(t *testing.T) {
 	saved, err := store.GetChannel(t.Context(), fx.db, channel.ID)
 	if err != nil || saved.AutoDisabledUntil != 0 || saved.ConsecutiveErrors != 0 {
 		t.Fatalf("recovered=%+v err=%v", saved, err)
+	}
+}
+
+func TestRemovedChannelModelIsDeletedAcrossSubsequentSaves(t *testing.T) {
+	fx := newChannelAdminFixture(t)
+	channel, err := store.CreateChannel(t.Context(), fx.db, "Models", "openai", "chat", "https://api.example.test/v1", "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fx.db.Exec(`INSERT INTO channel_models(id,channel_id,request_id,label,kind,enabled) VALUES
+		('keep',?,'gpt-keep','Keep','chat',1), ('remove',?,'gpt-remove','Remove','chat',1)`, channel.ID, channel.ID); err != nil {
+		t.Fatal(err)
+	}
+	readModels := func() []store.ChannelModel {
+		t.Helper()
+		rec := fx.request(t, http.MethodGet, "/api/admin/channels/"+channel.ID+"/models", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("list models: status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var models []store.ChannelModel
+		if err := json.Unmarshal(rec.Body.Bytes(), &models); err != nil {
+			t.Fatal(err)
+		}
+		return models
+	}
+	writeModels := func(models []store.ChannelModel) {
+		t.Helper()
+		body, err := json.Marshal(models)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := fx.request(t, http.MethodPut, "/api/admin/channels/"+channel.ID+"/models", string(body))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("replace models: status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var saved []store.ChannelModel
+		if err := json.Unmarshal(rec.Body.Bytes(), &saved); err != nil {
+			t.Fatal(err)
+		}
+		if len(saved) != 1 || saved[0].RequestID != "gpt-keep" || !saved[0].Enabled {
+			t.Fatalf("save returned removed model: %+v", saved)
+		}
+	}
+
+	writeModels([]store.ChannelModel{{ChannelID: channel.ID, RequestID: "gpt-keep", Label: "Keep", Kind: "chat"}})
+	models := readModels()
+	if len(models) != 1 || models[0].RequestID != "gpt-keep" {
+		t.Fatalf("removed model remains in editor list: %+v", models)
+	}
+	var count int
+	if err := fx.db.QueryRow(`SELECT COUNT(1) FROM channel_models WHERE channel_id=? AND request_id='gpt-remove'`, channel.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("removed model rows=%d err=%v", count, err)
+	}
+
+	// Saving the list after reopening the editor must not recreate removed rows.
+	writeModels(models)
+	models = readModels()
+	if len(models) != 1 || models[0].RequestID != "gpt-keep" {
+		t.Fatalf("removed model returned after resave: %+v", models)
+	}
+	if err := fx.db.QueryRow(`SELECT COUNT(1) FROM channel_models WHERE channel_id=? AND request_id='gpt-remove'`, channel.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("resave recreated removed model rows=%d err=%v", count, err)
 	}
 }
 

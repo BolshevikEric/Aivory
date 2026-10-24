@@ -346,16 +346,15 @@ func ListChannelModels(ctx context.Context, db *sql.DB, channelID string, onlyEn
 	return out, rows.Err()
 }
 
-// ReplaceChannelModels updates a channel's advertised request ids in one
-// transaction. Existing rows are disabled first so removed upstream models do
-// not remain selectable in the model editor.
+// ReplaceChannelModels replaces a channel's advertised request ids in one
+// transaction. Omitted rows are removed from the channel's capability registry.
 func ReplaceChannelModels(ctx context.Context, db *sql.DB, channelID string, models []ChannelModel) ([]ChannelModel, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE channel_models SET enabled=0, updated_at=? WHERE channel_id=?`, time.Now().Unix(), channelID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM channel_models WHERE channel_id=?`, channelID); err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
@@ -382,7 +381,7 @@ func ReplaceChannelModels(ctx context.Context, db *sql.DB, channelID string, mod
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return ListChannelModels(ctx, db, channelID, false)
+	return ListChannelModels(ctx, db, channelID, true)
 }
 
 func (m ChannelModel) IDOrNew() string {
