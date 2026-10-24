@@ -236,12 +236,21 @@ func TestHTTPKnowledgeBaseShareRevocationScrubsLateProviderOutputAndAllowsReshar
 			t.Fatalf("late provider content reached original SSE: %+v", frame)
 		}
 	}
-	followerBody, err := io.ReadAll(followerResp.Body)
-	if err != nil {
-		t.Fatalf("read follower stream: %v", err)
+	followerFrames := branchHTTPReadSSE(t, followerResp, nil)
+	followerDones := 0
+	for _, frame := range followerFrames {
+		if strings.Contains(frame.Data, knowledgeBaseRevocationLateSecret) {
+			t.Fatalf("late provider content reached follower stream: %+v", frame)
+		}
+		if frame.Value.Type == "done" {
+			followerDones++
+			if frame.Value.StopReason != "stopped" || frame.Value.MessageID != assistantID {
+				t.Fatalf("unexpected follower terminal event: %+v", frame)
+			}
+		}
 	}
-	if strings.Contains(string(followerBody), knowledgeBaseRevocationLateSecret) {
-		t.Fatalf("late provider content reached follower stream: %s", followerBody)
+	if followerDones != 1 {
+		t.Fatalf("follower SSE done events=%d, want 1: %+v", followerDones, followerFrames)
 	}
 	persisted, err := store.GetMessage(ctx, db, assistantID)
 	if err != nil {

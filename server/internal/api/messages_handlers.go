@@ -2160,6 +2160,11 @@ func streamMessageHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	closeReadWatcher := watchConversationReadAccess(d, ctx, cancel, convID, conv.WorkspaceID, u.ID)
 	defer closeReadWatcher()
+	// Subscribe before replay so a concurrent revoke is observed either by its
+	// notification or by flush's durable tombstone check. Followers must stop
+	// promptly even when revocation prevents any further content notifications.
+	closeStreamRevocation := subscribeAccessRevocationTopic(d, ctx, cancel, genstream.RevocationTopic(msgID))
+	defer closeStreamRevocation()
 
 	lastID := r.Header.Get("Last-Event-ID")
 	if lastID == "" {
