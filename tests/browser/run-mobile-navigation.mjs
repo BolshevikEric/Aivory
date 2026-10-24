@@ -19,6 +19,8 @@ const projects = Array.from({ length: 30 }, (_, i) => ({ id: `project-${i}`, nam
 const conversations = [{ id: 'navigation-conversation', title: 'Navigation conversation', model_id: 'model', created_at: 1, updated_at: 1 }]
 const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox'] })
 const page = await browser.newPage()
+// Keep API fixtures active when testing production builds with a service worker.
+await page.setBypassServiceWorker(true)
 page.on('pageerror', (error) => errors.push(error.stack || String(error)))
 await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }])
 await page.setRequestInterception(true)
