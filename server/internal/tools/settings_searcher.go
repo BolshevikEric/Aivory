@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"os"
 	"strings"
 
 	"aivory/server/internal/llm"
@@ -56,7 +57,13 @@ func (s *settingsSearcher) Search(ctx context.Context, query string, topK int) (
 func (s *settingsSearcher) backend() Searcher {
 	provider := s.settingString("search_provider", s.fallbackPv)
 	baseURL := s.settingString("search_base_url", s.fallbackURL)
-	apiKey := s.settingString("search_api_key", s.fallbackKey)
+	fallbackKey := s.fallbackKey
+	if (strings.EqualFold(provider, "youcom") || strings.EqualFold(provider, "you")) && strings.TrimSpace(fallbackKey) == "" {
+		// Resolve You.com's environment alias before consulting the saved row.
+		// A present empty search_api_key must override both environment keys.
+		fallbackKey = strings.TrimSpace(os.Getenv("YDC_API_KEY"))
+	}
+	apiKey := s.settingString("search_api_key", fallbackKey)
 	secretID := s.settingString("search_secret_id", s.fallbackSecretID)
 	secretKey := s.settingString("search_secret_key", s.fallbackSecretKey)
 	engines := parseSearchEngines(s.settingString("search_engines", ""))
