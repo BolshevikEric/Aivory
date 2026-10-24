@@ -53,10 +53,12 @@ type backupArchiveFile struct {
 }
 
 type backupExportState struct {
-	Running        *backupExportJob    `json:"running"`
-	Jobs           []backupExportJob   `json:"jobs"`
-	Archives       []backupArchiveFile `json:"archives"`
-	MaxImportBytes int64               `json:"max_import_bytes"`
+	Running         *backupExportJob    `json:"running"`
+	Jobs            []backupExportJob   `json:"jobs"`
+	Archives        []backupArchiveFile `json:"archives"`
+	MaxImportBytes  int64               `json:"max_import_bytes"`
+	ServerArchives  []backupArchiveFile `json:"server_archives"`
+	BackupDirectory string              `json:"backup_directory"`
 }
 
 type backupExportManager struct {
@@ -155,10 +157,12 @@ func deleteBackupArchiveAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 
 func buildBackupExportState(d Deps) backupExportState {
 	return backupExportState{
-		Running:        adminBackupExports.running(),
-		Jobs:           adminBackupExports.recentJobs(),
-		Archives:       listBackupArchiveFiles(d.Config.BackupDir),
-		MaxImportBytes: maxBackupImportBytes(d),
+		Running:         adminBackupExports.running(),
+		Jobs:            adminBackupExports.recentJobs(),
+		Archives:        listBackupArchiveFiles(d.Config.BackupDir),
+		MaxImportBytes:  maxBackupImportBytes(d),
+		ServerArchives:  listBackupArchiveFilesMatching(d.Config.BackupDir, safeServerBackupArchiveName),
+		BackupDirectory: d.Config.BackupDir,
 	}
 }
 
@@ -318,13 +322,20 @@ func runBackupExportJob(d Deps, job *backupExportJob, origins ...*store.AuditCon
 }
 
 func listBackupArchiveFiles(dir string) []backupArchiveFile {
+	return listBackupArchiveFilesMatching(dir, safeBackupArchiveName)
+}
+
+func listBackupArchiveFilesMatching(dir string, accept func(string) bool) []backupArchiveFile {
+	if strings.TrimSpace(dir) == "" {
+		return []backupArchiveFile{}
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return []backupArchiveFile{}
 	}
 	out := []backupArchiveFile{}
 	for _, entry := range entries {
-		if entry.IsDir() || !safeBackupArchiveName(entry.Name()) {
+		if entry.IsDir() || !accept(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()

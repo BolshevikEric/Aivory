@@ -40,6 +40,9 @@ type backupImportJob struct {
 	owner        string
 	token        string
 	path         string
+	archiveName  string
+	archiveFile  *os.File
+	archiveMtime time.Time
 	lastActivity time.Time
 	lastOffset   int64
 	lastSize     int64
@@ -89,15 +92,28 @@ func (m *backupImportManager) expire(id string) {
 		time.AfterFunc(remaining, func() { m.expire(id) })
 		return
 	}
-	_ = os.Remove(j.path)
+	j.cleanupInput()
 	delete(m.jobs, id)
 }
 
+// Call with j.mu held. A server archive is borrowed, never removed.
+func (j *backupImportJob) cleanupInput() {
+	if j.archiveFile != nil {
+		_ = j.archiveFile.Close()
+		j.archiveFile = nil
+	}
+	if j.path != "" {
+		_ = os.Remove(j.path)
+	}
+}
+
 func createBackupImportJobAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var req struct {
-		ID        string `json:"id"`
-		SizeBytes int64  `json:"size_bytes"`
-		Confirm   string `json:"confirm"`
+		ID          string `json:"id"`
+		SizeBytes   int64  `json:"size_bytes"`
+		Confirm     string `json:"confirm"`
+		ArchiveName string `json:"archive_name"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -121,7 +137,7 @@ func createBackupImportJobAdmin(d Deps, w http.ResponseWriter, r *http.Request) 
 	if existing := adminBackupImports.jobs[req.ID]; existing != nil {
 		existing.mu.Lock()
 		defer existing.mu.Unlock()
-		if existing.owner != owner.ID || existing.TotalBytes != req.SizeBytes {
+		if existing.owner != owner.ID || existing.TotalBytes != req.SizeBytes || existing.archiveName != req.ArchiveName {
 			writeError(w, http.StatusConflict, errors.New("backup upload ID already in use"))
 			return
 		}
@@ -143,30 +159,50 @@ func createBackupImportJobAdmin(d Deps, w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusConflict, errors.New("backup upload or import already running"))
 		return
 	}
-	dir, err := backupUploadTempDir(d)
-	if err != nil {
-		writeBackupUploadError(w, err)
-		return
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		writeBackupUploadError(w, backupUploadFailure(err, maxBackupImportBytes(d)))
-		return
-	}
-	file, err := os.CreateTemp(dir, ".aivory-backup-upload-*.zip")
-	if err != nil {
-		writeBackupUploadError(w, backupUploadFailure(err, maxBackupImportBytes(d)))
-		return
-	}
-	_ = file.Close()
 	var secret [32]byte
 	if _, err := rand.Read(secret[:]); err != nil {
-		_ = os.Remove(file.Name())
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	j := &backupImportJob{
 		ID: req.ID, Status: "uploading", TotalBytes: req.SizeBytes, ChunkBytes: backupImportChunkBytes,
-		owner: owner.ID, token: hex.EncodeToString(secret[:]), path: file.Name(), lastActivity: time.Now(), lastOffset: -1,
+		owner: owner.ID, token: hex.EncodeToString(secret[:]), lastActivity: time.Now(), lastOffset: -1,
+	}
+	if req.ArchiveName != "" {
+		file, info, status, err := openServerBackupArchive(d.Config.BackupDir, req.ArchiveName)
+		if err != nil {
+			writeError(w, status, err)
+			return
+		}
+		if err := validateServerBackupDirectory(d); err != nil {
+			_ = file.Close()
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if info.Size() != req.SizeBytes {
+			_ = file.Close()
+			writeError(w, http.StatusConflict, errors.New("server backup archive size changed; refresh the list and try again"))
+			return
+		}
+		j.archiveName, j.archiveFile, j.archiveMtime = req.ArchiveName, file, info.ModTime()
+		j.UploadedBytes = j.TotalBytes
+	} else {
+		dir, err := backupUploadTempDir(d)
+		if err != nil {
+			writeBackupUploadError(w, err)
+			return
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			writeBackupUploadError(w, backupUploadFailure(err, maxBackupImportBytes(d)))
+			return
+		}
+		file, err := os.CreateTemp(dir, ".aivory-backup-upload-*.zip")
+		if err != nil {
+			writeBackupUploadError(w, backupUploadFailure(err, maxBackupImportBytes(d)))
+			return
+		}
+		_ = file.Close()
+		j.path = file.Name()
 	}
 	adminBackupImports.jobs[j.ID] = j
 	time.AfterFunc(backupImportJobTTL, func() { adminBackupImports.expire(j.ID) })
@@ -224,6 +260,10 @@ func uploadBackupImportChunkAdmin(d Deps, w http.ResponseWriter, r *http.Request
 	defer j.mu.Unlock()
 	if j.Status != "uploading" {
 		writeError(w, http.StatusConflict, errors.New("backup upload is no longer accepting chunks"))
+		return
+	}
+	if j.archiveName != "" {
+		writeError(w, http.StatusConflict, errors.New("server backup archives do not accept uploaded chunks"))
 		return
 	}
 	// An acknowledged chunk may be retried after the response is lost. Accept
@@ -297,7 +337,7 @@ func cancelBackupImportUploadAdmin(_ Deps, w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusConflict, errors.New("a started restore cannot be cancelled"))
 		return
 	}
-	_ = os.Remove(j.path)
+	j.cleanupInput()
 	j.Status, j.Error = "failed", "upload cancelled"
 	j.lastActivity = time.Now()
 	writeJSON(w, http.StatusOK, j.view())
@@ -340,8 +380,8 @@ func runBackupImportJob(d Deps, j *backupImportJob, user store.User, origin *sto
 			response.Buffer.Reset()
 			_, _ = response.WriteString(`{"error":"restore interrupted; verify recovery journals before retrying","code":"backup_restore_recovery_required"}`)
 		}
-		_ = os.Remove(j.path)
 		j.mu.Lock()
+		j.cleanupInput()
 		j.lastActivity = time.Now()
 		if response.status >= 200 && response.status < 300 {
 			j.Status, j.Result = "completed", append(json.RawMessage(nil), response.Bytes()...)
@@ -366,12 +406,22 @@ func runBackupImportJob(d Deps, j *backupImportJob, user store.User, origin *sto
 			recordAuditJobResult(d, origin, "admin.system.backup_import_completed", j.ID, auditResult, reason, started, nil)
 		}
 	}()
-	file, err := os.Open(j.path)
-	if err != nil {
-		writeError(response, http.StatusInternalServerError, fmt.Errorf("open uploaded backup: %w", err))
-		return
+	file := j.archiveFile
+	if file != nil {
+		info, err := file.Stat()
+		if err != nil || info.Size() != j.TotalBytes || !info.ModTime().Equal(j.archiveMtime) {
+			writeError(response, http.StatusConflict, errors.New("server backup archive changed before restore; copy a completed ZIP and try again"))
+			return
+		}
+	} else {
+		var err error
+		file, err = os.Open(j.path)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, fmt.Errorf("open uploaded backup: %w", err))
+			return
+		}
+		defer file.Close()
 	}
-	defer file.Close()
 	ctx := context.WithValue(context.Background(), userCtxKey{}, &user)
 	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/api/admin/backup/import", nil)
 	restoreUploadedBackupAdmin(d, response, request, file, j.TotalBytes)
