@@ -349,6 +349,32 @@ Once all chunks are acknowledged, a short request starts a background restore.
 The page polls for the result and shows validation/restoration separately from
 upload progress. Upload reaching 100% does not mean restoration succeeded.
 
+If a proxy rejects a chunk with **413 Content Too Large**, the client halves the
+chunk size at the same acknowledged offset, down to **256 KiB**. This also
+accounts for multipart overhead under limits such as Nginx's default 1 MiB.
+If even the smallest chunk is rejected, upload stops with an actionable error.
+Changing `proxy_send_timeout` or `proxy_read_timeout` does not change body size
+limits such as `client_max_body_size`.
+
+Large archives can instead be copied into `BACKUP_DIR` using SFTP/SCP, then
+selected under **Import & restore → Restore from server directory**. Refresh
+the directory, select the ZIP, and type `REPLACE`. The page displays the active
+server directory: `/app/data/backups` inside the default container, mapped to
+`deploy/data/backups` on the host, or `backups` under a custom `DATA_DIR`.
+Ordinary `.zip`/`.ZIP` filenames copied by an operator are supported. Transfer
+as `.zip.part` and rename to `.zip` only after the transfer has finished.
+
+Server-directory restoration sends only small JSON requests; archive bytes
+never pass through the browser, Cloudflare or Nginx. The server reads the selected
+file directly without making another full ZIP copy and keeps the source after
+success, failure or cancellation before start. Only regular ZIP files within
+the configured directory are accepted; traversal and symlinks are rejected, and
+the opened descriptor pins the selected input against a replaced directory
+entry. `BACKUP_DIR` must be outside the uploads/artifacts trees that restoration
+replaces. This uses the same validation, transactions, rollback and background
+status polling as uploaded archives. `MAX_BACKUP_BYTES` applies to both sources;
+allow disk space for extraction and rollback as well.
+
 This avoids a single archive exceeding Cloudflare Free/Pro's usual 100 MB
 request limit, and avoids waiting for the entire restore in one HTTP request.
 Older service workers forwarded every request through `respondWith(fetch(...))`.

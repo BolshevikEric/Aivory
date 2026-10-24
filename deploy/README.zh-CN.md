@@ -249,6 +249,12 @@ Qdrant 按 embedding 宽度使用独立 collection（`aivory_c<dim>`）；SQLite
 
 备份导入大小上限由 `MAX_BACKUP_BYTES` 控制（默认 20 GiB），按 **ZIP 文件实际字节数**计算，不包含 multipart 表单开销。页面会提前检查配置的上限，并将归档按每块最多 **4 MiB** 顺序上传，显示实际上传字节数和百分比。失败的块按原位置重试，服务器会核验上一块的摘要，防止重复追加。若上传与清理同时断网，同一页面用原来选中的文件重试时会复用上传任务及已确认的位置。所有块确认接收后，通过短请求启动后台恢复，由页面查询结果。上传达到 100% 后显示“正在校验和恢复”，只有服务器确认成功后才提示恢复完成。
 
+若分块被代理以 **413 Content Too Large** 拒绝，页面会在同一已确认位置将分块依次缩小，最低到 **256 KiB**，以兼容 Nginx 默认 1 MiB 等包含 multipart 表单开销的限制。仍被拒绝时会停止并给出提示；`proxy_send_timeout`／`proxy_read_timeout` 调整的是超时，无法改变 `client_max_body_size` 等大小限制。
+
+大归档也可以通过 SFTP／SCP 等方式预先放入服务器的 `BACKUP_DIR`，在 **导入与还原 → 从服务器目录恢复** 中刷新目录、选择归档并输入 `REPLACE`。页面会显示服务实际读取的目录：默认容器内为 `/app/data/backups`，默认宿主机为 `deploy/data/backups`，自定义 `DATA_DIR` 时为该目录下的 `backups`。此入口也能读取手动复制的普通 `.zip`／`.ZIP` 文件，无需改成系统导出的命名格式。建议先传为 `.zip.part`，完成后再改为 `.zip`，避免选择尚未传完的归档。
+
+服务器目录恢复只发送小型 JSON 请求，归档字节不经过浏览器、CF 或 Nginx。它直接读取选中的文件，不额外复制整个 ZIP，成功、失败或取消待启动任务均不会删除原归档。后端只允许读取备份目录中的普通 ZIP，拒绝路径越界和符号链接，并固定打开的文件，避免同名路径后来被替换时读错归档。`BACKUP_DIR` 必须位于恢复会替换的 uploads/artifacts 目录之外。恢复继续使用相同的归档校验、事务、回滚和后台结果查询；`MAX_BACKUP_BYTES` 上限也适用于此入口，解压和回滚所需的数据盘空间仍需预留。
+
 这能避免整包上传超过 Cloudflare 免费版／Pro 通常为 100 MB 的单次请求限制，也避免用一个 HTTP 请求等待整个恢复结束。旧版 Service Worker 曾转发所有请求，上传或等待恢复响应超过 Chromium 默认的 5 分钟事件期限时可能中断，即使绕过 CF、Nginx 配置为 600 秒也会受影响。现在只有私有文件读取经过 Service Worker 来绕过旧 HTTP 缓存，上传、恢复、导出和事件流直接使用浏览器网络连接。升级后应刷新页面使新 Worker 生效；排查旧部署时，可在浏览器开发者工具的 Application → Service Workers 中勾选 Bypass for network 后对照验证，确认恢复结果前不要重复提交导入。
 
 源站 Nginx／宝塔等代理的有效超时配置仍会作用于请求；项目 Go 服务默认响应超时是 90 分钟。具体由失败请求状态码及代理／应用日志确定。CF 的 413 表示请求过大，524 表示源站响应／写入超时；只调高 `MAX_BACKUP_BYTES` 不会改变代理限制。Qdrant 归档操作另有**单次请求**默认 5 分钟的超时（`AIVORY_API_QDRANT_ARCHIVE_REQUEST_TIMEOUT`），在 ZIP 全部接收并校验后才会运行，与整个恢复的运行时间无关：Nginx 日志出现 `upstream timed out` 指向代理超时，API 日志出现 Qdrant／`Client.Timeout exceeded` 则指向向量服务请求失败。后台任务解决恢复对浏览器连接的依赖；数据库、磁盘或 Qdrant 的实际失败仍会作为任务失败报告。
