@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, Download, Upload, TriangleAlert, FileArchive, Clock3, XCircle, Database, Wrench, Trash2 } from 'lucide-react'
+import { CheckCircle2, Download, Upload, TriangleAlert, FileArchive, Clock3, XCircle, Database, Wrench, Trash2, RefreshCw } from 'lucide-react'
 import {
   adminApi,
   ApiError,
@@ -87,6 +87,8 @@ function tableRowCount(tables: Record<string, number> | null | undefined): numbe
 function normalizeBackupState(state: BackupExportState | null | undefined): BackupExportState {
   return {
     max_import_bytes: state?.max_import_bytes,
+    server_archives: safeArray(state?.server_archives),
+    backup_directory: state?.backup_directory,
     running: state?.running ?? null,
     archives: safeArray(state?.archives),
     jobs: safeArray(state?.jobs),
@@ -170,6 +172,14 @@ export default function AdminBackup() {
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [picked, setPicked] = useState<File | null>(null)
+  const [importSource, setImportSource] = useState<'upload' | 'server'>('upload')
+  const [serverArchives, setServerArchives] = useState<BackupArchiveFile[]>([])
+  const [backupDirectory, setBackupDirectory] = useState('')
+  const [serverArchiveName, setServerArchiveName] = useState('')
+  const [refreshingArchives, setRefreshingArchives] = useState(false)
+  const selectedServerArchive = serverArchives.find((archive) => archive.name === serverArchiveName)
+  const importFileName = importSource === 'server' ? selectedServerArchive?.name : picked?.name
+  const importSize = importSource === 'server' ? selectedServerArchive?.size_bytes : picked?.size
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -197,6 +207,8 @@ export default function AdminBackup() {
     setArchives(state.archives)
     setRecentJobs(state.jobs)
     setMaxImportBytes(state.max_import_bytes)
+    setServerArchives(safeArray(state.server_archives))
+    setBackupDirectory(state.backup_directory ?? '')
   }, [])
 
   const refreshVectorState = useCallback(async (signal: AbortSignal) => {
@@ -217,6 +229,8 @@ export default function AdminBackup() {
           setArchives(state.archives)
           setRecentJobs(state.jobs)
           setMaxImportBytes(state.max_import_bytes)
+          setServerArchives(safeArray(state.server_archives))
+          setBackupDirectory(state.backup_directory ?? '')
         }
         if (vectorRes.status === 'fulfilled') {
           const state = normalizeVectorState(vectorRes.value)
@@ -268,6 +282,7 @@ export default function AdminBackup() {
       setRunningExport(state.running)
       setArchives(state.archives)
       setRecentJobs(state.jobs)
+      setServerArchives(safeArray(state.server_archives))
       toast.success(t('admin:backup.export.started'))
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
@@ -302,6 +317,7 @@ export default function AdminBackup() {
     try {
       await adminApi.backupArchiveDelete(name)
       setArchives((current) => current.filter((archive) => archive.name !== name))
+      setServerArchives((current) => current.filter((archive) => archive.name !== name))
       setDeleteTarget(null)
       toast.success(t('admin:backup.export.deleteDone', { name }))
     } catch (e) {
@@ -317,25 +333,39 @@ export default function AdminBackup() {
     setImportError(null)
   }
 
+  async function onRefreshServerArchives() {
+    setRefreshingArchives(true)
+    try {
+      await refreshExportState(new AbortController().signal)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+    } finally {
+      setRefreshingArchives(false)
+    }
+  }
+
   async function onConfirmImport() {
-    if (!picked || confirmText !== CONFIRM_WORD || runningExport || runningVector || importing || importUncertain) return
-    if (maxImportBytes && picked.size > maxImportBytes) {
+    if (!importFileName || importSize === undefined || confirmText !== CONFIRM_WORD || runningExport || runningVector || importing || importUncertain) return
+    if (maxImportBytes && importSize > maxImportBytes) {
       setImportError(t('admin:backup.import.tooLarge', { limit: formatBytes(maxImportBytes) }))
       return
     }
     setImporting(true)
     setResult(null)
     setImportError(null)
-    setImportPhase('uploading')
+    setImportPhase(importSource === 'server' ? 'restoring' : 'uploading')
     setImportReconnecting(false)
-    setUploadProgress({ loaded: 0, total: picked.size, percent: 0 })
+    setUploadProgress({ loaded: 0, total: importSize, percent: 0 })
     let uploaded = false
     try {
-      const res = await adminApi.backupImport(picked, {
+      const options = {
         onProgress: setUploadProgress,
         onUploaded: () => { uploaded = true; setImportPhase('restoring') },
         onReconnecting: setImportReconnecting,
-      })
+      }
+      const res = importSource === 'server'
+        ? await adminApi.backupRestoreServerArchive(selectedServerArchive!, options)
+        : await adminApi.backupImport(picked!, options)
       setResult(res)
       setConfirmOpen(false)
       toast.success(t('admin:backup.import.done'))
@@ -831,43 +861,88 @@ export default function AdminBackup() {
             <TriangleAlert size={16} className="mt-0.5 shrink-0 text-[var(--color-danger)]" aria-hidden />
             <p className="text-sm leading-relaxed text-[var(--color-fg)]">{t('admin:backup.import.warning')}</p>
           </div>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".zip,application/zip"
-              className="hidden"
-              aria-label={t('admin:backup.import.choose')}
-              onChange={onPick}
-            />
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => fileRef.current?.click()}
-              disabled={fullBackupBusy}
-              leadingIcon={<FileArchive size={14} aria-hidden />}
-              aria-describedby={picked ? 'backup-picked-file' : undefined}
-            >
-              {t('admin:backup.import.choose')}
-            </Button>
-            <div className="min-w-0 flex-1" role="status">
-              {picked && (
-                <p id="backup-picked-file" className="flex min-w-0 items-center gap-2 text-xs text-[var(--color-fg-muted)]">
-                  <span className="truncate font-medium text-[var(--color-fg)]" title={picked.name}>{picked.name}</span>
-                  <span className="shrink-0 tabular-nums">{formatBytes(picked.size)}</span>
-                </p>
-              )}
+          <fieldset disabled={fullBackupBusy} className="flex flex-wrap gap-x-6 gap-y-3">
+            <legend className="sr-only">{t('admin:backup.import.sourceLabel')}</legend>
+            {(['upload', 'server'] as const).map((source) => (
+              <label key={source} className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-[var(--color-fg)]">
+                <input
+                  type="radio"
+                  name="backup-import-source"
+                  value={source}
+                  checked={importSource === source}
+                  onChange={() => { setImportSource(source); setImportError(null); setResult(null) }}
+                  className="size-4 accent-[var(--color-accent)]"
+                />
+                {t(`admin:backup.import.source${source === 'server' ? 'Server' : 'Upload'}`)}
+              </label>
+            ))}
+          </fieldset>
+          {importSource === 'server' && (
+            <div className="space-y-3">
+              <p id="backup-server-hint" className="text-xs leading-relaxed text-[var(--color-fg-muted)]">
+                {t('admin:backup.import.serverHint')}
+                {backupDirectory && <code className="mt-1 block break-all text-[var(--color-fg)]">{backupDirectory}</code>}
+              </p>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  value={serverArchiveName}
+                  onChange={(event) => { setServerArchiveName(event.target.value); setImportError(null); setResult(null) }}
+                  disabled={fullBackupBusy || refreshingArchives || loadingExports}
+                  aria-label={t('admin:backup.import.serverChoose')}
+                  aria-describedby="backup-server-hint"
+                  className="h-10 min-h-10 w-full min-w-0 shrink-0 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface-sunken)] px-3 text-sm text-[var(--color-fg)] focus:border-[var(--color-border-strong)] focus:outline-none disabled:opacity-50 sm:flex-1"
+                >
+                  <option value="">{t(loadingExports ? 'admin:backup.export.loading' : serverArchives.length ? 'admin:backup.import.serverChoose' : 'admin:backup.import.serverEmpty')}</option>
+                  {serverArchives.map((archive) => (
+                    <option key={archive.name} value={archive.name}>{archive.name} · {formatBytes(archive.size_bytes)}</option>
+                  ))}
+                </select>
+                <Button size="sm" variant="secondary" loading={refreshingArchives} disabled={fullBackupBusy || loadingExports} onClick={() => void onRefreshServerArchives()} leadingIcon={<RefreshCw size={14} aria-hidden />}>
+                  {t('admin:backup.import.serverRefresh')}
+                </Button>
+              </div>
+              {selectedServerArchive && <p className="text-xs tabular-nums text-[var(--color-fg-muted)]">{formatBytes(selectedServerArchive.size_bytes)} · {formatDate(selectedServerArchive.created_at)}</p>}
             </div>
+          )}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            {importSource === 'upload' && (<>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".zip,application/zip"
+                className="hidden"
+                aria-label={t('admin:backup.import.choose')}
+                onChange={onPick}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => fileRef.current?.click()}
+                disabled={fullBackupBusy}
+                leadingIcon={<FileArchive size={14} aria-hidden />}
+                aria-describedby={picked ? 'backup-picked-file' : undefined}
+              >
+                {t('admin:backup.import.choose')}
+              </Button>
+              <div className="min-w-0 flex-1" role="status">
+                {picked && (
+                  <p id="backup-picked-file" className="flex min-w-0 items-center gap-2 text-xs text-[var(--color-fg-muted)]">
+                    <span className="truncate font-medium text-[var(--color-fg)]" title={picked.name}>{picked.name}</span>
+                    <span className="shrink-0 tabular-nums">{formatBytes(picked.size)}</span>
+                  </p>
+                )}
+              </div>
+            </>)}
             <Button
               size="sm"
               variant="destructive"
-              disabled={!picked || fullBackupBusy || importUncertain || Boolean(maxImportBytes && picked.size > maxImportBytes)}
+              disabled={!importFileName || fullBackupBusy || importUncertain || refreshingArchives || Boolean(maxImportBytes && importSize && importSize > maxImportBytes)}
               onClick={() => {
                 setConfirmText('')
                 setImportError(null)
                 setConfirmOpen(true)
               }}
-              leadingIcon={<Upload size={14} aria-hidden />}
+              leadingIcon={importSource === 'server' ? <Database size={14} aria-hidden /> : <Upload size={14} aria-hidden />}
             >
               {t('admin:backup.import.action')}
             </Button>
@@ -877,7 +952,7 @@ export default function AdminBackup() {
               {t('admin:backup.import.sizeLimit', { limit: formatBytes(maxImportBytes) })}
             </p>
           )}
-          {picked && maxImportBytes && picked.size > maxImportBytes && (
+          {importSize !== undefined && maxImportBytes && importSize > maxImportBytes && (
             <p role="alert" className="text-sm text-[var(--color-danger)]">
               {t('admin:backup.import.tooLarge', { limit: formatBytes(maxImportBytes) })}
             </p>
@@ -970,6 +1045,7 @@ export default function AdminBackup() {
             <DialogDescription>{t('admin:backup.confirm.lead')}</DialogDescription>
           </DialogHeader>
           <DialogBody>
+            <p className="mb-3 break-all font-mono text-xs text-[var(--color-fg)]">{importFileName}</p>
             <p className="text-sm text-[var(--color-fg-muted)]">
               {t('admin:backup.confirm.instruction', { word: CONFIRM_WORD })}
             </p>
@@ -1010,7 +1086,7 @@ export default function AdminBackup() {
                 <p className="text-xs leading-relaxed text-[var(--color-fg-muted)]">
                   {importPhase === 'uploading'
                     ? t('admin:backup.import.uploadBytes', { loaded: formatBytes(uploadProgress.loaded), total: formatBytes(uploadProgress.total ?? picked?.size ?? 0) })
-                    : t(importReconnecting ? 'admin:backup.import.reconnecting' : 'admin:backup.import.restoringHint')}
+                    : t(importReconnecting ? 'admin:backup.import.reconnecting' : importSource === 'server' ? 'admin:backup.import.serverRestoringHint' : 'admin:backup.import.restoringHint')}
                 </p>
               </div>
             )}
@@ -1024,7 +1100,7 @@ export default function AdminBackup() {
               variant="destructive"
               onClick={onConfirmImport}
               loading={importing}
-              disabled={importUncertain || confirmText !== CONFIRM_WORD || Boolean(runningExport) || Boolean(runningVector)}
+              disabled={!importFileName || importUncertain || confirmText !== CONFIRM_WORD || Boolean(runningExport) || Boolean(runningVector)}
             >
               {t('admin:backup.confirm.action')}
             </Button>

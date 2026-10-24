@@ -7,11 +7,11 @@ import AdminBackup from '@/pages/admin/AdminBackup'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BackupImportOptions } from '@/api/backup-import'
 
-const { backupImport, backupExportState, success, error } = vi.hoisted(() => ({
-  backupImport: vi.fn(), backupExportState: vi.fn(), success: vi.fn(), error: vi.fn(),
+const { backupImport, backupRestoreServerArchive, backupExportState, success, error } = vi.hoisted(() => ({
+  backupImport: vi.fn(), backupRestoreServerArchive: vi.fn(), backupExportState: vi.fn(), success: vi.fn(), error: vi.fn(),
 }))
 vi.mock('@/api', () => ({
-  adminApi: { backupImport, backupExportState, vectorMaintenanceState: async () => ({ running: null, jobs: [] }) },
+  adminApi: { backupImport, backupRestoreServerArchive, backupExportState, vectorMaintenanceState: async () => ({ running: null, jobs: [] }) },
   ApiError: class extends Error {},
 }))
 vi.mock('@/hooks/use-toast', () => ({ toast: { error, success } }))
@@ -25,7 +25,7 @@ let container: HTMLDivElement
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
-  backupImport.mockReset(); backupExportState.mockReset(); success.mockReset(); error.mockReset()
+  backupImport.mockReset(); backupRestoreServerArchive.mockReset(); backupExportState.mockReset(); success.mockReset(); error.mockReset()
   backupExportState.mockResolvedValue({ running: null, jobs: [], archives: [], max_import_bytes: 1024 * 1024 })
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -59,6 +59,37 @@ async function confirmImport() {
 }
 
 describe('backup upload progress', () => {
+  it('confirms a server archive and waits for restore without uploading a browser file', async () => {
+    const archive = { name: 'server-migration.zip', size_bytes: 1024, created_at: 123 }
+    backupExportState.mockResolvedValue({ running: null, jobs: [], archives: [], server_archives: [archive], backup_directory: '/app/data/backups' })
+    let rejectRestore!: (error: unknown) => void
+    backupRestoreServerArchive.mockImplementation(() => new Promise((_resolve, reject) => { rejectRestore = reject }))
+    await act(async () => root.render(createElement(TooltipProvider, null, createElement(MemoryRouter, null, createElement(AdminBackup)))))
+    await act(async () => container.querySelector<HTMLInputElement>('input[type="radio"][value="server"]')!.click())
+    expect(container.textContent).toContain('/app/data/backups')
+    const select = container.querySelector<HTMLSelectElement>('select')!
+    await act(async () => { select.value = archive.name; select.dispatchEvent(new Event('change', { bubbles: true })) })
+    await confirmImport()
+    expect(backupRestoreServerArchive).toHaveBeenCalledWith(archive, expect.any(Object))
+    expect(backupImport).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(archive.name)
+    expect(document.querySelector('[role="progressbar"]')?.hasAttribute('aria-valuenow')).toBe(false)
+    expect(document.body.textContent).toContain('admin:backup.import.serverRestoringHint')
+    expect(success).not.toHaveBeenCalled()
+    await act(async () => rejectRestore(new TypeError('connection failed before start')))
+  })
+
+  it('refreshes server archives without choosing or restoring one automatically', async () => {
+    await mountAndPick()
+    await act(async () => container.querySelector<HTMLInputElement>('input[type="radio"][value="server"]')!.click())
+    expect(button('admin:backup.import.action').disabled).toBe(true)
+    backupExportState.mockResolvedValue({ running: null, jobs: [], archives: [], server_archives: [{ name: 'copied.zip', size_bytes: 123, created_at: 456 }] })
+    await act(async () => button('admin:backup.import.serverRefresh').click())
+    expect(container.querySelector('select')?.textContent).toContain('copied.zip')
+    expect(button('admin:backup.import.action').disabled).toBe(true)
+    expect(backupRestoreServerArchive).not.toHaveBeenCalled()
+  })
+
   it('shows real bytes in the dialog and switches to indeterminate restore until the server finishes', async () => {
     let callbacks!: BackupImportOptions
     let rejectImport!: (error: unknown) => void

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { importBackupArchive } from '@/api/backup-import'
+import { importBackupArchive, restoreServerBackupArchive } from '@/api/backup-import'
 import { api, apiUpload, ApiError } from '@/api/client'
 import { isReloadBlocked } from '@/lib/sync-guards'
 
@@ -19,6 +19,80 @@ beforeEach(() => { vi.useFakeTimers(); vi.mocked(api).mockReset(); vi.mocked(api
 afterEach(() => { vi.useRealTimers() })
 
 describe('chunked backup import', () => {
+  it('reduces rejected chunks until they fit a proxy limit including multipart headers', async () => {
+    const file = new File([new Uint8Array(chunkBytes + 16)], 'large.zip')
+    const accepted: { offset: number; size: number }[] = []
+    vi.mocked(api).mockImplementation(async (path) => path.endsWith('/import-jobs') ? state('uploading') : { ...state('completed'), result })
+    vi.mocked(apiUpload).mockImplementation(async (path, form) => {
+      const offset = Number(new URL(path, 'https://example.test').searchParams.get('offset'))
+      const chunk = form.get('file') as File
+      if (chunk.size + 1024 > 1024 * 1024) throw new ApiError(413, 'Content Too Large', null)
+      expect(offset).toBe(accepted.reduce((sum, item) => sum + item.size, 0))
+      accepted.push({ offset, size: chunk.size })
+      return state('uploading', offset + chunk.size)
+    })
+    await expect(importBackupArchive(file)).resolves.toEqual(result)
+    expect(vi.mocked(apiUpload).mock.calls.slice(0, 4).map(([, form]) => (form.get('file') as File).size))
+      .toEqual([chunkBytes, chunkBytes / 2, chunkBytes / 4, chunkBytes / 8])
+    expect(accepted.reduce((sum, item) => sum + item.size, 0)).toBe(file.size)
+    expect(accepted.every((item) => item.size <= 512 * 1024)).toBe(true)
+    expect(vi.mocked(api).mock.calls.filter(([path]) => path.endsWith('/start'))).toHaveLength(1)
+  })
+
+  it('stops at the minimum chunk size and never starts restore if every chunk is rejected', async () => {
+    vi.mocked(api).mockResolvedValue(state('uploading'))
+    vi.mocked(apiUpload).mockRejectedValue(new ApiError(413, 'Content Too Large', null))
+    await expect(importBackupArchive(new File([new Uint8Array(chunkBytes)], 'large.zip'))).rejects.toMatchObject({ status: 413 })
+    expect(apiUpload).toHaveBeenCalledTimes(5)
+    expect(vi.mocked(api).mock.calls.some(([path]) => path.endsWith('/start'))).toBe(false)
+    expect(vi.mocked(api).mock.calls.at(-1)?.[1]?.method).toBe('DELETE')
+  })
+
+  it('restores a server archive using only JSON requests and the same capability polling', async () => {
+    const archive = { name: 'server-migration.zip', size_bytes: 5 * chunkBytes, created_at: 123 }
+    const onProgress = vi.fn(), onUploaded = vi.fn()
+    vi.mocked(api).mockImplementation(async (path) => {
+      if (path.endsWith('/import-jobs')) return state('uploading', archive.size_bytes)
+      if (path.endsWith('/start')) return state('restoring', archive.size_bytes)
+      return { ...state('completed', archive.size_bytes), result }
+    })
+    const promise = restoreServerBackupArchive(archive, { onProgress, onUploaded })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isReloadBlocked()).toBe(true)
+    expect(api).toHaveBeenCalledWith('/admin/backup/import-jobs', {
+      method: 'POST', body: { id: expect.any(String), size_bytes: archive.size_bytes, archive_name: archive.name, confirm: 'REPLACE' },
+    })
+    expect(onUploaded).toHaveBeenCalledOnce()
+    expect(onProgress).not.toHaveBeenCalled()
+    expect(apiUpload).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(promise).resolves.toEqual(result)
+    expect(api).toHaveBeenLastCalledWith(expect.stringContaining('/public/backup-import-jobs/'), {
+      anonymous: true, activity: 'background', headers: { Authorization: 'BackupImport scoped-secret' },
+    })
+    expect(isReloadBlocked()).toBe(false)
+  })
+
+  it('reuses a server source job when creation and cleanup responses both lose the network', async () => {
+    const archive = { name: 'server.zip', size_bytes: 1234, created_at: 5678 }
+    let connected = false
+    vi.mocked(api).mockImplementation(async (path, options) => {
+      if (!connected) throw new TypeError('offline')
+      if (options?.method === 'DELETE') throw new Error('must reuse the pinned source')
+      if (path.endsWith('/import-jobs')) return state('uploading', archive.size_bytes)
+      return { ...state('completed', archive.size_bytes), result }
+    })
+    const failed = restoreServerBackupArchive(archive).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(3500)
+    expect(await failed).toBeInstanceOf(TypeError)
+    connected = true
+    await expect(restoreServerBackupArchive({ ...archive })).resolves.toEqual(result)
+    const creations = vi.mocked(api).mock.calls.filter(([path]) => path.endsWith('/import-jobs'))
+    expect(creations).toHaveLength(4)
+    expect(creations.every(([, options]) => JSON.stringify(options?.body) === JSON.stringify(creations[0][1]?.body))).toBe(true)
+    expect(apiUpload).not.toHaveBeenCalled()
+  })
+
   it('uploads bounded chunks with total byte progress and polls independently of login sessions', async () => {
     const file = new File([new Uint8Array(chunkBytes + 16)], 'backup.zip')
     const progress = vi.fn()

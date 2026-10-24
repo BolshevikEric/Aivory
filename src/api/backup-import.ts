@@ -1,5 +1,5 @@
 import { api, apiUpload, ApiError, type UploadProgress } from './client'
-import type { BackupImportResult } from './endpoints'
+import type { BackupArchiveFile, BackupImportResult } from './endpoints'
 import { randomUUID } from '@/lib/random-uuid'
 import { blockReload } from '@/lib/sync-guards'
 
@@ -26,10 +26,10 @@ const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(re
 const transient = (error: unknown) => !(error instanceof ApiError)
   || [0, 408, 429, 500, 502, 503, 504, 520, 522, 524].includes(error.status)
 
-// If an upload and its cleanup both lose the connection, retrying the same
-// selected File reuses its upload ID and the server's acknowledged offset.
+// If creation/upload and cleanup both lose the connection, retrying the same
+// source reuses its job ID and the server's acknowledged offset or pinned ZIP.
 // Never reuse an ID once a destructive start has been attempted.
-let pendingUpload: { file: File; id: string } | undefined
+let pendingImport: { file?: File; archive?: BackupArchiveFile; id: string } | undefined
 
 async function discardUpload(id: string): Promise<void> {
   try {
@@ -54,9 +54,24 @@ async function retry<T>(action: () => Promise<T>): Promise<T> {
  * final acknowledged byte count advances progress; retries never append twice.
  * Restore runs independently of the browser and its login session. */
 export async function importBackupArchive(file: File, options: BackupImportOptions = {}): Promise<BackupImportResult> {
+  return importBackupSource({ file }, options)
+}
+
+export async function restoreServerBackupArchive(archive: BackupArchiveFile, options: BackupImportOptions = {}): Promise<BackupImportResult> {
+  return importBackupSource({ archive }, options)
+}
+
+async function importBackupSource(source: { file: File; archive?: never } | { archive: BackupArchiveFile; file?: never }, options: BackupImportOptions): Promise<BackupImportResult> {
+  const file = source.file
+  const size = file?.size ?? source.archive!.size_bytes
   const releaseReloadBlock = blockReload()
-  const previousUpload = pendingUpload
-  const id = previousUpload?.file === file ? previousUpload.id : randomUUID()
+  const previousUpload = pendingImport
+  const sameSource = previousUpload && (file
+    ? previousUpload.file === file
+    : previousUpload.archive?.name === source.archive?.name
+      && previousUpload.archive?.size_bytes === size
+      && previousUpload.archive?.created_at === source.archive?.created_at)
+  const id = sameSource ? previousUpload.id : randomUUID()
   const path = `/admin/backup/import-jobs/${encodeURIComponent(id)}`
   let token: string | undefined
   let startAttempted = false
@@ -71,45 +86,57 @@ export async function importBackupArchive(file: File, options: BackupImportOptio
       // The server only permits cancellation while the old job is uploading.
       await discardUpload(previousUpload.id)
     }
-    pendingUpload = { file, id }
+    pendingImport = { ...source, id }
     let job = await retry(() => api<ImportJob>('/admin/backup/import-jobs', {
-      method: 'POST', body: { id, size_bytes: file.size, confirm: 'REPLACE' },
+      method: 'POST', body: { id, size_bytes: size, confirm: 'REPLACE', ...(source.archive ? { archive_name: source.archive.name } : {}) },
     }))
     token = job.token
     if (!token || !Number.isSafeInteger(job.chunk_bytes) || job.chunk_bytes <= 0) {
       throw new Error('Invalid backup upload response')
     }
     if (job.status !== 'uploading') {
-      pendingUpload = undefined
+      pendingImport = undefined
       throw new ApiError(409, 'backup upload is no longer accepting chunks; select the file again', null)
     }
     // Use at most 4 MiB even if a newer backend offers a larger chunk size.
-    const chunkBytes = Math.min(job.chunk_bytes, 4 * 1024 * 1024)
-    while (job.uploaded_bytes < file.size) {
+    let chunkBytes = Math.min(job.chunk_bytes, 4 * 1024 * 1024)
+    while (file && job.uploaded_bytes < file.size) {
       const offset = job.uploaded_bytes
       const end = Math.min(file.size, offset + chunkBytes)
       const chunk = file.slice(offset, end)
       options.onProgress?.({ loaded: offset, total: file.size, percent: Math.floor(offset / file.size * 100) })
-      job = await retry(() => {
-        const form = new FormData()
-        form.append('confirm', 'REPLACE')
-        form.append('file', chunk, 'backup.part')
-        return apiUpload<ImportJob>(`${path}/chunks?offset=${offset}`, form, {
-          onProgress: (progress) => {
-            // XHR totals include multipart headers. Scale each request to the
-            // actual chunk so the page reports archive bytes, not form bytes.
-            if (!progress.total) return
-            const loaded = offset + Math.min(chunk.size, Math.floor(progress.loaded / progress.total * chunk.size))
-            options.onProgress?.({ loaded, total: file.size, percent: Math.floor(loaded / file.size * 100) })
-          },
+      try {
+        job = await retry(() => {
+          const form = new FormData()
+          form.append('confirm', 'REPLACE')
+          form.append('file', chunk, 'backup.part')
+          return apiUpload<ImportJob>(`${path}/chunks?offset=${offset}`, form, {
+            onProgress: (progress) => {
+              // XHR totals include multipart headers. Scale each request to the
+              // actual chunk so the page reports archive bytes, not form bytes.
+              if (!progress.total) return
+              const loaded = offset + Math.min(chunk.size, Math.floor(progress.loaded / progress.total * chunk.size))
+              options.onProgress?.({ loaded, total: file.size, percent: Math.floor(loaded / file.size * 100) })
+            },
+          })
         })
-      })
+      } catch (error) {
+        // A proxy can reject 4 MiB even though the API accepts it (Nginx often
+        // defaults to 1 MiB including multipart headers). Retry a smaller chunk
+        // at the same acknowledged offset, down to 256 KiB.
+        if (error instanceof ApiError && error.status === 413 && chunkBytes > 256 * 1024) {
+          chunkBytes = Math.max(256 * 1024, Math.floor(chunkBytes / 2))
+          continue
+        }
+        throw error
+      }
       if (job.uploaded_bytes !== end) throw new Error('Invalid backup upload offset')
     }
-    options.onProgress?.({ loaded: file.size, total: file.size, percent: 100 })
+    if (job.uploaded_bytes !== size) throw new Error('Invalid backup source size')
+    if (file) options.onProgress?.({ loaded: size, total: size, percent: 100 })
     options.onUploaded?.()
     startAttempted = true
-    pendingUpload = undefined
+    pendingImport = undefined
     // A lost start response is ambiguous: query the capability endpoint before
     // resending. The server also makes start idempotent.
     try {
@@ -139,7 +166,7 @@ export async function importBackupArchive(file: File, options: BackupImportOptio
       // Only discard an upload that has never been submitted for restore.
       try {
         await discardUpload(id)
-        if (pendingUpload?.id === id) pendingUpload = undefined
+        if (pendingImport?.id === id) pendingImport = undefined
       } catch { /* Reuse this upload ID if the same file is retried. */ }
     } else if (!outcomeKnown) {
       throw new ApiError(0, 'backup restore status could not be verified', { code: 'backup_import_status_unknown' })

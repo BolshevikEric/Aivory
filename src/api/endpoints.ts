@@ -15,7 +15,7 @@ import {
 import i18n, { normalizeLanguage } from '@/i18n'
 import { withRequestActivity, type RequestActivityMode } from '@/lib/request-activity'
 import { apiFetch } from '@/lib/api-fetch'
-import { importBackupArchive } from './backup-import'
+import { importBackupArchive, restoreServerBackupArchive } from './backup-import'
 import type {
   ApiAdminOverview,  ApiAdminMessageFeedbackPage,
   ApiAdminOnboarding,
@@ -1879,6 +1879,7 @@ export const adminApi = {
   backupArchiveDelete: (name: string) =>
     api<{ deleted: string }>(`/admin/backup/archives/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   backupImport: importBackupArchive,
+  backupRestoreServerArchive: restoreServerBackupArchive,
 
   // Configuration backup / migration. This is lighter than the full backup:
   // it exports admin configuration tables (settings, channels, models, skills,
@@ -1956,6 +1957,8 @@ export interface BackupArchiveFile {
 
 export interface BackupExportState {
   max_import_bytes?: number
+  server_archives?: BackupArchiveFile[]
+  backup_directory?: string
   running: BackupExportJob | null
   jobs: BackupExportJob[]
   archives: BackupArchiveFile[]
