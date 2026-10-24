@@ -9,13 +9,40 @@
 
 # Aivory
 
-Aivory is a self-hosted AI workspace for multi-model chat, knowledge search, tool-assisted work, and team collaboration. It provides personal and team deployments, with data stored on infrastructure you control.
+Aivory is a self-hosted AI workspace for individuals and teams. It brings conversations, research, creation, and shared knowledge together, while keeping control of the product and its data in your hands.
 
 [Deployment guide](deploy/README.md) · [Product documentation](https://docs.aivorygo.com) · [Live demo](https://demo.aivorygo.com)
 
+## Product
+
+Aivory gives people one place to work with the AI services they choose. Conversations, files, research, and team projects stay together, so work can continue from an idea through to a finished result.
+
+- **Conversations:** Use different AI models for different tasks, return to earlier work, and organize discussions in projects. Keep useful context close to the conversation instead of starting over in a separate service.
+- **Research and creation:** Search for information, review web pages and documents, and ask follow-up questions in the same workflow. Turn the results into code, images, reports, spreadsheets, or presentations that can be reviewed and downloaded.
+- **Knowledge:** Build libraries from the documents your team uses. Bring relevant passages into conversations and check the cited sources, making recurring research easier to reuse.
+- **Personal and team workspaces:** Keep private conversations and files separate from shared team work. Invite teammates to selected workspaces and collaborate around shared projects, conversations, files, and knowledge.
+- **Administration:** Configure available AI services, manage members and access, set plans and usage limits, review activity and costs, and maintain workspace features and backups from one place.
+
+## Screenshots
+
+![Aivory product overview showing chat, team workspaces, sandbox, and administration](docs/screenshots/aivory-readme-cover.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/hero.png" alt="Aivory conversation workspace"></td>
+    <td width="50%"><img src="docs/screenshots/admin.jpg" alt="Aivory administration workspace"></td>
+  </tr>
+</table>
+
+## Product architecture
+
+Aivory connects AI models, knowledge, everyday tools, and shared work in one workspace. The diagram shows how those parts come together from a user's perspective.
+
+![Aivory product architecture: models, knowledge, tools, sandbox, and data connected through one workspace](docs/screenshots/aivory-architecture-poster.png)
+
 ## Deploy
 
-Deploy with Docker 24 or later and the Docker Compose plugin. Choose the personal profile for a single-user server with SQLite, or the full profile for PostgreSQL, Redis, Qdrant, and the bundled Python sandbox.
+Deploy with Docker 24 or later and the Docker Compose plugin. Choose the personal profile for an individual server or the full profile for a team deployment.
 
 ### Full deployment
 
@@ -71,13 +98,7 @@ For version-specific deployment, proxy configuration, storage paths, and recover
 
 ## Contributing
 
-For substantial changes, open an issue before starting work. Pull requests should describe the user-facing change and include relevant tests. Run checks for the areas you changed; for example:
-
-```bash
-npm run lint
-npm run build
-cd server && go test ./... && go vet ./...
-```
+For substantial changes, open an issue before starting work. Pull requests should explain the problem being solved, describe the user-facing result, and include evidence that the change works.
 
 ## Acknowledgements
 

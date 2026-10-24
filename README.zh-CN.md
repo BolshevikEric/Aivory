@@ -9,13 +9,40 @@
 
 # Aivory
 
-Aivory 是一个可自部署的 AI 工作空间，提供多模型对话、知识检索、工具协作和团队功能。支持个人与团队部署，数据保存在你管理的基础设施中。
+Aivory 是一个面向个人与团队的自部署 AI 工作空间，将对话、研究、创作与共享知识放在一起，让你始终掌控产品和自己的数据。
 
 [部署指南](deploy/README.zh-CN.md) · [产品文档](https://docs.aivorygo.com) · [在线体验](https://demo.aivorygo.com)
 
+## 产品介绍
+
+Aivory 让你在一个空间里使用自己选择的 AI 服务。对话、文件、研究资料和团队项目集中保存，让一项工作可以从想法持续推进到完成，而不必在多个聊天网站间来回切换。
+
+- **对话：** 为不同任务选择合适的 AI 模型，随时回到之前的讨论，并用项目整理相关对话。文件和已有上下文都留在工作旁边，后续可以接着推进。
+- **研究与创作：** 搜索资料、阅读网页和文档，并在同一流程中继续提问。研究结果可以整理成代码、图片、报告、表格或演示文稿，供检查和下载。
+- **知识：** 将团队常用文档整理成知识库，在对话中引用相关内容并查看来源，让重复研究更容易复用。
+- **个人与团队空间：** 个人对话和文件与团队工作保持区分。邀请成员进入指定工作空间，围绕共享项目、对话、文件和知识一起协作。
+- **管理：** 配置成员可用的 AI 服务，管理账号和访问权限，设置方案与使用额度，查看活动和成本，并维护工作空间功能及备份。
+
+## 产品截图
+
+![Aivory 产品概览：对话、团队空间、沙箱与管理后台](docs/screenshots/aivory-readme-cover.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/hero.png" alt="Aivory 对话工作空间"></td>
+    <td width="50%"><img src="docs/screenshots/admin.jpg" alt="Aivory 管理工作空间"></td>
+  </tr>
+</table>
+
+## 产品架构
+
+Aivory 将 AI 模型、知识、日常工具和团队协作连接在一个工作空间中。下图从产品使用角度展示各部分如何协同。
+
+![Aivory 产品架构：模型、知识、工具、沙箱和数据汇聚于一个工作空间](docs/screenshots/aivory-architecture-poster.png)
+
 ## 部署
 
-需要 Docker 24 或更新版本及 Docker Compose 插件。个人版使用 SQLite，适合单机部署；完整版使用 PostgreSQL、Redis、Qdrant，并包含 Python 沙箱。
+需要 Docker 24 或更新版本及 Docker Compose 插件。个人版适合个人服务器，完整版适合团队部署。
 
 ### 完整版
 
@@ -71,13 +98,7 @@ docker compose --env-file .env.personal -f docker-compose.personal.yml up -d --n
 
 ## 参与贡献
 
-较大的改动建议先提交 issue 讨论。Pull Request 请说明用户可见的变化，并附上相关测试。根据改动范围运行检查，例如：
-
-```bash
-npm run lint
-npm run build
-cd server && go test ./... && go vet ./...
-```
+较大的改动建议先提交 issue 讨论。Pull Request 请说明要解决的问题、用户能看到的变化，并提供改动有效的验证说明。
 
 ## 致谢
 
