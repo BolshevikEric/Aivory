@@ -389,7 +389,9 @@
       "recover": "恢复",
       "recovered": "模型渠道已恢复",
       "noCapability": "请先在渠道模型列表中配置此 request_id，再创建模型。",
-      "regularRequired": "至少选择一个渠道。"
+      "regularRequired": "至少选择一个渠道。",
+      "loadFailed": "无法读取模型的渠道绑定，保存已暂停以避免覆盖现有配置。",
+      "retry": "重试读取"
     },
     "policy": {
       "title": "超时与自动禁用",

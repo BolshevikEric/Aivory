@@ -200,7 +200,11 @@ function modelToDraft(m: ApiModel, channel?: ApiChannel): Draft {
   }
 }
 
-function legacyChannelBinding(model: ApiModel, channels: ApiChannel[], role: 'regular' | 'fallback'): ApiModelChannelBinding[] {
+function legacyChannelBinding(
+  model: { id: string; channel_id?: string; fallback_channel_id?: string },
+  channels: ApiChannel[],
+  role: 'regular' | 'fallback',
+): ApiModelChannelBinding[] {
   const channelID = role === 'regular' ? model.channel_id : model.fallback_channel_id
   if (!channelID) return []
   const channel = channels.find((row) => row.id === channelID)
@@ -255,6 +259,8 @@ export default function AdminModelEdit() {
   const [channels, setChannels] = useState<ApiChannel[]>([])
   const [capabilityChannels, setCapabilityChannels] = useState<ApiChannel[]>([])
   const [bindings, setBindings] = useState<{ regular: ApiModelChannelBinding[]; fallback: ApiModelChannelBinding[] }>({ regular: [], fallback: [] })
+  const [bindingsLoadError, setBindingsLoadError] = useState(false)
+  const [bindingsRetrying, setBindingsRetrying] = useState(false)
   const [allTags, setAllTags] = useState<ApiModelTag[]>([])
   const [allSkills, setAllSkills] = useState<ApiSkill[]>([])
   const [builtinTools, setBuiltinTools] = useState<ApiBuiltinTool[]>([])
@@ -278,6 +284,9 @@ export default function AdminModelEdit() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setDraft(null)
+      setBindings({ regular: [], fallback: [] })
+      setBindingsLoadError(false)
       setBuiltinToolsLoading(true)
       setBuiltinToolsError(false)
       setMCPServersLoading(true)
@@ -326,16 +335,21 @@ export default function AdminModelEdit() {
         } else {
           setNotFound(false)
           setDraft(modelToDraft(found, c.find((channel) => channel.id === found.channel_id)))
-          const loadedBindings = await adminApi.modelChannels(id).catch(() => null)
-          if (!cancelled) {
-            // Older models may only carry the single-channel fields.
-            const hasBindings = (loadedBindings?.regular?.length ?? 0) + (loadedBindings?.fallback?.length ?? 0) > 0
-            setBindings(hasBindings
-              ? unifyChannelBindings(loadedBindings?.regular ?? [], loadedBindings?.fallback ?? [])
-              : unifyChannelBindings(
-                  legacyChannelBinding(found, c, 'regular'),
-                  legacyChannelBinding(found, c, 'fallback'),
-                ))
+          try {
+            const loadedBindings = await adminApi.modelChannels(id)
+            if (!cancelled) {
+              // Older models may only carry the single-channel fields.
+              const hasBindings = (loadedBindings.regular?.length ?? 0) + (loadedBindings.fallback?.length ?? 0) > 0
+              setBindings(hasBindings
+                ? unifyChannelBindings(loadedBindings.regular ?? [], loadedBindings.fallback ?? [])
+                : unifyChannelBindings(
+                    legacyChannelBinding(found, c, 'regular'),
+                    legacyChannelBinding(found, c, 'fallback'),
+                  ))
+              setBindingsLoadError(false)
+            }
+          } catch {
+            if (!cancelled) setBindingsLoadError(true)
           }
         }
       } catch (e) {
@@ -580,6 +594,10 @@ export default function AdminModelEdit() {
 
   async function save() {
     if (!draft) return
+    if (bindingsLoadError || bindingsRetrying) {
+      toast.error(t('admin:models.channels.loadFailed'))
+      return
+    }
     if (!draft.label?.trim() || !draft.request_id?.trim()) {
       toast.error(t('admin:models.errors.missingFields'))
       return
@@ -700,6 +718,34 @@ export default function AdminModelEdit() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function retryChannelBindings() {
+    if (!draft || bindingsRetrying) return
+    setBindingsRetrying(true)
+    try {
+      const loadedBindings = await adminApi.modelChannels(id)
+      const hasBindings = (loadedBindings.regular?.length ?? 0) + (loadedBindings.fallback?.length ?? 0) > 0
+      setBindings(hasBindings
+        ? unifyChannelBindings(loadedBindings.regular ?? [], loadedBindings.fallback ?? [])
+        : unifyChannelBindings(
+            legacyChannelBinding({
+              id,
+              channel_id: draft.channel_id,
+              fallback_channel_id: draft.fallback_channel_id,
+            }, channels, 'regular'),
+            legacyChannelBinding({
+              id,
+              channel_id: draft.channel_id,
+              fallback_channel_id: draft.fallback_channel_id,
+            }, channels, 'fallback'),
+          ))
+      setBindingsLoadError(false)
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('admin:models.channels.loadFailed'))
+    } finally {
+      setBindingsRetrying(false)
     }
   }
 
@@ -861,7 +907,16 @@ export default function AdminModelEdit() {
             bodyClassName="divide-y-0"
           >
             <SettingsBlock>
-              {(['regular'] as const).map((role) => {
+              {bindingsLoadError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] bg-[var(--color-bg-muted)] p-3">
+                  <p className="text-sm text-[var(--color-fg-muted)]">{t('admin:models.channels.loadFailed')}</p>
+                  <Button type="button" size="sm" variant="secondary" loading={bindingsRetrying} onClick={() => void retryChannelBindings()}>
+                    <RefreshCw size={14} aria-hidden />
+                    {t('admin:models.channels.retry')}
+                  </Button>
+                </div>
+              ) : null}
+              {!bindingsLoadError && (['regular'] as const).map((role) => {
                 const rows = bindings[role]
                 const showRouting = rows.length > 1
                 return (
@@ -1924,7 +1979,7 @@ export default function AdminModelEdit() {
             <Button variant="ghost" onClick={() => navigate('/admin/models')} disabled={saving || fastToggling}>
               {t('common:actions.cancel')}
             </Button>
-            <Button onClick={() => void save()} loading={saving} disabled={fastToggling}>
+            <Button onClick={() => void save()} loading={saving} disabled={fastToggling || bindingsLoadError || bindingsRetrying}>
               {t('common:actions.save')}
             </Button>
           </div>

@@ -389,7 +389,9 @@
       "recover": "Recover",
       "recovered": "Model channel recovered",
       "noCapability": "Configure this request_id in the channel model list before creating the model.",
-      "regularRequired": "Select at least one channel."
+      "regularRequired": "Select at least one channel.",
+      "loadFailed": "Could not load this model's channel bindings. Saving is paused to protect the existing configuration.",
+      "retry": "Retry loading"
     },
     "policy": {
       "title": "Timeout and auto-disable",

@@ -389,7 +389,9 @@
       "recover": "Rétablir",
       "recovered": "Liaison du modèle rétablie",
       "noCapability": "Configurez ce request_id dans la liste des modèles du canal avant de créer le modèle.",
-      "regularRequired": "Sélectionnez au moins un canal."
+      "regularRequired": "Sélectionnez au moins un canal.",
+      "loadFailed": "Impossible de charger les liaisons du modèle. L’enregistrement est suspendu pour protéger la configuration existante.",
+      "retry": "Réessayer"
     },
     "policy": {
       "title": "Expiration et désactivation automatique",

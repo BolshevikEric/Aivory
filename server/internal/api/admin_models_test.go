@@ -38,6 +38,32 @@ func TestCreateModelReqTracksExplicitResearchEnabled(t *testing.T) {
 	}
 }
 
+func TestListModelsAdminFailsWhenAssociationRowsCannotBeRead(t *testing.T) {
+	for _, table := range []string{"model_channel_bindings", "model_skills"} {
+		t.Run(table, func(t *testing.T) {
+			db := openMigrated(t, filepath.Join(t.TempDir(), "model-associations.db"))
+			defer db.Close()
+			mustExec(t, db, `INSERT INTO channels(id,name,type,api_format,base_url,api_key,enabled) VALUES
+				('association-channel','Association channel','openai','chat','https://api.example','sk',1)`)
+			mustExec(t, db, `INSERT INTO models(id,channel_id,kind,request_id,label,enabled) VALUES
+				('association-model','association-channel','chat','gpt-test','Association model',1)`)
+			if _, err := db.Exec(`DROP TABLE ` + table); err != nil {
+				t.Fatalf("drop %s: %v", table, err)
+			}
+
+			mx := newMux()
+			mx.handle(http.MethodGet, "/api/admin/models", func(w http.ResponseWriter, r *http.Request) {
+				listModelsAdmin(Deps{DB: db}, w, r)
+			})
+			rec := httptest.NewRecorder()
+			mx.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/models", nil))
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("list status=%d body=%s; broken association read must not look like an empty configuration", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestAdminModelOfficialToolsNoDefaultsValidationAndPublicMasking(t *testing.T) {
 	db := openMigrated(t, filepath.Join(t.TempDir(), "model-official-tools.db"))
 	defer db.Close()

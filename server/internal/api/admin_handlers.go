@@ -364,19 +364,24 @@ func listModelsAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, err)
 		return
 	}
-	// Populate model_skills bindings (§4.17) so the model editor can show which
-	// skills are currently checked. Admin model lists are small, so the per-row
-	// query is cheap; a SkillsForModel failure just leaves that row's skills empty.
+	// Populate model bindings so the editor never mistakes a failed association
+	// read for an empty configuration and overwrites saved rows on the next save.
 	for i := range rows {
-		if bindings, bindErr := store.ListModelChannelBindings(r.Context(), d.DB, rows[i].ID, ""); bindErr == nil {
-			rows[i].ChannelBindings = bindings
+		bindings, bindErr := store.ListModelChannelBindings(r.Context(), d.DB, rows[i].ID, "")
+		if bindErr != nil {
+			writeError(w, http.StatusInternalServerError, bindErr)
+			return
 		}
+		rows[i].ChannelBindings = bindings
 		if rows[i].Kind != "chat" {
 			continue
 		}
-		if ids, err := store.SkillsForModel(r.Context(), d.DB, rows[i].ID); err == nil {
-			rows[i].Skills = ids
+		ids, err := store.SkillsForModel(r.Context(), d.DB, rows[i].ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
 		}
+		rows[i].Skills = ids
 	}
 	writeJSON(w, 200, rows)
 }
