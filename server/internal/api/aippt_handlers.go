@@ -9,12 +9,12 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"aivory/server/internal/fileguard"
 	"aivory/server/internal/sse"
 	"aivory/server/internal/store"
 )
@@ -1295,6 +1295,11 @@ func mirrorAiPPTDeckFile(
 	ctx context.Context, d Deps, cfg docmeeConfig, client *aiPPTClient,
 	userID, token string, deck store.AiPPTDeck, info aiPPTPptInfo,
 ) (string, error) {
+	unlock, err := fileguard.LockStorage(ctx, false, d.Config.UploadDir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	fileURL := strings.TrimSpace(info.FileURL)
 	if fileURL == "" {
 		// The render response does not always carry a file URL; ask explicitly.
@@ -1334,7 +1339,7 @@ func mirrorAiPPTDeckFile(
 		Kind: kindOf(contentType, name), StoragePath: path,
 	})
 	if err != nil {
-		_ = os.Remove(path)
+		cleanupFailedStorageWrite(ctx, d, path, err)
 		return "", err
 	}
 	return created.ID, nil
@@ -1354,10 +1359,10 @@ func dropAiPPTMirroredFile(d Deps, userID, fileID string) {
 	if err != nil {
 		return
 	}
-	if f.StoragePath != "" {
-		_ = os.Remove(f.StoragePath)
+	if err := store.AdminDeleteFile(ctx, d.DB, fileID); err != nil {
+		return
 	}
-	_ = store.AdminDeleteFile(ctx, d.DB, fileID)
+	cleanupStoragePaths(ctx, d, []string{f.StoragePath}, "delete AI PPT mirrored file "+fileID)
 }
 
 // aiPPTSubjectFor derives a display name for a brand-new deck.

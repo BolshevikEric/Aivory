@@ -1565,6 +1565,11 @@ func saveArtifact(ctx context.Context, tc *llm.ToolContext, artifactDir, name, m
 	if dir == "" {
 		dir = "./data/artifacts"
 	}
+	unlock, err := fileguard.LockStorage(ctx, false, dir)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -1575,9 +1580,11 @@ func saveArtifact(ctx context.Context, tc *llm.ToolContext, artifactDir, name, m
 	// row pointed at the last file written. A random token guarantees distinct
 	// files (the display Filename stays `safe`).
 	tok := make([]byte, 6)
-	_, _ = rand.Read(tok)
+	if _, err := rand.Read(tok); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(dir, tc.MessageID+"_"+hex.EncodeToString(tok)+"_"+safe)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := fileguard.WriteNewFile(path, data, 0o644); err != nil {
 		return nil, err
 	}
 	art, err := store.CreateArtifactForUser(ctx, tc.DB, store.Artifact{
@@ -1589,7 +1596,16 @@ func saveArtifact(ctx context.Context, tc *llm.ToolContext, artifactDir, name, m
 		Source:      source,
 	}, tc.ConvID, tc.UserID)
 	if err != nil || art == nil {
-		_ = os.Remove(path)
+		// An uncertain commit may already have made this path durable in the DB.
+		// Keep the bytes unless a detached read proves that nobody references it.
+		if !errors.Is(err, store.ErrArtifactPersistenceUncertain) {
+			verifyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			referenced, verifyErr := store.StoragePathReferenced(verifyCtx, tc.DB, path)
+			cancel()
+			if verifyErr == nil && !referenced {
+				_ = os.Remove(path)
+			}
+		}
 		if err == nil {
 			err = errors.New("artifact row was not created")
 		}

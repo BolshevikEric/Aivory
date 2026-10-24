@@ -68,3 +68,17 @@ func TestWriteUploadCopyPersistsCompleteFile(t *testing.T) {
 		t.Fatalf("stored permissions=%#o, want no group or other access", permissions)
 	}
 }
+
+func TestWriteUploadCopyNeverOverwritesExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "upload.bin")
+	if err := os.WriteFile(path, []byte("existing bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeUploadCopy(path, &failingUploadReader{}, 1024); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("expected collision rejection, got %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "existing bytes" {
+		t.Fatalf("existing object damaged: %q %v", data, err)
+	}
+}

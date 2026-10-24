@@ -1673,7 +1673,7 @@ func DeleteUser(ctx context.Context, db *sql.DB, userID string, storageRoots ...
 		if referenced {
 			continue
 		}
-		if err := removeLocalStoragePath(path, storageRoots...); err != nil && !os.IsNotExist(err) {
+		if err := removeLocalStoragePath(db, path, storageRoots...); err != nil && !os.IsNotExist(err) {
 			log.Printf("delete user %s: remove file %q: %v", userID, path, err)
 		}
 	}

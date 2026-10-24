@@ -146,7 +146,7 @@ func CreateFile(ctx context.Context, db *sql.DB, f File) (*File, error) {
 	}
 	created.ConversationID = conversationID.String
 	created.Draft = draft != 0
-	if err := tx.Commit(); err != nil {
+	if err := commitStorageRecord(ctx, db, tx, "files", f.ID, f.StoragePath); err != nil {
 		return nil, err
 	}
 	return &created, nil
@@ -858,12 +858,23 @@ func keys(m map[string]struct{}) []string {
 // omitted root list therefore deliberately performs no physical deletion;
 // API callers pass their roots and the fileguard performs lexical and
 // symlink-aware containment checks.
-func removeLocalStoragePath(path string, roots ...string) error {
+func removeLocalStoragePath(db *sql.DB, path string, roots ...string) error {
 	if !looksLocalStoragePath(path) {
 		return nil
 	}
 	if len(roots) == 0 {
 		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	unlock, err := fileguard.LockStorage(ctx, true, roots...)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	referenced, err := StoragePathReferenced(ctx, db, path)
+	if err != nil || referenced {
+		return err
 	}
 	safePath, err := fileguard.ResolveExisting(path, roots...)
 	if err != nil {
@@ -2387,10 +2398,18 @@ func createArtifact(ctx context.Context, db *sql.DB, a Artifact, expectedConvID,
 	}
 	createdAt := time.Now().Unix()
 	if userID == "" {
-		_, err := db.ExecContext(ctx,
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback() //nolint:errcheck
+		_, err = tx.ExecContext(ctx,
 			`INSERT INTO artifacts(id, message_id, filename, storage_path, mime_type, size_bytes, source, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
 			a.ID, a.MessageID, a.Filename, a.StoragePath, a.MimeType, a.SizeBytes, a.Source, createdAt)
 		if err != nil {
+			return nil, err
+		}
+		if err := commitStorageRecord(ctx, db, tx, "artifacts", a.ID, a.StoragePath); err != nil {
 			return nil, err
 		}
 		a.CreatedAt = createdAt
@@ -2453,7 +2472,7 @@ func createArtifact(ctx context.Context, db *sql.DB, a Artifact, expectedConvID,
 		a.ID, a.MessageID, a.Filename, a.StoragePath, a.MimeType, a.SizeBytes, a.Source, createdAt); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitStorageRecord(ctx, db, tx, "artifacts", a.ID, a.StoragePath); err != nil {
 		return nil, err
 	}
 	a.CreatedAt = createdAt

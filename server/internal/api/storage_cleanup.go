@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -46,6 +47,11 @@ func cleanupStoragePaths(ctx context.Context, d Deps, paths []string, label stri
 // sweep must keep it (its owner's job is still running). err != nil means the
 // removal itself failed and durable cleanup state must be retained.
 func cleanupOneStoragePath(ctx context.Context, d Deps, obj *storage.Client, p string) (referenced bool, err error) {
+	unlock, err := fileguard.LockStorage(ctx, true, d.Config.UploadDir, d.Config.ArtifactDir)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
 	ref, err := store.StoragePathReferenced(ctx, d.DB, p)
 	if err != nil {
 		return false, err
@@ -221,5 +227,21 @@ func looksLocalStoragePath(p string) bool {
 func logStorageCleanup(d Deps, format string, args ...any) {
 	if d.Logger != nil {
 		d.Logger.Printf(format, args...)
+	}
+}
+
+// The upload caller already holds the shared storage lock and owns a fresh,
+// unique path. A failed acknowledgement is not permission to remove its bytes.
+func cleanupFailedStorageWrite(ctx context.Context, d Deps, path string, persistErr error) {
+	if errors.Is(persistErr, store.ErrStoragePersistenceUncertain) {
+		return
+	}
+	verifyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	referenced, err := store.StoragePathReferenced(verifyCtx, d.DB, path)
+	if err == nil && !referenced {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			logStorageCleanup(d, "remove failed upload %q: %v", path, err)
+		}
 	}
 }

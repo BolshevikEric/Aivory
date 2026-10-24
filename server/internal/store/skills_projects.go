@@ -1128,7 +1128,7 @@ func DeleteProjectWithOptions(ctx context.Context, db *sql.DB, id, userID string
 		if referenced {
 			continue
 		}
-		if removeErr := removeLocalStoragePath(path, storageRoots...); removeErr != nil && !os.IsNotExist(removeErr) {
+		if removeErr := removeLocalStoragePath(db, path, storageRoots...); removeErr != nil && !os.IsNotExist(removeErr) {
 			log.Printf("delete project %s: remove file %q: %v", id, path, removeErr)
 		}
 	}

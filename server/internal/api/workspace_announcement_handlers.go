@@ -134,7 +134,7 @@ func uploadWorkspaceImage(d Deps, w http.ResponseWriter, r *http.Request, allowS
 		writeError(w, status, err)
 		return
 	}
-	filename, err := saveUploadedIcon(d, data, ext)
+	filename, err := saveUploadedIcon(r.Context(), d, data, ext)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

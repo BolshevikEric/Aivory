@@ -1003,7 +1003,7 @@ func DeleteKB(ctx context.Context, db *sql.DB, id, userID string, storageRoots .
 		if ref {
 			continue
 		}
-		if rmErr := removeLocalStoragePath(p, storageRoots...); rmErr != nil && !os.IsNotExist(rmErr) {
+		if rmErr := removeLocalStoragePath(db, p, storageRoots...); rmErr != nil && !os.IsNotExist(rmErr) {
 			log.Printf("delete kb %s: remove file %q: %v", id, p, rmErr)
 		}
 	}
@@ -1539,13 +1539,27 @@ func CreateDocument(ctx context.Context, db *sql.DB, d Document) (*Document, err
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.ExecContext(ctx,
-		`INSERT INTO documents(id, kb_id, conversation_id, filename, mime_type, size_bytes, status, storage_path, uploaded_by_user_id, ingest_updated_at, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		d.ID, kbID, convID, d.Filename, d.MimeType, d.SizeBytes, d.Status, d.StoragePath, d.UploadedByUserID, now, now)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	return GetDocument(ctx, db, d.ID)
+	defer tx.Rollback() //nolint:errcheck
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO documents(id, kb_id, conversation_id, filename, mime_type, size_bytes, status, storage_path, uploaded_by_user_id, ingest_updated_at, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		d.ID, kbID, convID, d.Filename, d.MimeType, d.SizeBytes, d.Status, d.StoragePath, d.UploadedByUserID, now, now); err != nil {
+		return nil, err
+	}
+	created, err := scanDocument(tx.QueryRowContext(ctx,
+		`SELECT d.id, COALESCE(d.kb_id,''), COALESCE(d.conversation_id,''), d.filename, d.mime_type, d.size_bytes, d.status, d.error, d.chunk_count, d.storage_path,
+		        COALESCE(d.uploaded_by_user_id,''), COALESCE(u.name,''), COALESCE(u.email,''), d.created_at
+		   FROM documents d LEFT JOIN users u ON u.id=d.uploaded_by_user_id WHERE d.id=?`, d.ID))
+	if err != nil {
+		return nil, err
+	}
+	if err := commitStorageRecord(ctx, db, tx, "documents", d.ID, d.StoragePath); err != nil {
+		return nil, err
+	}
+	return &created, nil
 }
 
 // CreateDocumentForUser binds document creation to an authorized KB or
@@ -1660,7 +1674,7 @@ func CreateDocumentForUser(ctx context.Context, db *sql.DB, d Document, userID s
 		}
 		created.CanDelete = canDelete == 1
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitStorageRecord(ctx, db, tx, "documents", d.ID, d.StoragePath); err != nil {
 		return nil, err
 	}
 	return &created, nil

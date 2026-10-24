@@ -117,7 +117,7 @@ func uploadDestPath(d Deps, userID, kindPrefix, safeName string) (string, error)
 // all. In particular, a disconnected client or a late disk error must not
 // leave bytes behind that have no database row and cannot be managed later.
 func writeUploadCopy(path string, source io.Reader, limit int64) (int64, error) {
-	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return 0, err
 	}
@@ -149,6 +149,11 @@ func writeUploadCopy(path string, source io.Reader, limit int64) (int64, error) 
 //
 // Returns the persisted store.Document, ready for RAG ingestion.
 func receiveDocument(d Deps, r *http.Request, kbID, convID string) (*store.Document, error) {
+	unlock, lockErr := fileguard.LockStorage(r.Context(), false, d.Config.UploadDir)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	u := authUser(r)
 	// Fail on current group capabilities before resolving billing or checking
 	// quota. A user who cannot upload should never receive a misleading quota
@@ -219,7 +224,7 @@ func receiveDocument(d Deps, r *http.Request, kbID, convID string) (*store.Docum
 		}
 		created, err := store.CreateDocumentForUser(r.Context(), d.DB, doc, u.ID)
 		if err != nil {
-			_ = os.Remove(path)
+			cleanupFailedStorageWrite(r.Context(), d, path, err)
 			return nil, err
 		}
 		return created, nil
@@ -269,7 +274,7 @@ func receiveDocument(d Deps, r *http.Request, kbID, convID string) (*store.Docum
 	}
 	created, err := store.CreateDocumentForUser(r.Context(), d.DB, doc, u.ID)
 	if err != nil {
-		_ = os.Remove(path)
+		cleanupFailedStorageWrite(r.Context(), d, path, err)
 		return nil, err
 	}
 	return created, nil
@@ -284,6 +289,12 @@ func receiveDocument(d Deps, r *http.Request, kbID, convID string) (*store.Docum
 // BEFORE allocating the destination on disk. Invalid uploads never write
 // bytes to the filesystem (§4.6).
 func uploadFileHandler(d Deps, w http.ResponseWriter, r *http.Request) {
+	unlock, lockErr := fileguard.LockStorage(r.Context(), false, d.Config.UploadDir)
+	if lockErr != nil {
+		writeError(w, http.StatusInternalServerError, lockErr)
+		return
+	}
+	defer unlock()
 	u := authUser(r)
 	if !rateLimitUser(d, u.ID, "upload", uploadRateLimitMax, uploadRateLimitWindow) { // §C4
 		writeError(w, 429, errUploadRateLimited)
@@ -467,8 +478,8 @@ func uploadFileHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 		}(),
 	})
 	if err != nil {
-		// The row never landed — don't leave the copied bytes orphaned on disk.
-		_ = os.Remove(path)
+		// Only a confirmed failed write permits removal of these bytes.
+		cleanupFailedStorageWrite(r.Context(), d, path, err)
 		// TOCTOU with the scope check above: an explicit conversation deletion
 		// can race a body that is still streaming. Surface that as the same 404
 		// rather than an opaque FK 500.

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"aivory/server/internal/envcfg"
+	"aivory/server/internal/fileguard"
 	"aivory/server/internal/mail"
 	"aivory/server/internal/requestheaders"
 	"aivory/server/internal/store"
@@ -746,6 +747,12 @@ func listSkillsAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 }
 
 func createSkillAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
+	unlock, err := fileguard.LockStorage(r.Context(), false, d.Config.UploadDir)
+	if err != nil {
+		writeError(w, 500, err)
+		return
+	}
+	defer unlock()
 	var s store.Skill
 	if err := decodeJSON(r, &s); err != nil {
 		writeError(w, 400, errInvalidInput)
@@ -810,6 +817,12 @@ func reorderSkillsAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 }
 
 func updateSkillAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
+	unlock, err := fileguard.LockStorage(r.Context(), false, d.Config.UploadDir)
+	if err != nil {
+		writeError(w, 500, err)
+		return
+	}
+	defer unlock()
 	id := pathParam(r, "id")
 	// Load the existing row and decode the request body OVER it, so a PARTIAL
 	// payload (e.g. just {"enabled":false}) only changes the fields it sends and

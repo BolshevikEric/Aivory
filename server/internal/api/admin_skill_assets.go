@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"aivory/server/internal/envcfg"
+	"aivory/server/internal/fileguard"
 )
 
 // Skill assets (§4.17) are templates / scripts / data files an admin bundles
@@ -59,6 +61,12 @@ type skillAssetRow struct {
 // asset descriptor the editor appends to the skill's `assets` array:
 // {filename, storage_path, mime_type, size_bytes}.
 func uploadSkillAssetAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
+	unlock, lockErr := fileguard.LockStorage(r.Context(), false, d.Config.UploadDir)
+	if lockErr != nil {
+		writeError(w, 500, lockErr)
+		return
+	}
+	defer unlock()
 	if err := r.ParseMultipartForm(maxSkillAssetBytes + 4096); err != nil {
 		writeError(w, 400, err)
 		return
@@ -105,7 +113,7 @@ func uploadSkillAssetAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(dir, id+"."+ext)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := fileguard.WriteNewFile(path, data, 0o644); err != nil {
 		writeError(w, 500, err)
 		return
 	}
@@ -161,6 +169,17 @@ func validateSkillAssets(d Deps, assets json.RawMessage) (json.RawMessage, error
 		}
 		if abs != base && !strings.HasPrefix(abs, base+string(os.PathSeparator)) {
 			return nil, errors.New("assets: storage_path outside skill-assets directory")
+		}
+		safe, err := fileguard.ResolveExisting(abs, base)
+		if err != nil {
+			return nil, fmt.Errorf("assets: source file unavailable: %w", err)
+		}
+		info, err := os.Stat(safe)
+		if err != nil {
+			return nil, fmt.Errorf("assets: inspect source file: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, errors.New("assets: source must be a regular file")
 		}
 		row.Filename = sanitizeAssetName(row.Filename)
 		row.StoragePath = abs

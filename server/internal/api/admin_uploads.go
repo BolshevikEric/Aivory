@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"aivory/server/internal/envcfg"
+	"aivory/server/internal/fileguard"
 )
 
 // iconServingCacheAge is the GET-icon Cache-Control max-age (86400s = 24h).
@@ -170,7 +172,7 @@ func uploadIconAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, err)
 		return
 	}
-	filename, err := saveUploadedIcon(d, data, ext)
+	filename, err := saveUploadedIcon(r.Context(), d, data, ext)
 	if err != nil {
 		writeError(w, 500, err)
 		return
@@ -184,7 +186,12 @@ func uploadIconAdmin(d Deps, w http.ResponseWriter, r *http.Request) {
 
 // saveUploadedIcon stores a validated image under a random name. It is shared
 // by global admin assets and workspace announcement uploads.
-func saveUploadedIcon(d Deps, data []byte, ext string) (string, error) {
+func saveUploadedIcon(ctx context.Context, d Deps, data []byte, ext string) (string, error) {
+	unlock, err := fileguard.LockStorage(ctx, false, d.Config.UploadDir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	id, err := randomHex(12)
 	if err != nil {
 		return "", err
@@ -194,7 +201,7 @@ func saveUploadedIcon(d Deps, data []byte, ext string) (string, error) {
 		return "", err
 	}
 	filename := id + "." + ext
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
+	if err := fileguard.WriteNewFile(filepath.Join(dir, filename), data, 0o644); err != nil {
 		return "", err
 	}
 	return filename, nil
