@@ -276,7 +276,7 @@ For the personal profile, business rows and vectors are both inside
 `DATA_DIR/aivory.db`; the admin logical backup includes `vector_points`. Back up
 the whole `DATA_DIR` as well so uploads and artifacts stay consistent with it.
 
-For the full profile, the existing behavior is unchanged:
+For the full profile:
 
 Persisted in named volumes: `pgdata`, `redisdata`, `qdrantdata`. Uploads and
 artifacts are bind-mounted from `DATA_DIR` (default `./data`). Back these up
@@ -286,4 +286,56 @@ The admin **Backup & Migration** page also creates async full migration archives
 for Docker deployments. Those ZIPs include the logical database dump, optional
 uploads/artifacts, and Qdrant vectors, and are stored under `BACKUP_DIR`
 (default `/app/data/backups`, visible on the host as `DATA_DIR/backups`).
+
+Exports that include files first repair confirmed missing local files. This
+removes their `artifacts`, `files`, and `documents` rows and cleans download
+references in messages, shared transcripts, and compaction media in the same
+transaction. Uploaded attachments retain a deleted marker and filename; message
+text, tool-call pairs, and conversation branches are preserved. Missing skill
+assets are removed from skill metadata. Document deletion also queues vector
+cleanup through the normal lifecycle. Database-only exports do not run this
+repair. An unavailable storage root, access error, or unsafe path fails the
+export without committing the repair.
+
+File exports pin a filesystem snapshot before compressing the archive, so
+normal file deletion cannot invalidate the database snapshot. Writers resume
+after the files are pinned, without waiting for ZIP compression or Qdrant
+export. Full imports coordinate directory replacement with file writers across
+API processes sharing the same storage.
+
+File, document, PPT mirror and tool-output saves reconcile failed commit
+acknowledgements using an independent context. Confirmed commits succeed;
+unresolved outcomes retain the bytes. Physical cleanup excludes file writers
+and rechecks references. New files use exclusive creation to prevent replacing
+existing objects. Skill saves also verify that their asset files exist. Finishing assistant replies
+recheck structured file references so an in-flight generation cannot resurrect
+references removed by export repair.
+
+Full imports mark archived `streaming` / `stopping` assistant messages as
+interrupted, preserving partial content and branches, and clear old generation
+and compaction leases. Workers from before the restore cannot finalize those
+restored messages, and new requests need not wait for archived leases to expire.
+
+Before replacing live directories, full imports write a recovery journal named
+`.aivory-storage-*.lock.recovery` beside each storage root. The database commit
+also writes `settings.internal_backup_restore_commit` as a witness. Normal
+completion or confirmed rollback removes the journals. An unresolved commit,
+process interruption or failed rollback retains them and prevents later file
+writes, physical cleanup, and imports/exports containing files. Both file-tree
+versions are retained; the Qdrant compensation ZIP is stored beside the upload
+root, normally in persistent `DATA_DIR`.
+
+To resolve a retained journal, stop every API instance and maintenance worker,
+then preserve the database, live trees, journals, their `previous` / `stage`
+trees, and Qdrant compensation ZIP. After the original database transaction has
+finished, query `SELECT value FROM settings WHERE
+key='internal_backup_restore_commit'` and compare its JSON string with the
+journal's `token`. A match means the restore committed: retain the new `target`
+trees. A mismatch, once the transaction has finished, means it did not commit:
+restore the original trees (`had_target=false` means no original directory
+existed), and restore the original Qdrant data when applicable. Account for any
+partial compensation by checking which recorded directories still exist.
+Remove the journals and restart only after rows, files and vectors agree.
+Simply deleting a journal does not resolve an interrupted restore.
+
 Backup import accepts up to `MAX_BACKUP_BYTES` bytes (default 20 GiB).
