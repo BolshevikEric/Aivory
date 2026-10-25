@@ -3,9 +3,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, Plus, Pencil, Trash2, Upload, X, FileText } from 'lucide-react'
+import { Sparkles, Plus, Pencil, Trash2, Upload, X, FileText, FileArchive } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
-import type { ApiSkill } from '@/api/types'
+import type { ApiSkill, ApiSkillImportPreview } from '@/api/types'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogBody,
@@ -52,10 +53,15 @@ export default function AdminSkills() {
   })
   const [confirmDelete, setConfirmDelete] = useState<ApiSkill | null>(null)
   const [importMd, setImportMd] = useState('')
+  const [importTab, setImportTab] = useState('paste')
+  const [importUrl, setImportUrl] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const zipRef = useRef<HTMLInputElement>(null)
+  const importingRef = useRef(false)
   const savingRef = useRef(false)
   const deletingRef = useRef(false)
 
@@ -103,10 +109,12 @@ export default function AdminSkills() {
 
   function openNew() {
     setImportMd('')
+    setImportUrl('')
     setEditor({ open: true, draft: { ...defaultDraft, sort_order: rows.length } })
   }
   function openEdit(row: ApiSkill) {
     setImportMd('')
+    setImportUrl('')
     setEditor({ open: true, row, draft: { ...row } })
   }
 
@@ -127,6 +135,62 @@ export default function AdminSkills() {
       },
     }))
     toast.success(t('admin:skills.importDone'))
+  }
+
+  // Fill the editor from a server-parsed import preview (zip upload / remote
+  // URL). Assets are already staged server-side; saving goes through the
+  // normal create/update path untouched.
+  function applyImportPreview(p: ApiSkillImportPreview) {
+    setEditor((ed) => ({
+      ...ed,
+      draft: {
+        ...ed.draft,
+        name: p.name || ed.draft.name,
+        description: p.description || ed.draft.description,
+        instructions: p.instructions || ed.draft.instructions,
+        assets: p.assets,
+      },
+    }))
+    toast.success(t('admin:skills.importFilled', { name: p.name }), t('admin:skills.importBindHint'))
+    if (p.name_exists) {
+      toast.warning(t('admin:skills.importNameExists', { name: p.name }))
+    }
+    if (p.warnings.length > 0) {
+      toast.warning(t('admin:skills.importWarnings', { count: p.warnings.length }), p.warnings.join('\n'))
+    }
+  }
+
+  async function importFromUrl() {
+    if (importingRef.current) return
+    const url = importUrl.trim()
+    if (!url) return
+    importingRef.current = true
+    setImporting(true)
+    try {
+      applyImportPreview(await adminApi.importSkillRemote(url))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : t('admin:common.failed'))
+    } finally {
+      importingRef.current = false
+      setImporting(false)
+    }
+  }
+
+  async function onPickZip(e: React.ChangeEvent<HTMLInputElement>) {
+    if (importingRef.current) return
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    importingRef.current = true
+    setImporting(true)
+    try {
+      applyImportPreview(await adminApi.importSkillArchive(file))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : t('admin:common.failed'))
+    } finally {
+      importingRef.current = false
+      setImporting(false)
+    }
   }
 
   async function submit() {
@@ -258,23 +322,64 @@ export default function AdminSkills() {
           <DialogBody>
             <div className="grid gap-4">
               <Field
-                label={t('admin:skills.fields.importMd')}
+                label={t('admin:skills.fields.import')}
                 htmlFor="admin-skill-import"
-                hint={t('admin:skills.fields.importMdHint')}
+                hint={t('admin:skills.fields.importHint')}
               >
-                <Textarea
-                  id="admin-skill-import"
-                  rows={4}
-                  value={importMd}
-                  onChange={(e) => setImportMd(e.target.value)}
-                  placeholder={'---\nname: make_ppt\ndescription: Use when the user asks for slides or a deck.\n---\n\n# How to build a deck\n…'}
-                  className="font-mono text-[12px]"
-                />
-                <div className="mt-2 flex justify-end">
-                  <Button size="sm" variant="secondary" onClick={applyImport}>
-                    {t('admin:skills.importApply')}
-                  </Button>
-                </div>
+                <Tabs value={importTab} onValueChange={setImportTab}>
+                  <TabsList variant="segmented">
+                    <TabsTrigger value="paste" variant="segmented">{t('admin:skills.importTab.paste')}</TabsTrigger>
+                    <TabsTrigger value="url" variant="segmented">{t('admin:skills.importTab.url')}</TabsTrigger>
+                    <TabsTrigger value="zip" variant="segmented">{t('admin:skills.importTab.zip')}</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="paste">
+                    <Textarea
+                      id="admin-skill-import"
+                      rows={4}
+                      value={importMd}
+                      onChange={(e) => setImportMd(e.target.value)}
+                      placeholder={'---\nname: make_ppt\ndescription: Use when the user asks for slides or a deck.\n---\n\n# How to build a deck\n…'}
+                      className="font-mono text-[12px]"
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <Button size="sm" variant="secondary" onClick={applyImport}>
+                        {t('admin:skills.importApply')}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="url">
+                    <div className="flex gap-2">
+                      <Input
+                        id="admin-skill-import-url"
+                        value={importUrl}
+                        onChange={(e) => setImportUrl(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') void importFromUrl() }}
+                        placeholder="https://github.com/anthropics/skills/tree/main/skills/pdf"
+                        inputMode="url"
+                      />
+                      <Button
+                        size="sm"
+                        loading={importing}
+                        disabled={!importUrl.trim()}
+                        onClick={() => void importFromUrl()}
+                      >
+                        {t('admin:skills.importGo')}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="zip">
+                    <input ref={zipRef} type="file" accept=".zip,application/zip" className="hidden" onChange={onPickZip} />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      leadingIcon={<FileArchive size={14} aria-hidden />}
+                      loading={importing}
+                      onClick={() => zipRef.current?.click()}
+                    >
+                      {t('admin:skills.importPickZip')}
+                    </Button>
+                  </TabsContent>
+                </Tabs>
               </Field>
               <Field label={t('admin:skills.fields.name')} htmlFor="s-name">
                 <Input
