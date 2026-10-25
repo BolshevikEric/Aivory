@@ -18,6 +18,8 @@ import type {
   ApiWorkspaceMember,
 } from '@/api/types'
 import { toast } from '@/hooks/use-toast'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,7 +30,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { PanelFallback } from '@/components/ui/panel-fallback'
 import {
   Sheet,
@@ -67,6 +68,7 @@ export default function AdminWorkspaces() {
   const [search, setSearch] = useState('')
   const filteredRows = rows.filter((row) => matchesAdminSearch(search, [row.name, row.id, row.owner_name, row.owner_id, row.description]))
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const deletingRef = useRef(false)
@@ -74,11 +76,12 @@ export default function AdminWorkspaces() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const { workspaces } = await workspacesApi.adminList()
       setRows(workspaces)
     } catch {
-      toast.error(t('workspaces.loadFailed', { defaultValue: 'Could not load workspaces.' }))
+      setLoadError(t('workspaces.loadFailed', { defaultValue: 'Could not load workspaces.' }))
     } finally {
       setLoading(false)
     }
@@ -116,21 +119,19 @@ export default function AdminWorkspaces() {
         description={t('workspaces.subtitle', { defaultValue: 'Every collaborative space, its owner and member count.' })}
       />
       <AdminListToolbar search={search} onSearchChange={setSearch} placeholder={t('listToolbar.search.workspaces')} actions={<WorkspaceAdminControls onSaved={() => void load()} />} />
-      {loading ? (
+      {loadError && rows.length > 0 ? <ErrorState size="inline" className="mt-4" description={loadError} retry={() => void load()} /> : null}
+      {loading && rows.length === 0 ? (
         <PanelFallback />
+      ) : loadError && rows.length === 0 ? (
+        <ErrorState size="panel" className="mt-4" description={loadError} retry={() => void load()} />
       ) : rows.length === 0 ? (
-        <div className="mt-10">
-          <EmptyState
-            icon={<Briefcase size={22} aria-hidden />}
-            title={t('workspaces.emptyTitle', { defaultValue: 'No workspaces yet' })}
-            description={t('workspaces.emptyBody', { defaultValue: 'Users create workspaces from the sidebar avatar menu.' })}
-          />
-        </div>
+        <EmptyState size="panel" className="mt-4" icon={<Briefcase aria-hidden />} title={t('workspaces.emptyTitle')} description={t('workspaces.emptyBody')} />
       ) : (
         <>
         <AdminTable
           className="mt-4"
           items={filteredRows}
+          emptyFiltered={Boolean(search.trim())}
           rowKey={(workspace) => workspace.id}
           label={t('workspaces.title')}
           columns={[

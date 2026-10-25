@@ -8,11 +8,12 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Database, Loader2, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react'
 import { ApiError, kbsApi } from '@/api'
 import type { ApiKnowledgeBase } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ContentHeader } from '@/components/layout/content-header'
 import {
@@ -253,9 +254,7 @@ export default function KnowledgeBasesList() {
             ) : loading ? (
               <KnowledgeBasesSkeleton label={t('common:common.loading')} />
             ) : loadError ? (
-              <EmptyState
-                icon={<Database size={20} aria-hidden />}
-                title={t('common:common.error')}
+              <ErrorState
                 description={
                   loadError === 'knowledge_base_group_permission_required'
                     ? t('kb:groupPermissionRequired', { defaultValue: 'Your user group does not have knowledge-base access.' })
@@ -263,13 +262,7 @@ export default function KnowledgeBasesList() {
                       ? t('kb:workspaceDisabledBody', { defaultValue: 'The workspace administrator has disabled knowledge bases.' })
                     : knowledgeBaseErrorText(t, loadError, loadError)
                 }
-                action={
-                  canUseKnowledgeBases ? (
-                    <Button variant="secondary" onClick={() => void load()}>
-                      {t('common:actions.tryAgain', { defaultValue: 'Try again' })}
-                    </Button>
-                  ) : undefined
-                }
+                retry={canUseKnowledgeBases ? () => void load() : undefined}
               />
             ) : rows.length === 0 ? (
               <EmptyState

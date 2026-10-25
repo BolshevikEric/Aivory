@@ -4,9 +4,10 @@ import { Plus, Search, FolderKanban } from 'lucide-react'
 import { useProjects } from '@/store/projects'
 import { useConversations } from '@/store/conversations'
 import { ContentHeader } from '@/components/layout/content-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectRow } from '@/components/projects/project-row'
 import { NewProjectDialog } from '@/components/projects/new-project-dialog'
@@ -123,21 +124,16 @@ export default function ProjectsList() {
               description={t('projects:list.accessDeniedBody', { defaultValue: 'The workspace administrator has disabled knowledge bases and projects.' })}
             />
           ) : !loaded && loadError ? (
-            <EmptyState
+            <ErrorState
               className="mt-8"
-              icon={<FolderKanban size={20} aria-hidden />}
-              title={t('common:common.error')}
               description={loadError}
-              action={
-                <Button variant="secondary" onClick={() => void reload()}>
-                  {t('common:actions.tryAgain', { defaultValue: 'Try again' })}
-                </Button>
-              }
+              retry={() => void reload()}
             />
           ) : !loaded || loading ? (
             <ProjectsListSkeleton label={t('common:common.loading')} />
           ) : (
             <>
+          {loaded && loadError ? <ErrorState size="inline" className="mt-5" description={loadError} retry={() => void reload()} /> : null}
           {/* Controls stay close to the list and use a divider instead of a container. */}
           {projects.length > 0 ? (
             <div className="mt-5 flex flex-col gap-2.5 pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -207,10 +203,14 @@ export default function ProjectsList() {
         ) : (
           <EmptyState
             className="mt-8"
-            icon={<FolderKanban size={20} aria-hidden />}
-            title={t('projects:list.emptyTitle')}
-            description={t('projects:list.emptyBody')}
-            action={canCreateProject ? (
+            icon={projects.length > 0 ? <Search size={20} aria-hidden /> : <FolderKanban size={20} aria-hidden />}
+            title={t(projects.length > 0 ? query.trim() ? 'projects:list.noMatchesTitle' : 'projects:list.noPinnedTitle' : 'projects:list.emptyTitle')}
+            description={t(projects.length > 0 ? query.trim() ? 'projects:list.noMatchesBody' : 'projects:list.noPinnedBody' : 'projects:list.emptyBody')}
+            action={projects.length > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => { setQuery(''); setFilter('all') }}>
+                {t('projects:list.clearFilters')}
+              </Button>
+            ) : canCreateProject ? (
               <Button
                 variant="secondary"
                 leadingIcon={<Plus size={15} aria-hidden />}

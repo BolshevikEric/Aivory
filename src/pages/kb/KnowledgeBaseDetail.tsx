@@ -9,8 +9,9 @@ import { Plus, Trash2, Upload, FileText, AlertTriangle, MoreHorizontal, RefreshC
 import { ApiError, kbsApi } from '@/api'
 import type { ApiDocument, ApiKnowledgeBase, ApiKnowledgeBaseShare, ApiKnowledgeBaseUploader, ApiWorkspaceKnowledgeBaseMemberPermission } from '@/api/types'
 import { apiUpload, apiUrl } from '@/api/client'
-import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -595,11 +596,10 @@ export default function KnowledgeBaseDetail() {
   if (loadError && !loading) {
     return (
       <div className="flex-1 grid place-items-center p-10">
-        <EmptyState
-          icon={<AlertTriangle size={20} aria-hidden />}
+        <ErrorState
           title={t('kb:detail.loadFailedTitle', { defaultValue: 'Could not load this knowledge base' })}
           description={loadError}
-          action={<Button onClick={() => void load()}>{t('common:actions.tryAgain')}</Button>}
+          retry={() => void load()}
         />
       </div>
     )

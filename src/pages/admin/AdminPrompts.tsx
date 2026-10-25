@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { FileText, Pencil, Plus, Trash2 } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiPrompt } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,6 +39,7 @@ export default function AdminPrompts() {
   const { t } = useTranslation(['admin', 'common'])
   const [rows, setRows] = useState<ApiPrompt[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [editor, setEditor] = useState<{ open: boolean; row?: ApiPrompt; draft: PromptDraft }>({
     open: false,
     draft: emptyDraft,
@@ -49,10 +52,13 @@ export default function AdminPrompts() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       setRows(await adminApi.prompts())
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : t('admin:common.failed'))
+      const message = error instanceof ApiError ? error.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -163,13 +169,13 @@ export default function AdminPrompts() {
       />
 
       <section className="mt-8">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center">
-            <FileText size={20} className="text-[var(--color-fg-subtle)]" aria-hidden />
-            <p className="text-sm text-[var(--color-fg-muted)]">{t('admin:prompts.empty')}</p>
-          </div>
+          <EmptyState size="panel" icon={<FileText aria-hidden />} title={t('admin:prompts.empty')} />
         ) : (
           <AdminSortableList
             items={rows}

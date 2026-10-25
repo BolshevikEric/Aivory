@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, CircleX, Copy, RefreshCw, Search, ShieldAlert, Trash2, X } from 'lucide-react'
+import { ReceiptText, Check, CircleX, Copy, RefreshCw, Search, ShieldAlert, Trash2, X } from 'lucide-react'
 
 import { adminApi, ApiError } from '@/api'
 import type {
@@ -8,6 +8,8 @@ import type {
   ApiPaymentOrderStatus,
   ApiPaymentProvider,
 } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -409,19 +411,13 @@ export default function AdminPaymentOrders() {
       </div>
 
       <section className="mt-2">
+        {loadError && orders.length > 0 ? <ErrorState size="inline" className="mb-4" description={loadError} retry={() => setReloadKey((value) => value + 1)} /> : null}
         {loading && orders.length === 0 ? (
           <PanelFallback />
-        ) : loadError ? (
-          <div className="flex flex-col items-start gap-3 rounded-[12px] border border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)] px-4 py-3 text-[13px] text-[var(--color-danger)] sm:flex-row sm:items-center sm:justify-between">
-            <span>{loadError}</span>
-            <Button className="max-sm:h-11" variant="secondary" size="sm" leadingIcon={<RefreshCw size={13} aria-hidden />} onClick={() => setReloadKey((value) => value + 1)}>{t('admin:paymentOrders.retry')}</Button>
-          </div>
+        ) : loadError && orders.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => setReloadKey((value) => value + 1)} />
         ) : orders.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center">
-            <p className="text-sm font-medium text-[var(--color-fg)]">{filtersActive ? t('admin:paymentOrders.emptyFilteredTitle') : t('admin:paymentOrders.emptyTitle')}</p>
-            <p className="mx-auto mt-1 max-w-lg text-[13px] text-[var(--color-fg-muted)]">{filtersActive ? t('admin:paymentOrders.emptyFiltered') : t('admin:paymentOrders.empty')}</p>
-            {filtersActive ? <Button className="mt-4 max-sm:h-11" variant="secondary" size="sm" onClick={clearFilters}>{t('admin:paymentOrders.filters.clear')}</Button> : null}
-          </div>
+          <EmptyState size="panel" icon={<ReceiptText aria-hidden />} title={filtersActive ? t('admin:paymentOrders.emptyFilteredTitle') : t('admin:paymentOrders.emptyTitle')} description={filtersActive ? t('admin:paymentOrders.emptyFiltered') : t('admin:paymentOrders.empty')} action={filtersActive ? <Button variant="secondary" size="sm" onClick={clearFilters}>{t('admin:paymentOrders.filters.clear')}</Button> : undefined} />
         ) : (
           <>
             <AdminTableFrame label={t('admin:paymentOrders.title')}>

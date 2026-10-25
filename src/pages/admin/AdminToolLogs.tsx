@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RotateCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ScrollText, RotateCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { adminApi, ApiError } from '@/api'
 import type { ApiToolCallLog, ApiToolLogFilters } from '@/api/types'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AdminTable, type AdminTableColumn } from '@/components/admin/AdminTable'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -132,7 +134,7 @@ export default function AdminToolLogs() {
     { id: 'model', header: t('usage.table.model'), width: 180, render: (log) => <Identity primary={log.model_label || log.model_id || '-'} /> },
     { id: 'server', header: t('toolLogs.server'), width: 170, render: (log) => <Identity primary={log.server_name || log.server_id || '-'} /> },
     { id: 'duration', header: t('logs.duration'), width: 100, render: (log) => <span className="whitespace-nowrap text-[12px] tabular-nums">{log.duration_ms} ms</span> },
-    { id: 'id', header: t('logs.table.id'), width: 340, render: (log) => <span className="font-mono text-[11px]">{log.id}</span> },
+    { id: 'id', header: t('logs.table.id'), width: 340, render: (log) => <span className="font-mono text-[12px]">{log.id}</span> },
     { id: 'actions', header: t('common.actions'), width: 65, align: 'right', render: (log) => <Tooltip content={t('logs.deleteRow')}><Button variant="ghost" size="icon-sm" disabled={deleting} aria-label={t('logs.deleteEntry', { id: log.id })} onClick={(event) => { event.stopPropagation(); setDeleteRequest({ kind: 'one', log }) }}><Trash2 size={14} aria-hidden /></Button></Tooltip> },
   ]
 
@@ -157,7 +159,7 @@ export default function AdminToolLogs() {
     </div>}
     {invalidRange && <p role="alert" className="mt-2 text-[12px] text-[var(--color-danger)]">{t('logs.invalidRange')}</p>}
     <section className="mt-5" aria-busy={loading}>
-      {loading ? <PanelFallback /> : loadError ? <Failure onRetry={refresh} /> : logs.length === 0 ? <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">{t('logs.empty')}</div> : <AdminTable items={logs} columns={columns} rowKey={(log) => log.id} label={t('toolLogs.title')}
+      {loading ? <PanelFallback /> : loadError ? <Failure onRetry={refresh} /> : logs.length === 0 ? <EmptyState size="panel" icon={<ScrollText aria-hidden />} title={t('logs.empty')} /> : <AdminTable items={logs} columns={columns} rowKey={(log) => log.id} label={t('toolLogs.title')}
         renderRow={(log, _index, cells) => <tr key={log.id} role="button" tabIndex={0} aria-label={t('logs.openDetail', { id: log.id })} onClick={() => setSelectedId(log.id)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSelectedId(log.id) } }} className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]">{cells}</tr>} />}
       {!loading && !loadError && total > PAGE_SIZE && <Pagination page={request.page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} onPage={(page) => setRequest((current) => ({ ...current, page }))} />}
     </section>
@@ -207,7 +209,7 @@ export default function AdminToolLogs() {
 }
 
 function Identity({ primary, secondary }: { primary: string; secondary?: string }) {
-  return <div className="min-w-0"><p className="truncate text-[12px] font-medium" title={primary}>{primary}</p>{secondary && <p className="mt-1 truncate font-mono text-[10px] text-[var(--color-fg-subtle)]" title={secondary}>{secondary}</p>}</div>
+  return <div className="min-w-0"><p className="truncate text-[12px] font-medium" title={primary}>{primary}</p>{secondary && <p className="mt-1 truncate font-mono text-[12px] text-[var(--color-fg-subtle)]" title={secondary}>{secondary}</p>}</div>
 }
 
 function DetailItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -218,10 +220,9 @@ function Evidence({ label, value, truncated, danger }: { label: string; value: s
   const { t } = useTranslation('admin')
   let formatted = value
   try { formatted = JSON.stringify(JSON.parse(value), null, 2) } catch { /* Plain text and excerpts retain their original format. */ }
-  return <section className="min-w-0"><h3 className="mb-1.5 text-[12px] font-medium text-[var(--color-fg-subtle)]">{label}</h3><pre className={`max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[var(--color-bg-muted)] p-3 font-mono text-[12px] leading-relaxed ${danger ? 'text-[var(--color-danger)]' : 'text-[var(--color-fg-muted)]'}`}>{formatted}</pre>{truncated && <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">{t('toolLogs.truncated')}</p>}</section>
+  return <section className="min-w-0"><h3 className="mb-1.5 text-[12px] font-medium text-[var(--color-fg-subtle)]">{label}</h3><pre className={`max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[var(--color-bg-muted)] p-3 font-mono text-[12px] leading-relaxed ${danger ? 'text-[var(--color-danger)]' : 'text-[var(--color-fg-muted)]'}`}>{formatted}</pre>{truncated && <p className="mt-1 text-[12px] text-[var(--color-fg-subtle)]">{t('toolLogs.truncated')}</p>}</section>
 }
 
 function Failure({ onRetry }: { onRetry: () => void }) {
-  const { t } = useTranslation('admin')
-  return <div role="alert" className="py-10 text-center text-sm text-[var(--color-fg-muted)]"><p>{t('common.failed')}</p><Button variant="ghost" size="sm" onClick={onRetry} className="mt-2"><RotateCw size={14} />{t('logs.refresh')}</Button></div>
+  return <ErrorState size="panel" retry={onRetry} />
 }

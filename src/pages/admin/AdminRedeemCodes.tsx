@@ -31,6 +31,8 @@ import {
 } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiRedeemCode, ApiUserGroup } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
@@ -89,6 +91,7 @@ export default function AdminRedeemCodes() {
   const [rows, setRows] = useState<ApiRedeemCode[]>([])
   const [groups, setGroups] = useState<ApiUserGroup[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [batchFilter, setBatchFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -112,6 +115,7 @@ export default function AdminRedeemCodes() {
 
   async function load(requestId = ++loadRequestRef.current) {
     setLoading(true)
+    setLoadError('')
     try {
       const codes = await adminApi.redeemCodes({
         search: search.trim() || undefined,
@@ -121,7 +125,7 @@ export default function AdminRedeemCodes() {
       })
       if (requestId === loadRequestRef.current) setRows(codes)
     } catch (e) {
-      if (requestId === loadRequestRef.current) toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      if (requestId === loadRequestRef.current) setLoadError(e instanceof ApiError ? e.message : t('common:startup.failed'))
     } finally {
       if (requestId === loadRequestRef.current) setLoading(false)
     }
@@ -311,13 +315,13 @@ export default function AdminRedeemCodes() {
       />
 
       <section className="mt-4">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" className="mb-4" description={loadError} retry={() => void load()} /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="grid place-items-center rounded-[12px] bg-[var(--color-bg-muted)]/30 px-4 py-10 sm:px-6 sm:py-16">
-            <Ticket size={28} className="text-[var(--color-fg-faint)]" aria-hidden />
-            <p className="mt-4 text-sm text-[var(--color-fg-muted)]">{t(search.trim() || batchFilter.trim() || status !== 'all' ? 'admin:common.noResults' : 'admin:redeemCodes.empty')}</p>
-          </div>
+          <EmptyState size="panel" icon={<Ticket aria-hidden />} title={t(search.trim() || batchFilter.trim() || status !== 'all' ? 'admin:common.noResults' : 'admin:redeemCodes.empty')} />
         ) : (
           <>
             <AdminTable

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Inbox, Search } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
 
 export interface AdminTableColumn<T> {
@@ -18,6 +20,8 @@ interface AdminTableProps<T> {
   label?: string
   className?: string
   emptyMessage?: ReactNode
+  /** Distinguish a filtered empty result from a collection with no records. */
+  emptyFiltered?: boolean
   renderRow?: (item: T, index: number, cells: ReactNode) => ReactNode
   framed?: boolean
   hideHeader?: boolean
@@ -39,7 +43,7 @@ export function AdminTableFrame({ children, className, embedded, label }: { chil
 }
 
 /** Shared layout and semantics for sortable lists and read-only admin tables. */
-export function AdminTable<T>({ items, columns, rowKey, label, className, emptyMessage, renderRow, framed = true, hideHeader = false, embedded }: AdminTableProps<T>) {
+export function AdminTable<T>({ items, columns, rowKey, label, className, emptyMessage, emptyFiltered = false, renderRow, framed = true, hideHeader = false, embedded }: AdminTableProps<T>) {
   const { t } = useTranslation('admin')
   const tableRef = useRef<HTMLTableElement>(null)
   const [actionsWidth, setActionsWidth] = useState<number | null>(null)
@@ -89,7 +93,19 @@ export function AdminTable<T>({ items, columns, rowKey, label, className, emptyM
           ))
           return renderRow ? renderRow(item, index, cells) : <tr key={rowKey(item)}>{cells}</tr>
         })}
-        {items.length === 0 ? <tr><td colSpan={columns.length} className="admin-table-empty">{emptyMessage ?? t('common.noResults')}</td></tr> : null}
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={columns.length} className="admin-table-empty">
+              <div className="admin-table-empty-content">
+                <EmptyState
+                  size="table"
+                  icon={emptyFiltered ? <Search aria-hidden /> : <Inbox aria-hidden />}
+                  title={emptyMessage ?? t(emptyFiltered ? 'common.noResults' : 'common.noData')}
+                />
+              </div>
+            </td>
+          </tr>
+        ) : null}
       </tbody>
     </table>
   )

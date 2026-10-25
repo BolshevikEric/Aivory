@@ -8,6 +8,8 @@ import { AlertTriangle, ArrowLeft, Check, ChevronDown, Globe, LockKeyhole, Penci
 import { adminApi, workspacesApi } from '@/api'
 import { domainsApi, type DomainUser, type DomainUserCandidate, type RegistrationDomain } from '@/api/domains'
 import type { ApiUserGroup, ApiWorkspace } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
 import { Input } from '@/components/ui/input'
@@ -110,19 +112,15 @@ export default function AdminDomains() {
       />
       <p className="mt-3 max-w-3xl text-xs leading-5 text-[var(--color-fg-muted)]">{t('domains.scopeHint')}</p>
       {loading ? <PanelFallback /> : error ? (
-        <div role="alert" className="mt-8 space-y-3"><p>{error}</p><Button variant="secondary" onClick={() => void load()}>{t('domains.retry')}</Button></div>
+        <ErrorState size="panel" className="mt-4" description={error} retry={() => void load()} />
       ) : !rows.length ? (
-        <div className="py-14 text-center">
-          <Globe size={24} className="mx-auto text-[var(--color-fg-muted)]" aria-hidden />
-          <p className="mt-3 font-medium">{t('domains.empty')}</p>
-          <p className="mx-auto mt-2 max-w-lg text-sm text-[var(--color-fg-muted)]">{t('domains.emptyHint')}</p>
-          {!workspaces.length && <Button variant="secondary" className="mt-4" asChild><Link to="/admin/workspaces">{t('domains.createWorkspace')}</Link></Button>}
-        </div>
+        <EmptyState size="panel" className="mt-4" icon={<Globe aria-hidden />} title={t('domains.empty')} description={t('domains.emptyHint')} action={!workspaces.length ? <Button size="sm" variant="secondary" asChild><Link to="/admin/workspaces">{t('domains.createWorkspace')}</Link></Button> : undefined} />
       ) : (
         <>
         <AdminTable
           className="mt-4"
           items={filteredRows}
+          emptyFiltered={Boolean(search.trim())}
           rowKey={(row) => row.domain}
           label={t('domains.title')}
           columns={[

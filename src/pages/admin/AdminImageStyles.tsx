@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Trash2, Palette } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiImageStyle, ApiModel } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,6 +29,7 @@ export default function AdminImageStyles() {
   const [models, setModels] = useState<ApiModel[]>([])
   const [imagePromptModelId, setImagePromptModelId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [savingPromptModel, setSavingPromptModel] = useState(false)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -35,6 +38,7 @@ export default function AdminImageStyles() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const [nextStyles, settings, chatModels] = await Promise.all([
         adminApi.imageStyles(),
@@ -45,7 +49,9 @@ export default function AdminImageStyles() {
       setModels(chatModels)
       setImagePromptModelId(typeof settings.image_prompt_model_id === 'string' ? settings.image_prompt_model_id : '')
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -187,12 +193,13 @@ export default function AdminImageStyles() {
           </Button>
         </div>
 
-        {loading ? (
+        {loadError && styles.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && styles.length === 0 ? (
           <PanelFallback />
+        ) : loadError && styles.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : styles.length === 0 ? (
-          <div className="mt-6 rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center text-sm text-[var(--color-fg-muted)]">
-            {t('admin:imageStyles.empty', { defaultValue: 'No styles yet. Add one above.' })}
-          </div>
+          <EmptyState size="panel" icon={<Palette aria-hidden />} title={t('admin:imageStyles.empty')} />
         ) : (
           <AdminSortableList
             items={styles}

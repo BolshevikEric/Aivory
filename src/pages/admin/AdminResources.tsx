@@ -28,9 +28,9 @@ import type {
   ApiDocument,
 } from '@/api/types'
 import { ImageLightbox } from '@/components/chat/image-lightbox'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -661,8 +661,7 @@ function KnowledgeBaseList({
   if (state.error && !state.data) return <ListError message={state.error} onRetry={onRetry} t={t} />
   if (!state.data?.items.length) {
     return (
-      <EmptyState
-        className="py-20"
+      <EmptyState size="panel"
         icon={<BookOpen size={21} aria-hidden />}
         title={t(filtered ? 'admin:resources.empty.filtered' : 'admin:resources.empty.knowledgeBases')}
         description={filtered ? undefined : t('admin:resources.empty.knowledgeBasesLead')}
@@ -714,8 +713,7 @@ function ProjectList({
   if (state.error && !state.data) return <ListError message={state.error} onRetry={onRetry} t={t} />
   if (!state.data?.items.length) {
     return (
-      <EmptyState
-        className="py-20"
+      <EmptyState size="panel"
         icon={<FolderKanban size={21} aria-hidden />}
         title={t(filtered ? 'admin:resources.empty.filtered' : 'admin:resources.empty.projects')}
         description={filtered ? undefined : t('admin:resources.empty.projectsLead')}
@@ -767,8 +765,7 @@ function ImageList({
   if (state.error && !state.data) return <ListError message={state.error} onRetry={onRetry} t={t} />
   if (!state.data?.items.length) {
     return (
-      <EmptyState
-        className="py-20"
+      <EmptyState size="panel"
         icon={<ImageIcon size={21} aria-hidden />}
         title={t(filtered ? 'admin:resources.empty.filtered' : 'admin:resources.empty.images')}
         description={filtered ? undefined : t('admin:resources.empty.imagesLead')}

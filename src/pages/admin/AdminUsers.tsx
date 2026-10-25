@@ -10,6 +10,7 @@ import { Brain, History, MessageSquare, Plus, Pencil, Trash2, Search, Info, Ban,
 import { adminApi, ApiError } from '@/api'
 import type { ApiUser, ApiUserGroup } from '@/api/types'
 import { AdminSortableList } from '@/components/admin/AdminSortableList'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -72,6 +73,7 @@ export default function AdminUsers() {
   const [total, setTotal] = useState(0)
   const [groups, setGroups] = useState<ApiUserGroup[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   // New-user dialog
   const [createOpen, setCreateOpen] = useState(false)
@@ -147,6 +149,7 @@ export default function AdminUsers() {
         groupsLoadedRef.current ? Promise.resolve(null) : adminApi.userGroups(),
       ])
       if (opts?.signal?.aborted || request !== loadRequestRef.current) return
+      setLoadError('')
       setRows(resp.users)
       setTotal(resp.total)
       if (gs) {
@@ -157,8 +160,8 @@ export default function AdminUsers() {
       if (p > lastPage) setPage(lastPage)
     } catch (e) {
       if (opts?.signal?.aborted) return
+      if (request === loadRequestRef.current) setLoadError(e instanceof ApiError ? e.message : t('common:startup.failed'))
       if (opts?.signal) throw e
-      if (request === loadRequestRef.current) toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
     } finally {
       if (request === loadRequestRef.current) setLoading(false)
     }
@@ -464,11 +467,15 @@ export default function AdminUsers() {
       </div>
 
       <section className="mt-4 sm:mt-5">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" className="mb-4" description={loadError} retry={() => void reload()} /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void reload()} />
         ) : (
           <AdminSortableList
             items={pageRows}
+            emptyFiltered={Boolean(committedQuery.trim() || groupFilter !== 'all')}
             onItemsChange={setRows}
             onOrderCommit={persistOrder}
             dragHandleLabel={t('admin:common.dragHandle')}

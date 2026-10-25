@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, RotateCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ScrollText, Download, RotateCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { adminApi, ApiError } from '@/api'
 import type { ApiAdminAuditLog, ApiAuditFilters } from '@/api/types'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AdminTable, type AdminTableColumn } from '@/components/admin/AdminTable'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -194,7 +196,7 @@ export default function AdminAuditLogs() {
       {invalidRange && <p role="alert" className="mt-2 text-[12px] text-[var(--color-danger)]">{t('logs.invalidRange')}</p>}
 
       <section className="mt-5" aria-busy={loading}>
-        {loading ? <PanelFallback /> : loadError ? <div role="alert" className="py-10 text-center text-sm text-[var(--color-fg-muted)]"><p>{t('common.failed')}</p><Button variant="ghost" size="sm" onClick={refresh} className="mt-2"><RotateCw size={14} />{t('logs.refresh')}</Button></div> : logs.length === 0 ? <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">{t('logs.empty')}</div> : <AdminTable
+        {loading ? <PanelFallback /> : loadError ? <ErrorState size="panel" retry={refresh} /> : logs.length === 0 ? <EmptyState size="panel" icon={<ScrollText aria-hidden />} title={t('logs.empty')} /> : <AdminTable
           items={logs} columns={columns} rowKey={(log) => log.id} label={t('logs.auditLogs')}
           renderRow={(log, _index, cells) => <tr key={log.id} role="button" tabIndex={0} aria-label={t('logs.openDetail', { id: log.id })}
             onClick={() => setSelectedLog(log)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSelectedLog(log) } }}

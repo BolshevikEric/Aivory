@@ -11,10 +11,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, RefreshCw, Search, Settings as SettingsIcon, Trash2, Tags as TagsIcon } from 'lucide-react'
+import { Box, Plus, RefreshCw, Search, Settings as SettingsIcon, Trash2, Tags as TagsIcon } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import { embeddingGuardErrorText } from '@/lib/admin-embedding-errors'
 import type { ApiChannel, ApiChannelModelCandidate, ApiModel } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -115,6 +117,7 @@ export default function AdminModels() {
     })
   }, [models, channels, search, channelFilter, kindFilter, statusFilter])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [creator, setCreator] = useState<{ open: boolean; draft: CreateDraft }>({
     open: false,
     draft: emptyCreate,
@@ -138,12 +141,15 @@ export default function AdminModels() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const [c, m] = await Promise.all([adminApi.channels(), adminApi.models()])
       setChannels(c)
       setModels(m)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -440,15 +446,17 @@ export default function AdminModels() {
       />
 
       <section className="mt-4">
-        {loading ? (
+        {loadError && models.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && models.length === 0 ? (
           <PanelFallback />
+        ) : loadError && models.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : models.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">
-            {t('admin:models.empty')}
-          </div>
+          <EmptyState size="panel" icon={<Box aria-hidden />} title={t('admin:models.empty')} />
         ) : (
           <AdminSortableList
             items={filteredModels}
+            emptyFiltered={models.length > 0}
             onItemsChange={(next) => setModels((current) => mergeVisibleAdminOrder(current, next))}
             onOrderCommit={persistOrder}
             dragHandleLabel={t('admin:common.dragHandle')}

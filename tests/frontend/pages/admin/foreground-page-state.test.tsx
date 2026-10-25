@@ -281,4 +281,37 @@ describe('other page drafts and loaded data during foreground synchronization', 
     expect(mocks.myFiles).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'report' }))
     expect(mocks.myFiles).toHaveBeenCalledTimes(2)
   })
+
+  it('preserves loaded files after a failed search and lets the user retry', async () => {
+    const file = { id: 'file', source: 'file', filename: 'report.zip', mime_type: 'application/zip', size_bytes: 512, created_at: 1 }
+    mocks.myFiles.mockResolvedValue({ files: [file], total: 1 })
+    await mount(<UserFiles />, '/files', '/files')
+    const list = container.querySelector('ul')
+    expect(list?.textContent).toContain(file.filename)
+
+    mocks.myFiles.mockRejectedValueOnce(new Error('temporarily offline'))
+    vi.useFakeTimers()
+    const input = container.querySelector<HTMLInputElement>('input')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'report')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => vi.advanceTimersByTime(350))
+    vi.useRealTimers()
+
+    expect(container.querySelector('ul')).toBe(list)
+    expect(list?.textContent).toContain(file.filename)
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(i18n.t('files:preview.failed'))
+    expect(container.textContent).not.toContain(i18n.t('files:empty.title'))
+
+    const retry = deferred<{ files: typeof file[]; total: number }>()
+    mocks.myFiles.mockReturnValueOnce(retry.promise)
+    await click('[role="alert"] button')
+    expect(container.querySelector('ul')).toBe(list)
+    expect(list?.getAttribute('aria-busy')).toBe('true')
+    await act(async () => retry.resolve({ files: [file], total: 1 }))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.querySelector('ul')).toBe(list)
+    expect(mocks.myFiles).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'report' }))
+  })
 })

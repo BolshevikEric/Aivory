@@ -45,6 +45,8 @@ import { DeckList } from '@/components/ppt/deck-list'
 import { DocmeeEditorDialog } from '@/components/ppt/docmee-editor-dialog'
 import { RenderStage } from '@/components/ppt/render-stage'
 import { TemplatePicker } from '@/components/ppt/template-picker'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -55,7 +57,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -363,15 +364,10 @@ export default function AiPPT() {
   let body: ReactNode
   if (configStatus === 'error') {
     body = (
-      <EmptyState
-        icon={<Presentation size={22} aria-hidden />}
+      <ErrorState
         title={t('ppt:loadFailed.title')}
         description={configError ?? t('ppt:loadFailed.description')}
-        action={
-          <Button variant="outline" onClick={() => void loadConfig(true)}>
-            {t('common:actions.tryAgain')}
-          </Button>
-        }
+        retry={() => void loadConfig(true)}
       />
     )
   } else if (!config) {

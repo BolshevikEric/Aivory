@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Check, Copy, ExternalLink, Link2, MessageSquare, Search } from 'lucide-react'
+import { Check, Copy, ExternalLink, Link2, MessageSquare, Search } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiAdminConversationShare, ApiAdminConversationSharePage } from '@/api/types'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AdminTable } from '@/components/admin/AdminTable'
-import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -119,10 +120,9 @@ export default function AdminConversationShares() {
             {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}
           </div>
         ) : error ? (
-          <EmptyState
-            icon={<AlertCircle size={24} aria-hidden />}
-            title={error}
-            action={<Button variant="secondary" onClick={() => void load()}>{t('common:actions.tryAgain')}</Button>}
+          <ErrorState size="panel"
+            description={error}
+            retry={() => void load()}
           />
         ) : data && data.items.length > 0 ? (
           <div className={loading ? 'pointer-events-none opacity-60' : undefined}>
@@ -190,7 +190,7 @@ export default function AdminConversationShares() {
             <Pagination page={page} pageCount={pageCount} onPage={setPage} />
           </div>
         ) : (
-          <EmptyState icon={<Link2 size={24} aria-hidden />} title={t(filtered ? 'admin:conversationShares.emptyFiltered' : 'admin:conversationShares.empty')} />
+          <EmptyState size="panel" icon={<Link2 size={24} aria-hidden />} title={t(filtered ? 'admin:conversationShares.emptyFiltered' : 'admin:conversationShares.empty')} />
         )}
       </section>
     </div>

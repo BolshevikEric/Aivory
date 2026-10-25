@@ -188,6 +188,7 @@
     "details": "詳細",
     "lastActive": "最終アクティブ",
     "pricing": "価格",
+    "noData": "データはまだありません",
     "noResults": "一致するレコードはありません",
     "select": "選択",
     "cancel": "キャンセル",

@@ -8,9 +8,11 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, Trash2, Copy, Check, RefreshCw } from 'lucide-react'
+import { KeyRound, Plus, Pencil, Trash2, Copy, Check, RefreshCw } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiOAuthProvider, OAuthKind } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/label'
@@ -45,6 +47,7 @@ export default function AdminOAuth() {
   const { t } = useTranslation(['admin', 'common'])
   const [rows, setRows] = useState<ApiOAuthProvider[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [editor, setEditor] = useState<{ open: boolean; row?: ApiOAuthProvider; draft: Editable }>({
     open: false,
     draft: { kind: 'google', enabled: true },
@@ -61,10 +64,13 @@ export default function AdminOAuth() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       setRows(await adminApi.oauthProviders())
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -218,12 +224,13 @@ export default function AdminOAuth() {
       />
 
       <section className="mt-8">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">
-            {t('admin:oauth.empty')}
-          </div>
+          <EmptyState size="panel" icon={<KeyRound aria-hidden />} title={t('admin:oauth.empty')} />
         ) : (
           <AdminSortableList
             items={rows}

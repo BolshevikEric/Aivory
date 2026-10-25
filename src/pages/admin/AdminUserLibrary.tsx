@@ -11,6 +11,8 @@ import { FolderClosed, Library, ChevronDown, ImageIcon } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiProject, ApiAdminKnowledgeBase, ApiDocument, ApiUser, ApiAdminImage } from '@/api/types'
 import { AdminDetailHeader } from '@/components/admin/admin-detail-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useModels } from '@/store/models'
@@ -50,6 +52,8 @@ export default function AdminUserLibrary() {
   const [imagesMore, setImagesMore] = useState(false)
   const [imagesLoadingMore, setImagesLoadingMore] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   // Lazy-loaded documents per KB (expand a KB row to view its files).
   const [openKb, setOpenKb] = useState<string | null>(null)
   const [kbDocs, setKbDocs] = useState<Record<string, ApiDocument[]>>({})
@@ -100,6 +104,7 @@ export default function AdminUserLibrary() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setLoadError('')
       try {
         const [users, ps, ks, imgs] = await Promise.all([
           adminApi.users('', 200, 0).then((r) => r.users),
@@ -114,7 +119,7 @@ export default function AdminUserLibrary() {
         setImages(imgs)
         setImagesMore(imgs.length === IMAGES_PAGE)
       } catch (e) {
-        if (!cancelled) toast.error(e instanceof ApiError ? e.message : i18n.t('admin:common.failed'))
+        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : i18n.t('common:startup.failed'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -123,7 +128,7 @@ export default function AdminUserLibrary() {
     return () => {
       cancelled = true
     }
-  }, [id, i18n])
+  }, [id, i18n, reloadKey])
 
   const headerName = useMemo(() => user?.name || user?.email || id, [user, id])
   const projectName = (pid: string) => projects.find((p) => p.id === pid)?.name
@@ -139,6 +144,8 @@ export default function AdminUserLibrary() {
 
       {loading ? (
         <PanelFallback />
+      ) : loadError ? (
+        <ErrorState size="panel" className="mt-8" description={loadError} retry={() => setReloadKey((value) => value + 1)} />
       ) : (
         <>
           {/* Projects */}
@@ -149,9 +156,7 @@ export default function AdminUserLibrary() {
               <span className="text-[12px] text-[var(--color-fg-subtle)] tabular-nums">· {projects.length}</span>
             </h2>
             {projects.length === 0 ? (
-              <div className="mt-3 text-sm text-[var(--color-fg-subtle)] rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center">
-                {t('users.noProjects')}
-              </div>
+              <EmptyState size="panel" className="mt-3" icon={<FolderClosed aria-hidden />} title={t('users.noProjects')} />
             ) : (
               <AdminTable
                 items={projects}
@@ -175,9 +180,7 @@ export default function AdminUserLibrary() {
               <span className="text-[12px] text-[var(--color-fg-subtle)] tabular-nums">· {kbs.length}</span>
             </h2>
             {kbs.length === 0 ? (
-              <div className="mt-3 text-sm text-[var(--color-fg-subtle)] rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center">
-                {t('users.noKbs')}
-              </div>
+              <EmptyState size="panel" className="mt-3" icon={<Library aria-hidden />} title={t('users.noKbs')} />
             ) : (
               <AdminTable
                 items={kbs}
@@ -229,9 +232,7 @@ export default function AdminUserLibrary() {
               <span className="text-[12px] text-[var(--color-fg-subtle)] tabular-nums">· {images.length}</span>
             </h2>
             {images.length === 0 ? (
-              <div className="mt-3 text-sm text-[var(--color-fg-subtle)] rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center">
-                {t('users.noImages', { defaultValue: 'No generated images.' })}
-              </div>
+              <EmptyState size="panel" className="mt-3" icon={<ImageIcon aria-hidden />} title={t('users.noImages')} />
             ) : (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {images.map((img) => (

@@ -28,6 +28,8 @@ import type {
 } from '@/api/types'
 import { IconPicker } from '@/components/admin/icon-picker'
 import { ContentHeader } from '@/components/layout/content-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,7 +42,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/label'
 import { LucideGlyph } from '@/components/ui/lucide-icon'
@@ -939,23 +940,15 @@ export default function SkillsPrompts() {
             {loading ? (
               <LibrarySkeleton label={t('common:common.loading')} />
             ) : loadError ? (
-              <EmptyState
-                className="py-14"
-                icon={<LibraryBig size={20} aria-hidden />}
-                title={t('common:common.error')}
+              <ErrorState
                 description={loadError}
-                action={
-                  <Button variant="secondary" onClick={() => void load()}>
-                    {t('common:actions.tryAgain')}
-                  </Button>
-                }
+                retry={() => void load()}
               />
             ) : (
               <>
                 <TabsContent value="mine" className="mt-0">
                   {mineEmpty ? (
                     <EmptyState
-                      className="py-14"
                       icon={<LibraryBig size={20} aria-hidden />}
                       title={query ? t('library:empty.search') : t('library:empty.mine')}
                       action={
@@ -1056,7 +1049,6 @@ export default function SkillsPrompts() {
                 <TabsContent value="catalog" className="mt-0">
                   {catalogEmpty ? (
                     <EmptyState
-                      className="py-14"
                       icon={<LibraryBig size={20} aria-hidden />}
                       title={query ? t('library:empty.search') : t('library:empty.catalog')}
                     />

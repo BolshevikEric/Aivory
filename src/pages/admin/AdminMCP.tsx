@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  AlertCircle,
+  Blocks,
   Cable,
   Eye,
   EyeOff,
@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { adminApi, ApiError, type ApiMCPServer, type ApiMCPServerInput } from '@/api'
 import { IconPicker } from '@/components/admin/icon-picker'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
@@ -151,7 +153,6 @@ export default function AdminMCP() {
     try {
       await refreshRows()
     } catch (error) {
-      setRows([])
       setLoadFailed(true)
       toast.error(error instanceof ApiError ? error.message : t('admin:common.failed'))
     } finally {
@@ -358,27 +359,13 @@ export default function AdminMCP() {
       />
 
       <section className="mt-8" aria-label={t('admin:mcp.listLabel')}>
-        {loading ? (
+        {loadFailed && rows.length > 0 ? <ErrorState size="inline" className="mb-4" title={t('admin:mcp.loadFailed')} retry={() => void load()} /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
-        ) : loadFailed ? (
-          <div className="flex min-h-64 flex-col items-center justify-center rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center">
-            <AlertCircle size={22} aria-hidden className="text-[var(--color-danger)]" />
-            <p className="mt-3 text-sm font-medium text-[var(--color-fg)]">{t('admin:mcp.loadFailed')}</p>
-            <Button
-              className="mt-4"
-              size="sm"
-              variant="secondary"
-              leadingIcon={<RefreshCw size={14} aria-hidden />}
-              onClick={() => void load()}
-            >
-              {t('common:actions.tryAgain')}
-            </Button>
-          </div>
+        ) : loadFailed && rows.length === 0 ? (
+          <ErrorState size="panel" title={t('admin:mcp.loadFailed')} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center">
-            <p className="text-sm font-medium text-[var(--color-fg)]">{t('admin:mcp.emptyTitle')}</p>
-            <p className="mx-auto mt-1 max-w-lg text-sm text-[var(--color-fg-muted)]">{t('admin:mcp.emptyBody')}</p>
-          </div>
+          <EmptyState size="panel" icon={<Blocks aria-hidden />} title={t('admin:mcp.emptyTitle')} description={t('admin:mcp.emptyBody')} />
         ) : (
           <AdminTable
             items={rows}

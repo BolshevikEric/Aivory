@@ -17,7 +17,6 @@ import {
   FolderOpen,
   HardDrive,
   MessageSquare,
-  RefreshCw,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -26,6 +25,8 @@ import type { ApiAdminFile } from '@/api/types'
 import { DocumentPreview } from '@/components/files/document-preview'
 import { FileFiltersPopover } from '@/components/files/file-filters-popover'
 import { ContentHeader } from '@/components/layout/content-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -35,7 +36,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -461,27 +461,15 @@ export default function UserFiles() {
                 </div>
               ) : null}
 
+              {listError && rows.length > 0 ? <ErrorState size="inline" className="mx-2 mb-2" description={listError} retry={() => void load()} /> : null}
               {firstLoad ? (
                 <FileListSkeleton label={t('files:list.loading')} />
-              ) : listError ? (
-                <div className="flex flex-1 flex-col items-center justify-center px-6 text-center" role="alert">
-                  <span className="inline-flex size-12 items-center justify-center rounded-full bg-[var(--color-danger-soft)] text-[var(--color-danger)]">
-                    <FileQuestion size={21} aria-hidden />
-                  </span>
-                  <p className="mt-4 text-sm text-[var(--color-fg-muted)]">{listError}</p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="mt-4"
-                    leadingIcon={<RefreshCw size={14} aria-hidden />}
-                    onClick={() => void load()}
-                  >
-                    {t('common:actions.tryAgain', { defaultValue: 'Try again' })}
-                  </Button>
-                </div>
+              ) : listError && rows.length === 0 ? (
+                <ErrorState size="table" className="my-auto" description={listError} retry={() => void load()} />
               ) : rows.length === 0 ? (
                 <EmptyState
-                  className="my-auto py-10"
+                  size="table"
+                  className="my-auto"
                   icon={filtersActive ? <Search size={21} aria-hidden /> : <FolderOpen size={21} aria-hidden />}
                   title={filtersActive ? t('files:list.emptyFilteredTitle') : t('files:empty.title')}
                   description={filtersActive ? t('files:list.emptyFilteredBody') : t('files:empty.body')}
@@ -643,10 +631,11 @@ export default function UserFiles() {
             ) : (
               <div className="flex h-full items-center justify-center p-6">
                 <EmptyState
-                  className="max-w-sm py-10"
+                  size="table"
+                  className="max-w-sm"
                   icon={<FileQuestion size={21} aria-hidden />}
-                  title={rows.length === 0 && !filtersActive ? t('files:empty.title') : t('files:preview.selectTitle')}
-                  description={rows.length === 0 && !filtersActive ? t('files:empty.body') : t('files:preview.selectBody')}
+                  title={t('files:preview.selectTitle')}
+                  description={t('files:preview.selectBody')}
                 />
               </div>
             )}

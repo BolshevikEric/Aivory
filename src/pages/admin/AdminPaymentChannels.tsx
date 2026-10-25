@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { Check, Copy, Pencil, Plus, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
+import { Wallet, Check, Copy, Pencil, Plus, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
 
 import { adminApi, ApiError } from '@/api'
 import type { ApiPaymentChannel, ApiPaymentEnvironment, ApiPaymentProvider } from '@/api/types'
 import { AdminSortableList } from '@/components/admin/AdminSortableList'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -464,21 +466,13 @@ export default function AdminPaymentChannels() {
       />
 
       <section className="mt-5">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" className="mb-4" description={loadError} retry={() => void load()} /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
-        ) : loadError ? (
-          <div className="flex flex-col items-start gap-3 rounded-[12px] border border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)] px-4 py-3 text-[13px] text-[var(--color-danger)] sm:flex-row sm:items-center sm:justify-between">
-            <span>{loadError}</span>
-            <Button  variant="secondary" size="sm" leadingIcon={<RefreshCw size={13} aria-hidden />} onClick={() => void load()}>
-              {t('admin:paymentChannels.retry')}
-            </Button>
-          </div>
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center">
-            <p className="text-sm font-medium text-[var(--color-fg)]">{t('admin:paymentChannels.emptyTitle')}</p>
-            <p className="mx-auto mt-1 max-w-lg text-[13px] text-[var(--color-fg-muted)]">{t('admin:paymentChannels.empty')}</p>
-            <Button className="mt-4" size="sm" onClick={openNew}>{t('admin:paymentChannels.new')}</Button>
-          </div>
+          <EmptyState size="panel" icon={<Wallet aria-hidden />} title={t('admin:paymentChannels.emptyTitle')} description={t('admin:paymentChannels.empty')} action={<Button size="sm" onClick={openNew}>{t('admin:paymentChannels.new')}</Button>} />
         ) : (
           <AdminSortableList
             items={rows}

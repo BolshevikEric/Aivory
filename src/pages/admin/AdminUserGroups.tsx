@@ -15,6 +15,7 @@ import type {
   ApiUserGroup,
   ApiUserGroupPermissions,
 } from '@/api/types'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -280,6 +281,7 @@ export default function AdminUserGroups() {
   const [search, setSearch] = useState('')
   const filteredRows = useMemo(() => rows.filter((row) => matchesAdminSearch(search, [row.name, row.id, row.description, ...(row.features ?? [])])), [rows, search])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [editor, setEditor] = useState<{ open: boolean; row?: ApiUserGroup; draft: Draft }>({ open: false, draft: {} })
   const [confirmDelete, setConfirmDelete] = useState<ApiUserGroup | null>(null)
   const [settlementCurrency, setSettlementCurrency] = useState('USD')
@@ -307,12 +309,15 @@ export default function AdminUserGroups() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const [groups, settings] = await Promise.all([adminApi.userGroups(), adminApi.settings()])
       setRows(groups)
       setSettlementCurrency(normalizeSettlementCurrency(settings.settlement_currency ?? groups[0]?.settlement_currency))
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -649,11 +654,15 @@ export default function AdminUserGroups() {
       />
 
       <section className="mt-4">
-        {loading ? (
+        {loadError && rows.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : (
           <AdminSortableList
             items={filteredRows}
+            emptyFiltered={Boolean(search.trim())}
             onItemsChange={(next) => setRows((current) => mergeVisibleAdminOrder(current, next))}
             onOrderCommit={persistOrder}
             dragHandleLabel={t('admin:common.dragHandle')}

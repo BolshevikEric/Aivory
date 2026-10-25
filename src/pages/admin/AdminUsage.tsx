@@ -9,9 +9,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LoaderCircle, Trash2, X } from 'lucide-react'
+import { ChartNoAxesCombined, LoaderCircle, Trash2, X } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiUsageRecord } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -76,6 +78,7 @@ export default function AdminUsage() {
   const [modelMap, setModelMap] = useState<Record<string, string>>({})
   const [modelOptions, setModelOptions] = useState<{ id: string; label: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [page, setPage] = useState(1)
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -102,13 +105,14 @@ export default function AdminUsage() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const r = await adminApi.usage({ ...queryParams, page, pageSize: PAGE_SIZE })
       setRecords(r.records)
       setTotal(r.total)
       setTotalCost(r.total_cost)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('common.failed'))
+      setLoadError(e instanceof ApiError ? e.message : t('common:startup.failed'))
     } finally {
       setLoading(false)
     }
@@ -323,12 +327,13 @@ export default function AdminUsage() {
       </section>
 
       <section className="mt-8">
-        {loading ? (
+        {loadError && records.length > 0 ? <ErrorState size="inline" className="mb-4" description={loadError} retry={() => void load()} /> : null}
+        {loading && records.length === 0 ? (
           <PanelFallback />
+        ) : loadError && records.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : records.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center text-sm text-[var(--color-fg-muted)]">
-            {t('usage.empty')}
-          </div>
+          <EmptyState size="panel" icon={<ChartNoAxesCombined aria-hidden />} title={t('usage.empty')} />
         ) : (
           <>
           <AdminTableFrame label={t('usage.title')}>

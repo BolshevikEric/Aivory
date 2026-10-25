@@ -14,6 +14,18 @@ npm test
 npm run test:sandbox
 ```
 
+The UI state regression suite starts its own Vite server on port 5204 and uses
+mock API responses to check empty collections, failed requests and retry,
+project search and pin filters, file preview placeholders, and the visibility
+of empty table messages while scrolling on mobile in both themes:
+
+```sh
+npm run test:ui-states
+```
+
+It accepts `CHROME_PATH` and `AIVORY_UI_STATE_SCREENSHOTS`; screenshots otherwise
+go to the OS temporary directory under `aivory-ui-states`.
+
 Four Puppeteer suites drive real headless Chrome against a local Chrome/Edge
 binary. They exist because `tsc` and the unit suite cannot prove that a
 third-party widget actually mounts, and several shipped bugs were exactly that:

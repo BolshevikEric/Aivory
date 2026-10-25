@@ -6,9 +6,11 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Network, Plus, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiChannel, ApiChannelHealth, ApiChannelModel, ApiChannelModelCandidate, ApiChannelModelHealth } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -83,6 +85,7 @@ export default function AdminChannels() {
     && (statusFilter === 'all' || row.enabled === (statusFilter === 'enabled')),
   ), [rows, search, statusFilter])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [editor, setEditor] = useState<ChannelEditor>({
     open: false,
     draft: { enabled: true },
@@ -136,6 +139,7 @@ export default function AdminChannels() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const [nextRows, modelHealth] = await Promise.all([
         adminApi.channels(),
@@ -144,7 +148,9 @@ export default function AdminChannels() {
       setRows(nextRows)
       setChannelHealthByID(modelHealth)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -504,18 +510,17 @@ export default function AdminChannels() {
       />
 
       <section className="mt-4">
-      {loading ? (
+      {loadError && rows.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && rows.length === 0 ? (
           <PanelFallback />
+        ) : loadError && rows.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : rows.length === 0 ? (
-          <div className="rounded-[12px] bg-[var(--color-surface)] px-6 py-10 text-center">
-            <p className="text-[var(--color-fg-muted)] text-sm">{t('admin:channels.empty')}</p>
-            <div className="mt-4">
-              <Button onClick={openNew}>{t('admin:common.createFirst', { kind: t('admin:channels.title').toLowerCase() })}</Button>
-            </div>
-          </div>
+          <EmptyState size="panel" icon={<Network aria-hidden />} title={t('admin:channels.empty')} action={<Button size="sm" onClick={openNew}>{t('admin:common.createFirst', { kind: t('admin:channels.title').toLowerCase() })}</Button>} />
         ) : (
           <AdminSortableList
             items={filteredRows}
+            emptyFiltered={rows.length > 0}
             onItemsChange={(next) => setRows((current) => mergeVisibleAdminOrder(current, next))}
             onOrderCommit={persistOrder}
             dragHandleLabel={t('admin:common.dragHandle')}

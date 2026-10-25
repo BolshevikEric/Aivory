@@ -5,15 +5,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
-import { AlertCircle, History, Monitor, RefreshCw, Smartphone } from 'lucide-react'
+import { History, Monitor, Smartphone } from 'lucide-react'
 
 import { adminApi, ApiError } from '@/api'
 import type { ApiAdminLoginHistoryEntry, ApiUser } from '@/api/types'
 import { AdminDetailHeader } from '@/components/admin/admin-detail-header'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { AdminTable } from '@/components/admin/AdminTable'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { Badge } from '@/components/ui/badge'
+import { AdminTable } from '@/components/admin/AdminTable'
 import { Pagination } from '@/components/ui/pagination'
 import { PanelFallback } from '@/components/ui/panel-fallback'
 import { formatDateTime } from '@/lib/utils'
@@ -126,33 +126,14 @@ export default function AdminUserLoginHistory({ userId, embedded = false }: { us
         {loading ? (
           <PanelFallback />
         ) : error ? (
-          <div
-            className="flex flex-col items-start gap-3 rounded-[8px] border border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-            role="alert"
-          >
-            <div className="flex min-w-0 items-start gap-2.5 text-sm text-[var(--color-danger)]">
-              <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
-              <span className="min-w-0 break-words">{error}</span>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0 max-sm:w-full"
-              leadingIcon={<RefreshCw size={13} aria-hidden />}
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
-              {t('admin:users.loginHistoryRetry')}
-            </Button>
-          </div>
+          <ErrorState size="panel" description={error} retry={() => setReloadKey((key) => key + 1)} />
         ) : rows.length === 0 ? (
-          <div className="rounded-[8px] bg-[var(--color-surface)]">
-            <EmptyState
-              icon={<History size={20} aria-hidden />}
-              title={t('admin:users.noLoginHistory')}
-              description={t('admin:users.noLoginHistoryBody')}
-              className="py-10"
-            />
-          </div>
+          <EmptyState
+            size="panel"
+            icon={<History size={20} aria-hidden />}
+            title={t('admin:users.noLoginHistory')}
+            description={t('admin:users.noLoginHistoryBody')}
+          />
         ) : (
           <>
             <AdminTable

@@ -8,10 +8,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, ChevronRight, MessageSquare, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronRight, MessageSquare, Trash2 } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiConversation, ApiUser } from '@/api/types'
 import { AdminDetailHeader } from '@/components/admin/admin-detail-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
@@ -133,19 +135,9 @@ export default function AdminUserConversations({ userId, embedded = false }: { u
         {pageLoading ? (
           <PanelFallback />
         ) : error ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] bg-[var(--color-danger-soft)] p-4" role="alert">
-            <div className="flex min-w-0 items-start gap-2.5 text-sm text-[var(--color-danger)]">
-              <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
-              <span className="min-w-0 break-words">{error}</span>
-            </div>
-            <Button variant="secondary" size="sm" leadingIcon={<RefreshCw size={13} aria-hidden />} onClick={() => setReloadKey((key) => key + 1)}>
-              {t('common:actions.tryAgain')}
-            </Button>
-          </div>
+          <ErrorState size="panel" description={error} retry={() => setReloadKey((key) => key + 1)} />
         ) : rows.length === 0 ? (
-          <div className="text-sm text-[var(--color-fg-subtle)] rounded-[12px] bg-[var(--color-surface)] px-5 py-10 text-center">
-            {t('users.noConversations')}
-          </div>
+          <EmptyState size="panel" icon={<MessageSquare aria-hidden />} title={t('users.noConversations')} />
         ) : (
           <AdminTable
             items={rows}

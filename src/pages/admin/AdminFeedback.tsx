@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { Bug, ChevronRight, Image as ImageIcon, Search, X } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiAdminUserFeedback, ApiAdminUserFeedbackPage } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -203,8 +203,7 @@ export default function AdminFeedback() {
             <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-4" />
           </div>
         ) : (
-          <EmptyState
-            className="py-20"
+          <EmptyState size="panel"
             icon={<Bug size={21} aria-hidden />}
             title={t(searchDebounced ? 'admin:userFeedback.emptyFiltered' : 'admin:userFeedback.empty')}
             description={searchDebounced ? undefined : t('admin:userFeedback.lead')}

@@ -98,6 +98,21 @@ describe('shared admin tables', () => {
     expect(container.querySelector('tbody')?.textContent).toBe('No matches')
   })
 
+  it('distinguishes an empty collection from an empty filtered result', () => {
+    act(() => root.render(createElement(AdminTable<Item>, { items: [], columns, rowKey: (item) => item.id })))
+    expect(container.querySelector('tbody')?.textContent).toBe('common.noData')
+    act(() => root.render(createElement(AdminTable<Item>, { items: [], columns, rowKey: (item) => item.id, emptyFiltered: true })))
+    expect(container.querySelector('tbody')?.textContent).toBe('common.noResults')
+  })
+
+  it('passes the filtered-result state through sortable tables', () => {
+    act(() => root.render(createElement(AdminSortableList<Item>, {
+      items: [], onItemsChange: vi.fn(), columns, emptyFiltered: true,
+      dragHandleLabel: 'Drag', moveUpLabel: 'Up', moveDownLabel: 'Down',
+    })))
+    expect(container.querySelector('tbody')?.textContent).toBe('common.noResults')
+  })
+
   it('preserves the list layout used by editable parameter and tool forms', () => {
     act(() => root.render(createElement(AdminSortableList<Item>, {
       items: initial, onItemsChange: vi.fn(), renderItem: (item) => createElement('input', { defaultValue: item.name }),

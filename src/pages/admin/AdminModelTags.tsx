@@ -9,6 +9,8 @@ import { Plus, Trash2, Tag } from 'lucide-react'
 import { adminApi, ApiError } from '@/api'
 import type { ApiModelTag } from '@/api/types'
 import { AdminDetailHeader } from '@/components/admin/admin-detail-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AdminSortableList } from '@/components/admin/AdminSortableList'
@@ -25,6 +27,7 @@ export default function AdminModelTags() {
   const tags = useModels((state) => state.tags)
   const setTags = useModels((state) => state.setTags)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const creatingRef = useRef(false)
@@ -36,10 +39,13 @@ export default function AdminModelTags() {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       setTags(await adminApi.modelTags())
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t('admin:common.failed'))
+      const message = e instanceof ApiError ? e.message : t('common:startup.failed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -161,12 +167,13 @@ export default function AdminModelTags() {
           </Button>
         </div>
 
-        {loading ? (
+        {loadError && tags.length > 0 ? <ErrorState size="inline" description={loadError} retry={() => void load()} className="mb-4" /> : null}
+        {loading && tags.length === 0 ? (
           <PanelFallback />
+        ) : loadError && tags.length === 0 ? (
+          <ErrorState size="panel" description={loadError} retry={() => void load()} />
         ) : tags.length === 0 ? (
-          <div className="mt-6 rounded-[12px] bg-[var(--color-surface)] px-5 py-8 text-center text-sm text-[var(--color-fg-muted)]">
-            {t('admin:modelTags.empty')}
-          </div>
+          <EmptyState size="panel" icon={<Tag aria-hidden />} title={t('admin:modelTags.empty')} className="mt-6" />
         ) : (
           <AdminSortableList
             items={tags}

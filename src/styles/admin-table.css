@@ -1,4 +1,5 @@
 .admin-table-scroll {
+  container-type: inline-size;
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
@@ -162,9 +163,17 @@
 }
 
 .admin-data-table .admin-table-empty {
-  height: 120px;
+  padding: 0;
   text-align: center;
   color: var(--color-fg-muted);
+}
+
+/* Empty messages stay centered in the visible frame of a horizontally scrolling table. */
+.admin-table-empty-content {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+  max-width: 100%;
 }
 
 @media (pointer: coarse) {

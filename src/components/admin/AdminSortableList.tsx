@@ -34,6 +34,7 @@ interface AdminSortableListProps<T extends SortableItem> {
   columns?: AdminTableColumn<T>[]
   tableLabel?: string
   emptyMessage?: ReactNode
+  emptyFiltered?: boolean
   dragHandleLabel: string
   moveUpLabel: string
   moveDownLabel: string
@@ -55,6 +56,7 @@ export function AdminSortableList<T extends SortableItem>({
   columns,
   tableLabel,
   emptyMessage,
+  emptyFiltered,
   dragHandleLabel,
   moveUpLabel,
   moveDownLabel,
@@ -271,6 +273,7 @@ export function AdminSortableList<T extends SortableItem>({
           rowKey={(item) => item.id}
           label={tableLabel}
           emptyMessage={emptyMessage}
+          emptyFiltered={emptyFiltered}
           className={cn(drag && 'select-none', listClassName)}
           renderRow={(item, _index, cells) => (
             <motion.tr

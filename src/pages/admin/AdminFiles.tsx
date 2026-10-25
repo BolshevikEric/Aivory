@@ -18,6 +18,8 @@ import { adminApi, ApiError } from '@/api'
 import type { ApiAdminFile } from '@/api/types'
 import { DocumentPreview } from '@/components/files/document-preview'
 import { FileFiltersPopover } from '@/components/files/file-filters-popover'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
 import {
@@ -29,7 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -501,18 +502,13 @@ export default function AdminFiles() {
                 ))}
               </div>
             ) : listError ? (
-              <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-                <FileQuestion size={24} className="text-[var(--color-danger)]" aria-hidden />
-                <p className="mt-3 text-sm text-[var(--color-fg-muted)]">{listError}</p>
-                <Button variant="secondary" size="sm" className="mt-4" onClick={() => void load()}>
-                  {t('common:actions.tryAgain', { defaultValue: 'Try again' })}
-                </Button>
-              </div>
+              <ErrorState size="table" className="my-auto" description={listError} retry={() => void load()} />
             ) : rows.length === 0 ? (
               <EmptyState
-                className="my-auto py-10"
+                size="table"
+                className="my-auto"
                 icon={<FolderOpen size={21} aria-hidden />}
-                title={t('admin:files.empty')}
+                title={searchDebounced || userQDebounced || origin !== ALL || fileType !== 'all' ? t('files:list.emptyFilteredTitle') : t('admin:files.empty')}
                 description={
                   searchDebounced || userQDebounced || origin !== ALL || fileType !== 'all'
                     ? t('files:list.emptyFilteredBody')

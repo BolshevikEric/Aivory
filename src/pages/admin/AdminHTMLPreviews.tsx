@@ -4,6 +4,7 @@ import { AlertCircle, Check, Copy, ExternalLink, Link2, Search, Trash2 } from 'l
 
 import { adminApi, apiUrl, ApiError } from '@/api'
 import type { ApiAdminHTMLPreviewShare, ApiAdminHTMLPreviewSharePage } from '@/api/types'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { AdminTable } from '@/components/admin/AdminTable'
 import {
@@ -15,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -190,8 +190,7 @@ export default function AdminHTMLPreviews() {
             <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-4" />
           </div>
         ) : (
-          <EmptyState
-            className="py-20"
+          <EmptyState size="panel"
             icon={<Link2 size={21} aria-hidden />}
             title={t(searchDebounced ? 'admin:htmlPreviews.emptyFiltered' : 'admin:htmlPreviews.empty')}
             description={searchDebounced ? undefined : t('admin:htmlPreviews.emptyLead')}
