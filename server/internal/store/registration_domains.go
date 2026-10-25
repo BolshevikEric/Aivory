@@ -9,6 +9,7 @@ import (
 
 var ErrWorkspaceDomainBound = errors.New("workspace is assigned to an email domain; remove its domain rules first")
 var ErrInvalidDomain = errors.New("invalid email domain")
+var ErrDomainWorkspaceRequired = errors.New("choose a workspace before locking personal space")
 
 const (
 	MaxDomainUserEnrollmentBatch = 500
@@ -103,7 +104,7 @@ func enrollDomainUser(ctx context.Context, ex RowExecer, userID, email string) e
 	matchedDomain := emailDomain(email)
 	var ruleDomain, workspaceID string
 	var initialGroupID sql.NullString
-	err := ex.QueryRowContext(ctx, `SELECT d.domain,d.workspace_id,d.initial_group_id
+	err := ex.QueryRowContext(ctx, `SELECT d.domain,COALESCE(d.workspace_id,''),d.initial_group_id
 		FROM registration_domains d JOIN registration_domain_matches m ON m.rule_domain=d.domain
 		WHERE m.domain=? AND d.enabled=1`, matchedDomain).Scan(&ruleDomain, &workspaceID, &initialGroupID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -112,8 +113,24 @@ func enrollDomainUser(ctx context.Context, ex RowExecer, userID, email string) e
 	if err != nil {
 		return err
 	}
-	// Serializes against domain changes and workspace teardown in PostgreSQL.
-	res, err := ex.ExecContext(ctx, `UPDATE workspaces SET id=id WHERE id=? AND COALESCE(deleting,0)=0`, workspaceID)
+	// Serializes workspace-bound enrollment against workspace teardown.
+	if workspaceID != "" {
+		res, err := ex.ExecContext(ctx, `UPDATE workspaces SET id=id WHERE id=? AND COALESCE(deleting,0)=0`, workspaceID)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrNotFound
+		}
+	}
+	res, err := ex.ExecContext(ctx, `INSERT INTO domain_users(user_id,domain)
+		SELECT ?,d.domain FROM registration_domains d
+		JOIN registration_domain_matches m ON m.rule_domain=d.domain
+		WHERE d.domain=? AND COALESCE(d.workspace_id,'')=? AND d.enabled=1 AND m.domain=?`, userID, ruleDomain, workspaceID, matchedDomain)
 	if err != nil {
 		return err
 	}
@@ -121,32 +138,20 @@ func enrollDomainUser(ctx context.Context, ex RowExecer, userID, email string) e
 	if err != nil {
 		return err
 	}
-	if n != 1 {
-		return ErrNotFound
-	}
-	res, err = ex.ExecContext(ctx, `INSERT INTO domain_users(user_id,domain)
-		SELECT ?,d.domain FROM registration_domains d
-		JOIN registration_domain_matches m ON m.rule_domain=d.domain
-		WHERE d.domain=? AND d.workspace_id=? AND d.enabled=1 AND m.domain=?`, userID, ruleDomain, workspaceID, matchedDomain)
-	if err != nil {
-		return err
-	}
-	n, err = res.RowsAffected()
-	if err != nil {
-		return err
-	}
 	if n == 0 {
 		return nil
 	}
-	membership, err := ex.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'member') ON CONFLICT(workspace_id,user_id) DO NOTHING`, workspaceID, userID)
-	if err != nil {
-		return err
-	}
-	if created, rowsErr := membership.RowsAffected(); rowsErr != nil {
-		return rowsErr
-	} else if created == 1 {
-		if _, err := ex.ExecContext(ctx, `UPDATE domain_users SET workspace_membership_created=1 WHERE user_id=? AND domain=?`, userID, ruleDomain); err != nil {
+	if workspaceID != "" {
+		membership, err := ex.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'member') ON CONFLICT(workspace_id,user_id) DO NOTHING`, workspaceID, userID)
+		if err != nil {
 			return err
+		}
+		if created, rowsErr := membership.RowsAffected(); rowsErr != nil {
+			return rowsErr
+		} else if created == 1 {
+			if _, err := ex.ExecContext(ctx, `UPDATE domain_users SET workspace_membership_created=1 WHERE user_id=? AND domain=?`, userID, ruleDomain); err != nil {
+				return err
+			}
 		}
 	}
 	if initialGroupID.Valid && strings.TrimSpace(initialGroupID.String) != "" {
@@ -156,7 +161,7 @@ func enrollDomainUser(ctx context.Context, ex RowExecer, userID, email string) e
 }
 func GetDomainAccess(ctx context.Context, ex RowExecer, userID string) (*DomainAccess, error) {
 	var a DomainAccess
-	err := ex.QueryRowContext(ctx, `SELECT d.domain,d.workspace_id,COALESCE(du.lock_override,d.lock_personal),d.subscription_purchase_disabled
+	err := ex.QueryRowContext(ctx, `SELECT d.domain,COALESCE(d.workspace_id,''),CASE WHEN d.workspace_id IS NULL THEN 0 ELSE COALESCE(du.lock_override,d.lock_personal) END,d.subscription_purchase_disabled
  FROM domain_users du JOIN registration_domains d ON d.domain=du.domain WHERE du.user_id=?`, userID).Scan(&a.Domain, &a.WorkspaceID, &a.Locked, &a.SubscriptionPurchaseDisabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -164,10 +169,10 @@ func GetDomainAccess(ctx context.Context, ex RowExecer, userID string) (*DomainA
 	return &a, err
 }
 func ListRegistrationDomains(ctx context.Context, db *sql.DB) ([]RegistrationDomain, error) {
-	rows, err := db.QueryContext(ctx, `SELECT d.domain,d.workspace_id,w.name,w.icon_url,w.description,d.lock_personal,d.email_verification_required,
+	rows, err := db.QueryContext(ctx, `SELECT d.domain,COALESCE(d.workspace_id,''),COALESCE(w.name,''),w.icon_url,w.description,d.lock_personal,d.email_verification_required,
 	 COALESCE(d.initial_group_id,''),COALESCE(g.name,''),d.enabled,d.subscription_purchase_disabled,
 	 (SELECT COUNT(*) FROM domain_users du WHERE du.domain=d.domain)
-	 FROM registration_domains d JOIN workspaces w ON w.id=d.workspace_id
+	 FROM registration_domains d LEFT JOIN workspaces w ON w.id=d.workspace_id
 	 LEFT JOIN user_groups g ON g.id=d.initial_group_id ORDER BY d.domain`)
 	if err != nil {
 		return nil, err
@@ -253,6 +258,10 @@ func BackfillRegistrationDomainMatches(ctx context.Context, ex RowExecer) error 
 // The stable rule key and target workspace are immutable. The email domains
 // matched by the rule may be replaced without disturbing existing bindings.
 func SaveRegistrationDomain(ctx context.Context, db *sql.DB, d RegistrationDomain, create bool) error {
+	d.WorkspaceID = strings.TrimSpace(d.WorkspaceID)
+	if d.WorkspaceID == "" && d.LockPersonal {
+		return ErrDomainWorkspaceRequired
+	}
 	domain, err := NormalizeRegistrationDomain(d.Domain)
 	if err != nil {
 		return err
@@ -270,18 +279,11 @@ func SaveRegistrationDomain(ctx context.Context, db *sql.DB, d RegistrationDomai
 			return err
 		}
 	}
-	tx, err := beginWorkspaceMutationTx(ctx, db, d.WorkspaceID)
+	tx, err := beginDomainMutationTx(ctx, db, d.WorkspaceID)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var deleting int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(deleting,0) FROM workspaces WHERE id=?`, d.WorkspaceID).Scan(&deleting); err != nil {
-		return err
-	}
-	if deleting != 0 {
-		return ErrNotFound
-	}
 	var initialGroupID any
 	d.InitialGroupID = strings.TrimSpace(d.InitialGroupID)
 	if d.InitialGroupID != "" {
@@ -298,10 +300,10 @@ func SaveRegistrationDomain(ctx context.Context, db *sql.DB, d RegistrationDomai
 		// A newly created rule always starts running. Stopping enrollment is an
 		// explicit administrative action performed by updating an existing rule.
 		d.Enabled = true
-		_, err = tx.ExecContext(ctx, `INSERT INTO registration_domains(domain,workspace_id,lock_personal,email_verification_required,initial_group_id,enabled,subscription_purchase_disabled) VALUES(?,?,?,?,?,?,?)`, domain, d.WorkspaceID, boolInt(d.LockPersonal), boolInt(d.EmailVerificationRequired), initialGroupID, boolInt(d.Enabled), boolInt(d.SubscriptionPurchaseDisabled))
+		_, err = tx.ExecContext(ctx, `INSERT INTO registration_domains(domain,workspace_id,lock_personal,email_verification_required,initial_group_id,enabled,subscription_purchase_disabled) VALUES(?,?,?,?,?,?,?)`, domain, nullable(d.WorkspaceID), boolInt(d.LockPersonal), boolInt(d.EmailVerificationRequired), initialGroupID, boolInt(d.Enabled), boolInt(d.SubscriptionPurchaseDisabled))
 	} else {
 		var res sql.Result
-		res, err = tx.ExecContext(ctx, `UPDATE registration_domains SET lock_personal=?,email_verification_required=?,initial_group_id=?,enabled=?,subscription_purchase_disabled=? WHERE domain=? AND workspace_id=?`, boolInt(d.LockPersonal), boolInt(d.EmailVerificationRequired), initialGroupID, boolInt(d.Enabled), boolInt(d.SubscriptionPurchaseDisabled), domain, d.WorkspaceID)
+		res, err = tx.ExecContext(ctx, `UPDATE registration_domains SET lock_personal=?,email_verification_required=?,initial_group_id=?,enabled=?,subscription_purchase_disabled=? WHERE domain=? AND COALESCE(workspace_id,'')=?`, boolInt(d.LockPersonal), boolInt(d.EmailVerificationRequired), initialGroupID, boolInt(d.Enabled), boolInt(d.SubscriptionPurchaseDisabled), domain, d.WorkspaceID)
 		if err == nil {
 			if n, _ := res.RowsAffected(); n != 1 {
 				return ErrNotFound
@@ -322,6 +324,9 @@ func SaveRegistrationDomain(ctx context.Context, db *sql.DB, d RegistrationDomai
 		}
 	}
 	if d.IconURL != nil || d.Description != nil {
+		if d.WorkspaceID == "" {
+			return ErrInvalidWorkspaceProfile
+		}
 		var profile WorkspaceProfile
 		if err := tx.QueryRowContext(ctx, `SELECT icon_url,description FROM workspaces WHERE id=?`, d.WorkspaceID).Scan(&profile.IconURL, &profile.Description); err != nil {
 			return err
@@ -346,19 +351,41 @@ func SaveRegistrationDomain(ctx context.Context, db *sql.DB, d RegistrationDomai
 	return tx.Commit()
 }
 
+// Rules without a workspace still use a transaction for their domain bindings
+// and policy updates. Bound rules retain the existing workspace mutation lock.
+func beginDomainMutationTx(ctx context.Context, db *sql.DB, workspaceID string) (*sql.Tx, error) {
+	if workspaceID == "" {
+		return db.BeginTx(ctx, nil)
+	}
+	tx, err := beginWorkspaceMutationTx(ctx, db, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var deleting int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(deleting,0) FROM workspaces WHERE id=?`, workspaceID).Scan(&deleting); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if deleting != 0 {
+		_ = tx.Rollback()
+		return nil, ErrNotFound
+	}
+	return tx, nil
+}
+
 // A user may have left while unlocked. Reapplying a lock must restore access
 // to the assigned workspace rather than strand them outside every space.
 func ensureLockedDomainMembers(ctx context.Context, tx *sql.Tx, domain string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role)
 	 SELECT d.workspace_id,du.user_id,'member' FROM domain_users du
 	 JOIN registration_domains d ON d.domain=du.domain
-	 WHERE d.domain=? AND COALESCE(du.lock_override,d.lock_personal)=1
+	 WHERE d.domain=? AND d.workspace_id IS NOT NULL AND COALESCE(du.lock_override,d.lock_personal)=1
 	 ON CONFLICT(workspace_id,user_id) DO NOTHING`, domain)
 	return err
 }
 
 func ListDomainUsers(ctx context.Context, db *sql.DB, domain string) ([]DomainUser, error) {
-	rows, err := db.QueryContext(ctx, `SELECT u.id,u.name,u.email,du.lock_override,COALESCE(du.lock_override,d.lock_personal)
+	rows, err := db.QueryContext(ctx, `SELECT u.id,u.name,u.email,du.lock_override,CASE WHEN d.workspace_id IS NULL THEN 0 ELSE COALESCE(du.lock_override,d.lock_personal) END
  FROM domain_users du JOIN users u ON u.id=du.user_id JOIN registration_domains d ON d.domain=du.domain WHERE du.domain=? ORDER BY u.email`, domain)
 	if err != nil {
 		return nil, err
@@ -428,24 +455,17 @@ func EnrollExistingDomainUsers(ctx context.Context, db *sql.DB, value string, us
 		return nil, err
 	}
 	var workspaceID string
-	if err := db.QueryRowContext(ctx, `SELECT workspace_id FROM registration_domains WHERE domain=?`, domain).Scan(&workspaceID); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(workspace_id,'') FROM registration_domains WHERE domain=?`, domain).Scan(&workspaceID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	tx, err := beginWorkspaceMutationTx(ctx, db, workspaceID)
+	tx, err := beginDomainMutationTx(ctx, db, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	var deleting int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(deleting,0) FROM workspaces WHERE id=?`, workspaceID).Scan(&deleting); err != nil {
-		return nil, err
-	}
-	if deleting != 0 {
-		return nil, ErrNotFound
-	}
 	seen := make(map[string]struct{}, len(userIDs))
 	added := make([]string, 0, len(userIDs))
 	for _, userID := range userIDs {
@@ -476,7 +496,7 @@ func EnrollExistingDomainUsers(ctx context.Context, db *sql.DB, value string, us
 			return nil, ErrForbidden
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO domain_users(user_id,domain)
-		 SELECT ?,domain FROM registration_domains WHERE domain=? AND workspace_id=?`, userID, domain, workspaceID)
+		 SELECT ?,domain FROM registration_domains WHERE domain=? AND COALESCE(workspace_id,'')=?`, userID, domain, workspaceID)
 		if err != nil {
 			return nil, err
 		}
@@ -485,16 +505,18 @@ func EnrollExistingDomainUsers(ctx context.Context, db *sql.DB, value string, us
 		} else if n != 1 {
 			return nil, ErrNotFound
 		}
-		membership, err := tx.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role)
+		if workspaceID != "" {
+			membership, err := tx.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role)
 		 VALUES(?,?,'member') ON CONFLICT(workspace_id,user_id) DO NOTHING`, workspaceID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if created, rowsErr := membership.RowsAffected(); rowsErr != nil {
-			return nil, rowsErr
-		} else if created == 1 {
-			if _, err := tx.ExecContext(ctx, `UPDATE domain_users SET workspace_membership_created=1 WHERE user_id=? AND domain=?`, userID, domain); err != nil {
+			if err != nil {
 				return nil, err
+			}
+			if created, rowsErr := membership.RowsAffected(); rowsErr != nil {
+				return nil, rowsErr
+			} else if created == 1 {
+				if _, err := tx.ExecContext(ctx, `UPDATE domain_users SET workspace_membership_created=1 WHERE user_id=? AND domain=?`, userID, domain); err != nil {
+					return nil, err
+				}
 			}
 		}
 		added = append(added, userID)
@@ -647,11 +669,16 @@ func UpdateDomainUserAccess(ctx context.Context, db *sql.DB, domain, userID stri
 	}
 	defer tx.Rollback()
 	var workspaceID string
-	if err := tx.QueryRowContext(ctx, `SELECT workspace_id FROM registration_domains WHERE domain=?`, domain).Scan(&workspaceID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(workspace_id,'') FROM registration_domains WHERE domain=?`, domain).Scan(&workspaceID); err != nil {
 		return err
 	}
-	if err := lockWorkspaceMembershipTx(ctx, tx, workspaceID); err != nil {
-		return err
+	if workspaceID == "" && override != nil && *override {
+		return ErrDomainWorkspaceRequired
+	}
+	if workspaceID != "" {
+		if err := lockWorkspaceMembershipTx(ctx, tx, workspaceID); err != nil {
+			return err
+		}
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE domain_users SET lock_override=? WHERE domain=? AND user_id=?`, value, domain, userID)
 	if err != nil {
@@ -675,23 +702,23 @@ func RemoveDomainUser(ctx context.Context, db *sql.DB, value, userID string) (Do
 	if err != nil {
 		return result, err
 	}
-	if err := db.QueryRowContext(ctx, `SELECT workspace_id FROM registration_domains WHERE domain=?`, domain).Scan(&result.WorkspaceID); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(workspace_id,'') FROM registration_domains WHERE domain=?`, domain).Scan(&result.WorkspaceID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return result, ErrNotFound
 		}
 		return result, err
 	}
-	tx, err := beginWorkspaceMutationTx(ctx, db, result.WorkspaceID)
+	tx, err := beginDomainMutationTx(ctx, db, result.WorkspaceID)
 	if err != nil {
 		return result, err
 	}
 	defer tx.Rollback()
 	var membershipCreated bool
 	var ownerID string
-	if err := tx.QueryRowContext(ctx, `SELECT du.workspace_membership_created,w.owner_id
+	if err := tx.QueryRowContext(ctx, `SELECT du.workspace_membership_created,COALESCE(w.owner_id,'')
 		FROM domain_users du JOIN registration_domains d ON d.domain=du.domain
-		JOIN workspaces w ON w.id=d.workspace_id
-		WHERE du.domain=? AND du.user_id=? AND d.workspace_id=?`, domain, userID, result.WorkspaceID).Scan(&membershipCreated, &ownerID); err != nil {
+		LEFT JOIN workspaces w ON w.id=d.workspace_id
+		WHERE du.domain=? AND du.user_id=? AND COALESCE(d.workspace_id,'')=?`, domain, userID, result.WorkspaceID).Scan(&membershipCreated, &ownerID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return result, ErrNotFound
 		}
@@ -700,7 +727,7 @@ func RemoveDomainUser(ctx context.Context, db *sql.DB, value, userID string) (Do
 	if _, err := tx.ExecContext(ctx, `DELETE FROM domain_users WHERE domain=? AND user_id=?`, domain, userID); err != nil {
 		return result, err
 	}
-	if membershipCreated && userID != ownerID {
+	if result.WorkspaceID != "" && membershipCreated && userID != ownerID {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM conversation_shares
 			WHERE user_id=? AND EXISTS (
 				SELECT 1 FROM conversations c

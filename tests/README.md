@@ -26,6 +26,17 @@ npm run test:ui-states
 It accepts `CHROME_PATH` and `AIVORY_UI_STATE_SCREENSHOTS`; screenshots otherwise
 go to the OS temporary directory under `aivory-ui-states`.
 
+The domain-rule suite checks creation without a workspace, lock reset when
+clearing a workspace, existing rule edits, and mobile layouts in both themes:
+
+```sh
+node tests/browser/run-domain-rules.mjs
+```
+
+It starts Vite on port 5205 and accepts `CHROME_PATH` and
+`AIVORY_DOMAIN_SCREENSHOTS`. Screenshots default to `aivory-domain-rules` in the
+OS temporary directory.
+
 Four Puppeteer suites drive real headless Chrome against a local Chrome/Edge
 binary. They exist because `tsc` and the unit suite cannot prove that a
 third-party widget actually mounts, and several shipped bugs were exactly that:

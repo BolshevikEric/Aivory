@@ -1,5 +1,3 @@
-import { WorkspaceProfileFields, type WorkspaceProfileDraft } from '@/components/workspace/workspace-profile-fields'
-import { WorkspaceIcon } from '@/components/workspace/workspace-icon'
 import { useWorkspaces } from '@/store/workspaces'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -26,6 +24,8 @@ import { toast } from '@/hooks/use-toast'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AdminListToolbar } from '@/components/admin/admin-list-toolbar'
 import { matchesAdminSearch } from '@/lib/admin-list-filter'
+
+const NO_WORKSPACE = '__none__'
 
 function matchedDomains(rule: RegistrationDomain): string[] {
   return rule.domains?.length ? rule.domains : [rule.domain]
@@ -103,7 +103,7 @@ export default function AdminDomains() {
           <Button
             size="sm"
             leadingIcon={<Plus size={15} aria-hidden />}
-            disabled={loading || !!error || !workspaces.length}
+            disabled={loading || !!error}
             onClick={() => setEditor('new')}
           >
             {t('domains.add')}
@@ -114,7 +114,7 @@ export default function AdminDomains() {
       {loading ? <PanelFallback /> : error ? (
         <ErrorState size="panel" className="mt-4" description={error} retry={() => void load()} />
       ) : !rows.length ? (
-        <EmptyState size="panel" className="mt-4" icon={<Globe aria-hidden />} title={t('domains.empty')} description={t('domains.emptyHint')} action={!workspaces.length ? <Button size="sm" variant="secondary" asChild><Link to="/admin/workspaces">{t('domains.createWorkspace')}</Link></Button> : undefined} />
+        <EmptyState size="panel" className="mt-4" icon={<Globe aria-hidden />} title={t('domains.empty')} description={t('domains.emptyHint')} />
       ) : (
         <>
         <AdminTable
@@ -125,7 +125,7 @@ export default function AdminDomains() {
           label={t('domains.title')}
           columns={[
             { id: 'domain', header: t('domains.domain'), width: 200, render: (row) => <div className="flex flex-wrap gap-x-2 gap-y-1 font-medium">{matchedDomains(row).map((domain) => <span key={domain} className="break-all">{domain}</span>)}</div> },
-            { id: 'workspace', header: t('domains.workspace'), width: 180, render: (row) => <span className="flex min-w-0 items-center gap-2"><WorkspaceIcon icon={row.icon_url} /><span className="truncate" title={row.workspace_name}>{row.workspace_name}</span></span> },
+            { id: 'workspace', header: t('domains.workspace'), width: 180, render: (row) => <span className="block truncate" title={row.workspace_name || t('domains.noWorkspace')}>{row.workspace_name || t('domains.noWorkspace')}</span> },
             { id: 'enrollment', header: t('domains.enrollment'), width: 230, render: (row) => <div className="flex flex-col items-start gap-1"><Badge size="xs" variant={row.enabled ? 'success' : 'neutral'}>{t(row.enabled ? 'domains.enabled' : 'domains.paused')}</Badge><span className="text-[12px] text-[var(--color-fg-muted)]">{t(row.email_verification_required ? 'domains.verificationRequired' : 'domains.verificationOptional')}</span><span className="text-[12px] text-[var(--color-fg-muted)]">{t('domains.initialGroupSummary', { group: row.initial_group_name || t('domains.systemDefaultGroup') })}</span></div> },
             { id: 'access', header: t('domains.access'), width: 160, render: (row) => <span className="inline-flex items-center gap-1.5">{row.lock_personal ? <LockKeyhole size={14} aria-hidden /> : null}{t(row.lock_personal ? 'domains.locked' : 'domains.unlocked')}</span> },
             { id: 'members', header: t('domains.members'), width: 80, align: 'right', render: (row) => <span className="tabular-nums">{row.member_count}</span> },
@@ -151,8 +151,6 @@ function DomainEditor({ rule, workspaces, groups, onClose, onSaved }: { rule: Re
   const isNew = rule === 'new'
   const [domainsText, setDomainsText] = useState(isNew ? '' : matchedDomains(rule).join('\n'))
   const [workspace, setWorkspace] = useState(isNew ? '' : rule.workspace_id)
-  const [profile, setProfile] = useState<WorkspaceProfileDraft>({ icon_url: isNew ? '' : rule.icon_url ?? '', description: isNew ? '' : rule.description ?? '' })
-  const [uploading, setUploading] = useState(false)
   const [locked, setLocked] = useState(isNew ? false : rule.lock_personal)
   const [verifyEmail, setVerifyEmail] = useState(isNew ? true : rule.email_verification_required)
   const [initialGroup, setInitialGroup] = useState(isNew ? '' : rule.initial_group_id)
@@ -163,14 +161,12 @@ function DomainEditor({ rule, workspaces, groups, onClose, onSaved }: { rule: Re
   const [error, setError] = useState('')
   const mutation = useRef(false)
   const domains = parseDomains(domainsText)
-  const canSave = domains.length > 0 && domains.length <= 50 && !!workspace
+  const canSave = domains.length > 0 && domains.length <= 50
   async function save() {
-    if (mutation.current || !canSave || uploading) return
+    if (mutation.current || !canSave) return
     mutation.current = true; setBusy(true); setError('')
     try {
-      const previous = isNew ? workspaces.find((w) => w.id === workspace) : rule
-      const profilePatch = { ...(profile.icon_url !== (previous?.icon_url ?? '') ? { icon_url: profile.icon_url } : {}), ...(profile.description !== (previous?.description ?? '') ? { description: profile.description } : {}) }
-      const body = { ...profilePatch, domain: isNew ? domains[0] : rule.domain, domains, workspace_id: workspace, lock_personal: locked, email_verification_required: verifyEmail, subscription_purchase_disabled: !purchaseAllowed, initial_group_id: initialGroup, enabled: isNew ? true : enabled }
+      const body = { domain: isNew ? domains[0] : rule.domain, domains, workspace_id: workspace, lock_personal: !!workspace && locked, email_verification_required: verifyEmail, subscription_purchase_disabled: !purchaseAllowed, initial_group_id: initialGroup, enabled: isNew ? true : enabled }
       if (isNew) await domainsApi.create(body)
       else {
         const { icon_url: _icon, description: _description, ...domainRule } = rule
@@ -187,19 +183,19 @@ function DomainEditor({ rule, workspaces, groups, onClose, onSaved }: { rule: Re
         <DialogHeader><DialogTitle>{t(isNew ? 'domains.add' : 'domains.edit')}</DialogTitle><DialogDescription>{t('domains.editorHint')}</DialogDescription></DialogHeader>
         <form className="flex min-h-0 flex-none flex-col" onSubmit={(e) => { e.preventDefault(); void save() }}>
           <DialogBody className="space-y-5 overscroll-contain">
-            <aside aria-labelledby="domain-permissions-title" className="flex items-start gap-3 rounded-[12px] border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-4">
+            {workspace ? <aside aria-labelledby="domain-permissions-title" className="flex items-start gap-3 rounded-[12px] border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-4">
               <AlertTriangle size={20} aria-hidden className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
               <div className="min-w-0 space-y-1.5 text-sm leading-6">
                 <p id="domain-permissions-title" className="font-semibold text-[var(--color-fg)]">{t('domains.permissionsNoticeTitle')}</p>
                 <p className="text-[var(--color-fg)]">{t('domains.permissionsNotice')}</p>
                 <Link to="/admin/user-groups" className="inline-flex font-medium text-[var(--color-fg)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">{t('domains.configureGroups')}</Link>
               </div>
-            </aside>
+            </aside> : null}
             <div className="space-y-2"><label htmlFor="domain-names" className="text-sm font-medium">{t('domains.domain')}</label><Textarea id="domain-names" autoFocus disabled={busy} rows={4} value={domainsText} onChange={(e) => setDomainsText(e.target.value)} placeholder={'example.com\nexample.org'} maxLength={12699} required aria-describedby="domain-names-hint" /><p id="domain-names-hint" className="text-sm text-[var(--color-fg-muted)]">{t('domains.domainsHint')}</p></div>
-            <div className="space-y-2"><label id="domain-workspace-label" className="text-sm font-medium">{t('domains.workspace')}</label>
-              <Select value={workspace} onValueChange={(id) => { setWorkspace(id); const selected = workspaces.find((w) => w.id === id); setProfile({ icon_url: selected?.icon_url ?? '', description: selected?.description ?? '' }) }} disabled={!isNew || busy || uploading}><SelectTrigger aria-labelledby="domain-workspace-label"><SelectValue placeholder={t('domains.chooseWorkspace')} /></SelectTrigger><SelectContent>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent></Select>
+            <div className="space-y-2"><label id="domain-workspace-label" className="text-sm font-medium">{t('domains.workspaceOptional')}</label>
+              <Select value={workspace || NO_WORKSPACE} onValueChange={(id) => { const next = id === NO_WORKSPACE ? '' : id; setWorkspace(next); if (!next) setLocked(false) }} disabled={!isNew || busy}><SelectTrigger aria-labelledby="domain-workspace-label" aria-describedby="domain-workspace-hint"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={NO_WORKSPACE}>{t('domains.noWorkspace')}</SelectItem>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent></Select>
+              <p id="domain-workspace-hint" className="text-sm text-[var(--color-fg-muted)]">{t('domains.workspaceHint')}</p>
             </div>
-            <WorkspaceProfileFields value={profile} onChange={setProfile} disabled={busy || uploading} onUploadingChange={setUploading} />
             {isNew ? (
               <p className="text-sm leading-6 text-[var(--color-fg-muted)]">{t('domains.startsEnabledHint')}</p>
             ) : (
@@ -232,10 +228,10 @@ function DomainEditor({ rule, workspaces, groups, onClose, onSaved }: { rule: Re
               </Popover>
             </div>
             <div className="flex items-start justify-between gap-4"><div><label htmlFor="domain-subscription" className="text-sm font-medium">{t('domains.purchaseAllowedLabel')}</label><p className="mt-1 text-sm text-[var(--color-fg-muted)]">{t('domains.purchaseAllowedHint')}</p></div><Switch id="domain-subscription" checked={purchaseAllowed} onCheckedChange={setPurchaseAllowed} disabled={busy} /></div>
-            <div className="flex items-start justify-between gap-4"><div><label htmlFor="domain-lock" className="text-sm font-medium">{t('domains.lockLabel')}</label><p className="mt-1 text-sm text-[var(--color-fg-muted)]">{t('domains.lockHint')}</p></div><Switch id="domain-lock" checked={locked} onCheckedChange={setLocked} disabled={busy} /></div>
+            <div className="flex items-start justify-between gap-4"><div><label htmlFor="domain-lock" className="text-sm font-medium">{t('domains.lockLabel')}</label><p id="domain-lock-hint" className="mt-1 text-sm text-[var(--color-fg-muted)]">{t(workspace ? 'domains.lockHint' : 'domains.lockRequiresWorkspace')}</p></div><Switch id="domain-lock" checked={!!workspace && locked} onCheckedChange={setLocked} disabled={busy || !workspace} aria-describedby="domain-lock-hint" /></div>
             {error && <p role="alert" className="text-sm text-[var(--color-danger)]">{error}</p>}
           </DialogBody>
-          <DialogFooter><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>{t('domains.cancel')}</Button><Button type="submit" loading={busy} disabled={!canSave || uploading}>{t('domains.save')}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>{t('domains.cancel')}</Button><Button type="submit" loading={busy} disabled={!canSave}>{t('domains.save')}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -335,7 +331,7 @@ function DomainMembers({ rule, onClose, onChanged }: { rule: RegistrationDomain;
               columns={[
                 { id: 'user', header: t('users.fields.name'), width: 220, render: (user) => <><span className="block truncate font-medium">{user.name || user.email}</span><span className="block truncate text-[12px] text-[var(--color-fg-muted)]">{user.email}</span></> },
                 { id: 'status', header: t('common.status'), width: 120, render: (user) => t(user.locked ? 'domains.locked' : 'domains.unlocked') },
-                { id: 'access', header: t('domains.access'), width: 190, render: (user) => <Select disabled={busy} value={user.lock_override === null ? 'inherit' : user.lock_override ? 'locked' : 'unlocked'} onValueChange={(value) => void change(user, value)}><SelectTrigger aria-label={`${t('domains.access')}: ${user.email}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="inherit">{t('domains.inherit')}</SelectItem><SelectItem value="locked">{t('domains.locked')}</SelectItem><SelectItem value="unlocked">{t('domains.unlocked')}</SelectItem></SelectContent></Select> },
+                { id: 'access', header: t('domains.access'), width: 190, render: (user) => <Select disabled={busy} value={user.lock_override === null ? 'inherit' : user.lock_override ? 'locked' : 'unlocked'} onValueChange={(value) => void change(user, value)}><SelectTrigger aria-label={`${t('domains.access')}: ${user.email}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="inherit">{t('domains.inherit')}</SelectItem><SelectItem value="locked" disabled={!rule.workspace_id}>{t('domains.locked')}</SelectItem><SelectItem value="unlocked">{t('domains.unlocked')}</SelectItem></SelectContent></Select> },
                 { id: 'actions', header: t('common.actions'), width: 60, align: 'right', render: (user) => <Button size="icon-sm" variant="ghost" disabled={busy} onClick={() => setRemovingUser(user)} aria-label={`${t('domains.removeMember')}: ${user.email}`} title={t('domains.removeMember')}><Trash2 size={16} aria-hidden /></Button> },
               ]}
             />

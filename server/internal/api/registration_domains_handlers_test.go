@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +9,48 @@ import (
 
 	"aivory/server/internal/store"
 )
+
+func TestAdminDomainWithoutWorkspaceAndPersonalAccess(t *testing.T) {
+	d, adminToken, userToken := newAuditEvidenceFixture(t)
+	mx := newMux()
+	mx.handle(http.MethodPost, "/api/admin/domains", requireAdmin(d, adminSaveDomainHandler))
+	mx.handle(http.MethodGet, "/api/admin/domains", requireAdmin(d, adminListDomainsHandler))
+	mx.handle(http.MethodPatch, "/api/admin/domains/:domain", requireAdmin(d, adminSaveDomainHandler))
+	mx.handle(http.MethodPost, "/api/admin/domains/:domain/users", requireAdmin(d, adminEnrollDomainUsersHandler))
+	mx.handle(http.MethodPatch, "/api/admin/domains/:domain/users/:uid", requireAdmin(d, adminDomainUserAccessHandler))
+	mx.handle(http.MethodGet, "/api/conversations", requireAuth(d, func(_ Deps, w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		return auditEvidenceRequest(mx, method, path, adminToken, body)
+	}
+	if response := request(http.MethodPost, "/api/admin/domains", `{"domain":"unassigned.example","email_verification_required":true}`); response.Code != http.StatusOK {
+		t.Fatalf("create unassigned rule: %d %s", response.Code, response.Body.String())
+	}
+	response := request(http.MethodGet, "/api/admin/domains", "")
+	var listed struct {
+		Domains []store.RegistrationDomain `json:"domains"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &listed); err != nil || response.Code != http.StatusOK || len(listed.Domains) != 1 || listed.Domains[0].WorkspaceID != "" || listed.Domains[0].LockPersonal {
+		t.Fatalf("list unassigned rule: %+v, %v; response=%s", listed, err, response.Body.String())
+	}
+	if response := request(http.MethodPatch, "/api/admin/domains/unassigned.example", `{"lock_personal":true}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("lock unassigned rule: %d %s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPost, "/api/admin/domains/unassigned.example/users", `{"user_ids":["audit-member"]}`); response.Code != http.StatusOK {
+		t.Fatalf("enroll unassigned member: %d %s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPatch, "/api/admin/domains/unassigned.example/users/audit-member", `{"lock_override":true}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("lock unassigned member: %d %s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPatch, "/api/admin/domains/unassigned.example/users/audit-member", `{"lock_override":false}`); response.Code != http.StatusOK {
+		t.Fatalf("unlock unassigned member: %d %s", response.Code, response.Body.String())
+	}
+	personal := auditEvidenceRequest(mx, http.MethodGet, "/api/conversations", userToken, "")
+	if personal.Code != http.StatusNoContent {
+		t.Fatalf("unassigned rule blocked personal space: %d %s", personal.Code, personal.Body.String())
+	}
+}
 
 func TestAdminDomainMemberSearchAddAndRemoveRoutes(t *testing.T) {
 	d := newAuthSecurityDeps(t, "domain-member-admin.db")

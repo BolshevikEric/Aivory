@@ -29,7 +29,7 @@ func adminSaveDomainHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	err := store.SaveRegistrationDomain(r.Context(), d.DB, req, create)
 	if err != nil {
 		status := 409
-		if errors.Is(err, store.ErrInvalidDomain) || errors.Is(err, store.ErrInvalidWorkspaceProfile) {
+		if errors.Is(err, store.ErrInvalidDomain) || errors.Is(err, store.ErrInvalidWorkspaceProfile) || errors.Is(err, store.ErrDomainWorkspaceRequired) {
 			status = 400
 		}
 		if errors.Is(err, store.ErrNotFound) {
@@ -40,7 +40,9 @@ func adminSaveDomainHandler(d Deps, w http.ResponseWriter, r *http.Request) {
 	}
 	domain, _ := store.NormalizeRegistrationDomain(req.Domain)
 	notifyDomainUsers(d, r, domain)
-	publishWorkspaceAccessEvent(d, r, req.WorkspaceID, "workspace.profile_updated")
+	if req.WorkspaceID != "" {
+		publishWorkspaceAccessEvent(d, r, req.WorkspaceID, "workspace.profile_updated")
+	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 func notifyDomainUsers(d Deps, r *http.Request, domain string) {
@@ -128,7 +130,11 @@ func adminDomainUserAccessHandler(d Deps, w http.ResponseWriter, r *http.Request
 	}
 	uid := pathParam(r, "uid")
 	if err := store.UpdateDomainUserAccess(r.Context(), d.DB, pathParam(r, "domain"), uid, req.LockOverride); err != nil {
-		writeError(w, 404, err)
+		status := http.StatusNotFound
+		if errors.Is(err, store.ErrDomainWorkspaceRequired) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err)
 		return
 	}
 	revokeUserPermissionSnapshots(d, uid)

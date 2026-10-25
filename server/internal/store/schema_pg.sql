@@ -1280,7 +1280,7 @@ CREATE TABLE IF NOT EXISTS workspace_announcements (
 CREATE TABLE IF NOT EXISTS registration_domains (
   subscription_purchase_disabled INTEGER NOT NULL DEFAULT 0 CHECK(subscription_purchase_disabled IN (0,1)),
   domain TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
+  workspace_id TEXT REFERENCES workspaces(id) ON DELETE RESTRICT,
   lock_personal INTEGER NOT NULL DEFAULT 0 CHECK(lock_personal IN (0,1)),
   email_verification_required INTEGER NOT NULL DEFAULT 1 CHECK(email_verification_required IN (0,1)),
   initial_group_id TEXT REFERENCES user_groups(id) ON DELETE SET NULL,
