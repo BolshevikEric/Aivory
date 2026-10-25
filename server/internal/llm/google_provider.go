@@ -223,6 +223,8 @@ func (p *GoogleProvider) Stream(ctx context.Context, req UnifiedChatRequest, too
 		}
 		totalUsage.InputTokens += u.InputTokens
 		totalUsage.OutputTokens += u.OutputTokens
+		totalUsage.CacheReadTokens += u.CacheReadTokens
+		totalUsage.CacheWriteTokens += u.CacheWriteTokens
 		allCitations = mergeCitationsByURL(allCitations, citations)
 		if finalizing {
 			finalParts := make([]map[string]any, 0, len(modelParts))
@@ -741,8 +743,7 @@ func readGeminiStream(body io.Reader, onEvent func(SseEvent)) (string, string, [
 			var trailer map[string]any
 			if json.Unmarshal([]byte(payload), &trailer) == nil {
 				if u, ok := trailer["usageMetadata"].(map[string]any); ok {
-					usage.InputTokens = intOf(u["promptTokenCount"])
-					usage.OutputTokens = intOf(u["candidatesTokenCount"]) + intOf(u["thoughtsTokenCount"])
+					updateGeminiUsage(&usage, u)
 				}
 			}
 			continue
@@ -833,8 +834,7 @@ func readGeminiStream(body io.Reader, onEvent func(SseEvent)) (string, string, [
 		}
 		if u, ok := parsed["usageMetadata"].(map[string]any); ok {
 			sawEvent = true
-			usage.InputTokens = intOf(u["promptTokenCount"])
-			usage.OutputTokens = intOf(u["candidatesTokenCount"]) + intOf(u["thoughtsTokenCount"])
+			updateGeminiUsage(&usage, u)
 		}
 		if feedback, ok := parsed["promptFeedback"].(map[string]any); ok {
 			sawEvent = true
@@ -1026,8 +1026,7 @@ func (p *GoogleProvider) promptRunOnce(req UnifiedChatRequest) PromptToolRunner 
 			}
 			usage = Usage{}
 			if u, ok := parsed["usageMetadata"].(map[string]any); ok {
-				usage.InputTokens = intOf(u["promptTokenCount"])
-				usage.OutputTokens = intOf(u["candidatesTokenCount"]) + intOf(u["thoughtsTokenCount"])
+				updateGeminiUsage(&usage, u)
 			}
 			if (!hasCandidates || len(cs) == 0) && parsed["promptFeedback"] == nil {
 				return invalidProviderStream("google", "response contained no candidates")

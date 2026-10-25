@@ -187,34 +187,44 @@ func TestOpenAIChatReturnsVisibleToolOnExplicitStreamError(t *testing.T) {
 }
 
 func TestOpenAIChatRequestsStreamingUsage(t *testing.T) {
-	var body map[string]any
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("decode request body: %v", err)
+	for _, promptMode := range []bool{false, true} {
+		name := "native"
+		if promptMode {
+			name = "prompt"
 		}
-		w.Header().Set("content-type", "text/event-stream")
-		_, _ = io.WriteString(w, strings.Join([]string{
-			`data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}`,
-			`data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2}}`,
-			`data: [DONE]`,
-			``,
-		}, "\n\n"))
-	}))
-	t.Cleanup(server.Close)
+		t.Run(name, func(t *testing.T) {
+			var body map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				w.Header().Set("content-type", "text/event-stream")
+				_, _ = io.WriteString(w, strings.Join([]string{
+					`data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}`,
+					`data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2,"prompt_tokens_details":{"cached_tokens":3,"cache_write_tokens":1}}}`,
+					`data: [DONE]`,
+					``,
+				}, "\n\n"))
+			}))
+			t.Cleanup(server.Close)
 
-	result, err := (&OpenAIProvider{}).Stream(context.Background(), UnifiedChatRequest{
-		Model:   ModelInfo{RequestID: "gpt-test", BaseURL: server.URL, APIKey: "test-key"},
-		History: []UnifiedMessage{{Role: "user", Blocks: []UnifiedBlock{{Kind: "text", Text: "hello"}}}},
-	}, nil, func(SseEvent) {})
-	if err != nil {
-		t.Fatalf("stream: %v", err)
-	}
-	streamOptions, _ := body["stream_options"].(map[string]any)
-	if include, _ := streamOptions["include_usage"].(bool); !include {
-		t.Fatalf("stream_options = %#v, want include_usage=true", body["stream_options"])
-	}
-	if result.Usage.InputTokens != 5 || result.Usage.OutputTokens != 2 {
-		t.Fatalf("usage = %+v, want 5/2", result.Usage)
+			result, err := (&OpenAIProvider{}).Stream(context.Background(), UnifiedChatRequest{
+				Model:          ModelInfo{RequestID: "gpt-test", BaseURL: server.URL, APIKey: "test-key"},
+				History:        []UnifiedMessage{{Role: "user", Blocks: []UnifiedBlock{{Kind: "text", Text: "hello"}}}},
+				ToolModePrompt: promptMode,
+			}, nil, func(SseEvent) {})
+			if err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			streamOptions, _ := body["stream_options"].(map[string]any)
+			if include, _ := streamOptions["include_usage"].(bool); !include {
+				t.Fatalf("stream_options = %#v, want include_usage=true", body["stream_options"])
+			}
+			want := Usage{InputTokens: 5, OutputTokens: 2, CacheReadTokens: 3, CacheWriteTokens: 1}
+			if result.Usage != want {
+				t.Fatalf("usage = %+v, want %+v", result.Usage, want)
+			}
+		})
 	}
 }
 

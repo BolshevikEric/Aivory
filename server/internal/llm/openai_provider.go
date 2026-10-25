@@ -352,6 +352,8 @@ func (p *OpenAIProvider) streamChat(ctx context.Context, req UnifiedChatRequest,
 			partialUsage := usage
 			partialUsage.InputTokens += u.InputTokens
 			partialUsage.OutputTokens += u.OutputTokens
+			partialUsage.CacheReadTokens += u.CacheReadTokens
+			partialUsage.CacheWriteTokens += u.CacheWriteTokens
 			if finalizing && !errors.Is(err, context.Canceled) {
 				err = toolFinalizationError(finalizationSignal, err)
 			}
@@ -362,7 +364,7 @@ func (p *OpenAIProvider) streamChat(ctx context.Context, req UnifiedChatRequest,
 				return &UnifiedResult{Blocks: partialBlocks, Raw: raw, StopReason: "stopped", Usage: partialUsage, Citations: allCitations}, err
 			}
 			visible := providerVisibleOutputFromContext(ctx)
-			if len(partialBlocks) > 0 || partialUsage.InputTokens > 0 || partialUsage.OutputTokens > 0 || (visible != nil && visible.Load()) {
+			if len(partialBlocks) > 0 || usageHasValue(partialUsage) || (visible != nil && visible.Load()) {
 				raw, _ := json.Marshal(messages[historyLen:])
 				return &UnifiedResult{Blocks: partialBlocks, Raw: raw, StopReason: "error", Usage: partialUsage, Citations: allCitations}, err
 			}
@@ -379,6 +381,8 @@ func (p *OpenAIProvider) streamChat(ctx context.Context, req UnifiedChatRequest,
 		}
 		usage.InputTokens += u.InputTokens
 		usage.OutputTokens += u.OutputTokens
+		usage.CacheReadTokens += u.CacheReadTokens
+		usage.CacheWriteTokens += u.CacheWriteTokens
 		if req.Private && len(calls) > 0 {
 			return &UnifiedResult{Blocks: allBlocks, Usage: usage}, ErrPrivateTools
 		}
@@ -525,10 +529,11 @@ func (p *OpenAIProvider) promptRunOnce(req UnifiedChatRequest) PromptToolRunner 
 			messages = append(messages, map[string]any{"role": m.Role, "content": messageText})
 		}
 		body := map[string]any{
-			"model":    req.Model.RequestID,
-			"messages": messages,
-			"stream":   true,
-			"stop":     []string{PromptToolStopSequence()},
+			"model":          req.Model.RequestID,
+			"messages":       messages,
+			"stream":         true,
+			"stream_options": map[string]any{"include_usage": true},
+			"stop":           []string{PromptToolStopSequence()},
 		}
 		if req.MaxOutputTokens > 0 {
 			body["max_tokens"] = req.MaxOutputTokens
@@ -1376,8 +1381,7 @@ func readOpenAIChatStream(body io.Reader, onEvent func(SseEvent)) (string, openA
 			var trailer map[string]any
 			if json.Unmarshal([]byte(payload), &trailer) == nil {
 				if u, ok := trailer["usage"].(map[string]any); ok {
-					usage.InputTokens = intOf(u["prompt_tokens"])
-					usage.OutputTokens = intOf(u["completion_tokens"])
+					updateOpenAIUsage(&usage, u, false)
 				}
 			}
 			continue
@@ -1452,8 +1456,7 @@ func readOpenAIChatStream(body io.Reader, onEvent func(SseEvent)) (string, openA
 		}
 		if u, ok := ev["usage"].(map[string]any); ok {
 			sawEvent = true
-			usage.InputTokens = intOf(u["prompt_tokens"])
-			usage.OutputTokens = intOf(u["completion_tokens"])
+			updateOpenAIUsage(&usage, u, false)
 		}
 	}
 	calls := snapshotCalls()
@@ -1762,6 +1765,8 @@ func (p *OpenAIProvider) streamResponses(ctx context.Context, req UnifiedChatReq
 			partialUsage := usage
 			partialUsage.InputTokens += u.InputTokens
 			partialUsage.OutputTokens += u.OutputTokens
+			partialUsage.CacheReadTokens += u.CacheReadTokens
+			partialUsage.CacheWriteTokens += u.CacheWriteTokens
 			if finalizing && !errors.Is(err, context.Canceled) {
 				err = toolFinalizationError(finalizationSignal, err)
 			}
@@ -1791,13 +1796,15 @@ func (p *OpenAIProvider) streamResponses(ctx context.Context, req UnifiedChatReq
 				return &UnifiedResult{Blocks: partialBlocks, Raw: partialRaw, StopReason: "stopped", Usage: partialUsage, Citations: partialCitations, GeneratedImages: allGeneratedImages}, err
 			}
 			visible := providerVisibleOutputFromContext(ctx)
-			if len(partialBlocks) > 0 || completedToolResult || len(partialCitations) > len(allCitations) || partialUsage.InputTokens > 0 || partialUsage.OutputTokens > 0 || (visible != nil && visible.Load()) {
+			if len(partialBlocks) > 0 || completedToolResult || len(partialCitations) > len(allCitations) || usageHasValue(partialUsage) || (visible != nil && visible.Load()) {
 				return &UnifiedResult{Blocks: partialBlocks, Raw: partialRaw, StopReason: "error", Usage: partialUsage, Citations: partialCitations, GeneratedImages: allGeneratedImages}, err
 			}
 			return nil, err
 		}
 		usage.InputTokens += u.InputTokens
 		usage.OutputTokens += u.OutputTokens
+		usage.CacheReadTokens += u.CacheReadTokens
+		usage.CacheWriteTokens += u.CacheWriteTokens
 		allCitations = append(allCitations, citations...)
 		// Persist the reasoning summary as a thinking block so it survives reload
 		// (it was only streamed live before).
@@ -2191,8 +2198,7 @@ func readOpenAIResponsesStream(body io.Reader, onEvent func(SseEvent)) (string, 
 			return
 		}
 		if responseUsage, ok := response["usage"].(map[string]any); ok {
-			usage.InputTokens = intOf(responseUsage["input_tokens"])
-			usage.OutputTokens = intOf(responseUsage["output_tokens"])
+			updateOpenAIUsage(&usage, responseUsage, true)
 		}
 		output, hasOutput := jsonArrayItems(response["output"])
 		if !hasOutput {
@@ -2829,10 +2835,7 @@ func parseResponsesOutput(b []byte) (string, []openAIToolCall, Usage) {
 			Name      string          `json:"name"`
 			Arguments json.RawMessage `json:"arguments"`
 		} `json:"output"`
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
+		Usage map[string]any `json:"usage"`
 	}
 	if err := json.Unmarshal(b, &parsed); err != nil {
 		return "", nil, Usage{}
@@ -2859,5 +2862,7 @@ func parseResponsesOutput(b []byte) (string, []openAIToolCall, Usage) {
 			calls = append(calls, openAIToolCall{ID: id, Name: item.Name, Input: args})
 		}
 	}
-	return text, calls, Usage{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens}
+	usage := Usage{}
+	updateOpenAIUsage(&usage, parsed.Usage, true)
+	return text, calls, usage
 }

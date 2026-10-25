@@ -750,7 +750,14 @@ func computeCost(m store.Model, u Usage) float64 {
 		// For mock image generation, OutputTokens is repurposed as image count.
 		return float64(u.OutputTokens) * m.PricePerImage
 	}
-	cost += float64(u.InputTokens) / 1_000_000 * m.PriceInput
+	inputTokens := u.InputTokens
+	switch m.Protocol {
+	case "openai.chat", "openai.responses", "gemini.generateContent":
+		// These protocols include cache reads/writes in the input total. Price
+		// each token once; Anthropic reports ordinary input separately instead.
+		inputTokens = maxInt(inputTokens-u.CacheReadTokens-u.CacheWriteTokens, 0)
+	}
+	cost += float64(inputTokens) / 1_000_000 * m.PriceInput
 	cost += float64(u.OutputTokens) / 1_000_000 * m.PriceOutput
 	cost += float64(u.CacheReadTokens) / 1_000_000 * m.PriceCacheRead
 	cost += float64(u.CacheWriteTokens) / 1_000_000 * m.PriceCacheWrite
