@@ -511,6 +511,9 @@ func writeSkillImportPreview(ctx context.Context, d Deps, w http.ResponseWriter,
 		Warnings:      analysis.Warnings,
 		SourceSummary: source,
 	}
+	if preview.Warnings == nil {
+		preview.Warnings = []string{}
+	}
 	if existing, err := store.GetSkillByName(ctx, d.DB, analysis.Name); err == nil && existing != nil {
 		preview.NameExists = true
 	}
@@ -596,6 +599,13 @@ func resolveSkillImportURL(rawURL string) (*skillImportTarget, error) {
 		if len(segments) >= 2 {
 			owner, repo := segments[0], strings.TrimSuffix(segments[1], ".git")
 			switch {
+			case strings.HasSuffix(strings.ToLower(parsed.Path), ".zip") &&
+				((len(segments) >= 4 && segments[2] == "archive") ||
+					(len(segments) >= 6 && segments[2] == "releases" && segments[3] == "download")):
+				// GitHub's archive and release asset URLs are already downloads.
+				// Keep their escaped paths and query parameters intact; the same
+				// SSRF-safe client validates every redirect when fetching them.
+				return &skillImportTarget{Kind: "zip", URL: parsed.String()}, nil
 			case len(segments) == 2:
 				return &skillImportTarget{Kind: "zip", URL: fmt.Sprintf("https://github.com/%s/%s/archive/HEAD.zip", owner, repo)}, nil
 			case len(segments) >= 4 && segments[2] == "tree":

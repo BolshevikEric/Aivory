@@ -1353,15 +1353,15 @@ export const adminApi = {
   },
   // Import a skill from an uploaded zip (SKILL.md + assets). Assets are staged
   // server-side; the preview fills the editor form and is saved normally.
-  importSkillArchive: (file: File) => {
+  importSkillArchive: (file: File, signal?: AbortSignal) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api<ApiSkillImportPreview>('/admin/skills/import-archive', { method: 'POST', body: fd })
+    return api<ApiSkillImportPreview>('/admin/skills/import-archive', { method: 'POST', body: fd, signal })
   },
   // Import a skill from a URL: a zip direct link, a raw SKILL.md link, or a
   // GitHub repository / subdirectory / blob page URL.
-  importSkillRemote: (url: string) =>
-    api<ApiSkillImportPreview>('/admin/skills/import-remote', { method: 'POST', body: { url } }),
+  importSkillRemote: (url: string, signal?: AbortSignal) =>
+    api<ApiSkillImportPreview>('/admin/skills/import-remote', { method: 'POST', body: { url }, signal }),
 
   prompts: () => api<ApiPrompt[]>('/admin/prompts'),
   createPrompt: (body: Partial<ApiPrompt>) => api<ApiPrompt>('/admin/prompts', { method: 'POST', body }),

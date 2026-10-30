@@ -61,7 +61,7 @@ export default function AdminSkills() {
   const [deleting, setDeleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const zipRef = useRef<HTMLInputElement>(null)
-  const importingRef = useRef(false)
+  const importRequestRef = useRef<AbortController | null>(null)
   const savingRef = useRef(false)
   const deletingRef = useRef(false)
 
@@ -104,15 +104,32 @@ export default function AdminSkills() {
   }
   useEffect(() => {
     void load()
+    return () => {
+      importRequestRef.current?.abort()
+      importRequestRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  function cancelImport() {
+    importRequestRef.current?.abort()
+    importRequestRef.current = null
+    setImporting(false)
+  }
+
+  function closeEditor() {
+    cancelImport()
+    setEditor((ed) => ({ ...ed, open: false }))
+  }
+
   function openNew() {
+    cancelImport()
     setImportMd('')
     setImportUrl('')
     setEditor({ open: true, draft: { ...defaultDraft, sort_order: rows.length } })
   }
   function openEdit(row: ApiSkill) {
+    cancelImport()
     setImportMd('')
     setImportUrl('')
     setEditor({ open: true, row, draft: { ...row } })
@@ -155,46 +172,48 @@ export default function AdminSkills() {
     if (p.name_exists) {
       toast.warning(t('admin:skills.importNameExists', { name: p.name }))
     }
-    if (p.warnings.length > 0) {
-      toast.warning(t('admin:skills.importWarnings', { count: p.warnings.length }), p.warnings.join('\n'))
+    const warnings = p.warnings ?? []
+    if (warnings.length > 0) {
+      toast.warning(t('admin:skills.importWarnings', { count: warnings.length }), warnings.join('\n'))
+    }
+  }
+
+  async function importSkill(loadPreview: (signal: AbortSignal) => Promise<ApiSkillImportPreview>) {
+    if (importRequestRef.current) return
+    const request = new AbortController()
+    importRequestRef.current = request
+    setImporting(true)
+    try {
+      const preview = await loadPreview(request.signal)
+      if (request.signal.aborted || importRequestRef.current !== request) return
+      applyImportPreview(preview)
+    } catch (err) {
+      if (request.signal.aborted || importRequestRef.current !== request) return
+      toast.error(err instanceof ApiError ? err.message : t('admin:common.failed'))
+    } finally {
+      if (importRequestRef.current === request) {
+        importRequestRef.current = null
+        setImporting(false)
+      }
     }
   }
 
   async function importFromUrl() {
-    if (importingRef.current) return
     const url = importUrl.trim()
     if (!url) return
-    importingRef.current = true
-    setImporting(true)
-    try {
-      applyImportPreview(await adminApi.importSkillRemote(url))
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : t('admin:common.failed'))
-    } finally {
-      importingRef.current = false
-      setImporting(false)
-    }
+    await importSkill((signal) => adminApi.importSkillRemote(url, signal))
   }
 
   async function onPickZip(e: React.ChangeEvent<HTMLInputElement>) {
-    if (importingRef.current) return
+    if (importRequestRef.current) return
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    importingRef.current = true
-    setImporting(true)
-    try {
-      applyImportPreview(await adminApi.importSkillArchive(file))
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : t('admin:common.failed'))
-    } finally {
-      importingRef.current = false
-      setImporting(false)
-    }
+    await importSkill((signal) => adminApi.importSkillArchive(file, signal))
   }
 
   async function submit() {
-    if (savingRef.current) return
+    if (savingRef.current || importRequestRef.current) return
     const d = editor.draft
     if (!d.name || !d.description || !d.instructions) {
       toast.error(t('admin:skills.errors.missingFields'))
@@ -210,7 +229,7 @@ export default function AdminSkills() {
         await adminApi.createSkill(d)
         toast.success(t('admin:skills.created'))
       }
-      setEditor({ ...editor, open: false })
+      closeEditor()
       await load()
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -314,7 +333,7 @@ export default function AdminSkills() {
         )}
       </section>
 
-      <Dialog open={editor.open} onOpenChange={(o) => !savingRef.current && setEditor({ ...editor, open: o })}>
+      <Dialog open={editor.open} onOpenChange={(open) => { if (!open && !savingRef.current) closeEditor() }}>
         <DialogContent presentation="drawer" size="md">
           <DialogHeader>
             <DialogTitle>{editor.row ? t('admin:skills.editorTitle') : t('admin:skills.newTitle')}</DialogTitle>
@@ -476,10 +495,10 @@ export default function AdminSkills() {
             </div>
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" disabled={saving} onClick={() => setEditor({ ...editor, open: false })}>
+            <Button variant="ghost" disabled={saving} onClick={closeEditor}>
               {t('common:actions.cancel')}
             </Button>
-            <Button loading={saving} disabled={uploading} onClick={() => void submit()}>{t('common:actions.save')}</Button>
+            <Button loading={saving} disabled={uploading || importing} onClick={() => void submit()}>{t('common:actions.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
